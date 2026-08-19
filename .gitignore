@@ -1,0 +1,38 @@
+# Rust build artifacts
+/target/
+**/*.rs.bk
+*.pdb
+
+# Cargo.lock IS committed: AGENTS.md §8 requires pinned, reviewable dependencies.
+
+# Local tooling / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# smed runtime state produced by local runs. Never commit sessions or logs:
+# they may contain repository contents and provider output.
+/.smed/
+
+# Local agent-tooling state (oh-my-codex, CommandCode). Contains turn logs,
+# learned-preference files, and session state that may include conversation
+# content. Local-only, never committed.
+/.omx/
+/.commandcode/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.log
+
+# Research clones and scratch space
+/smed-research/
+/scratch/
+
+# Never commit credentials. AGENTS.md §3 confines secrets to smed's owner-only
+# credential files or the environment; this is a backstop, not a sanctioned
+# location.
+.env
+.env.*
+*.pem
+*.key

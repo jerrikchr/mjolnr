@@ -1,0 +1,29 @@
+[package]
+name = "smed-desktop"
+version = "0.0.0"
+description = "Tauri 2 desktop client for smed"
+edition = "2024"
+license = "Apache-2.0"
+# See the root manifest: publishing is a separate, still-open decision.
+publish = false
+
+[lib]
+name = "smed_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.0.5", features = [] }
+
+[dependencies]
+smed = { path = "../../" }
+tauri = { version = "2.1.1", features = [] }
+tauri-plugin-dialog = "2"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+tokio = { version = "1.52.3", features = ["sync", "rt-multi-thread"] }
+thiserror = "2.0.18"
+async-trait = "0.1.89"
+tracing = "0.1.44"
+
+[lints.rust]
+unsafe_code = "forbid"

@@ -1,0 +1,82 @@
+# cargo-deny policy for smed-desktop Tauri 2 backend crate.
+# Backs AGENTS.md §8 (dependencies and provenance).
+
+[graph]
+targets = [
+    { triple = "aarch64-apple-darwin" },
+    { triple = "x86_64-apple-darwin" },
+    { triple = "x86_64-unknown-linux-gnu" },
+    { triple = "aarch64-unknown-linux-gnu" },
+]
+all-features = true
+
+[advisories]
+version = 2
+yanked = "deny"
+ignore = [
+    # 2026-07-28 (Phase A0): Tauri 2 desktop client dependencies include unmaintained
+    # Unicode, GTK3, and helper crates transitively via `urlpattern`, `tauri-utils`,
+    # `glib-macros`, `wry`, and `syntect`. All are unmaintained-only with no safe upgrade path in Tauri 2.
+    { id = "RUSTSEC-2025-0141", reason = "transitive via syntect dump-load; unmaintained-only; trusted bundled assets; no safe upgrade" },
+    { id = "RUSTSEC-2025-0075", reason = "transitive via tauri-utils urlpattern; unmaintained-only; no safe upgrade" },
+    { id = "RUSTSEC-2025-0080", reason = "transitive via tauri-utils urlpattern; unmaintained-only; no safe upgrade" },
+    { id = "RUSTSEC-2025-0100", reason = "transitive via tauri-utils urlpattern; unmaintained-only; no safe upgrade" },
+    { id = "RUSTSEC-2025-0098", reason = "transitive via tauri-utils urlpattern; unmaintained-only; no safe upgrade" },
+    { id = "RUSTSEC-2025-0081", reason = "transitive via tauri-utils urlpattern; unmaintained-only; no safe upgrade" },
+    { id = "RUSTSEC-2024-0370", reason = "transitive via glib-macros; unmaintained-only; no safe upgrade" },
+    { id = "RUSTSEC-2024-0412", reason = "transitive via tauri Linux webview wry -> atk-sys; unmaintained-only; no safe upgrade" },
+    { id = "RUSTSEC-2024-0413", reason = "transitive via tauri Linux webview wry -> atk; unmaintained-only; no safe upgrade" },
+    { id = "RUSTSEC-2024-0414", reason = "transitive via tauri Linux webview wry -> gdkx11-sys; unmaintained-only; no safe upgrade" },
+    { id = "RUSTSEC-2024-0415", reason = "transitive via tauri Linux webview wry -> gtk; unmaintained-only; no safe upgrade" },
+    { id = "RUSTSEC-2024-0416", reason = "transitive via tauri Linux webview wry -> gdk-sys; unmaintained-only; no safe upgrade" },
+    { id = "RUSTSEC-2024-0417", reason = "transitive via tauri Linux webview wry -> gdkx11; unmaintained-only; no safe upgrade" },
+    { id = "RUSTSEC-2024-0418", reason = "transitive via tauri Linux webview wry -> gdk; unmaintained-only; no safe upgrade" },
+    { id = "RUSTSEC-2024-0419", reason = "transitive via tauri Linux webview wry -> gtk3-macros; unmaintained-only; no safe upgrade" },
+    { id = "RUSTSEC-2024-0420", reason = "transitive via tauri Linux webview wry -> gtk-sys; unmaintained-only; no safe upgrade" },
+    { id = "RUSTSEC-2024-0411", reason = "transitive via tauri Linux webview tao -> gdkwayland-sys; unmaintained-only; no safe upgrade" },
+]
+
+[licenses]
+version = 2
+confidence-threshold = 0.93
+
+# Permissive licences plus MPL-2.0 for Tauri desktop transitives (`webkit2gtk`, `option-ext`).
+# MPL-2.0 is a file-level weak copyleft licence that does not restrict smed's core licensing or
+# impose copyleft on surrounding code.
+allow = [
+    "MIT",
+    "MIT-0",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unlicense",
+    "CC0-1.0",
+    "BSL-1.0",
+    "Unicode-3.0",
+    "MPL-2.0",
+]
+
+private = { ignore = true }
+
+[bans]
+multiple-versions = "warn"
+# Wildcards are denied globally, with one mechanism-scoped carve-out:
+# `allow-wildcard-paths` permits a wildcard version requirement only on
+# path dependencies. Today the sole path dependency is the smed
+# governance core (smed = { path = "../../" }), which always appears
+# as a wildcard (no crates.io semver) while referenced by path. Any
+# future *registry* wildcard dependency is refused by this policy.
+# Adding another path wildcard means adding a path dependency at all —
+# that requires the usual phase-report justification (AGENTS.md §8) and
+# an update to docs/adr/0005-custom-primitives-over-shadcn.md.
+wildcards = "deny"
+allow-wildcard-paths = true
+deny = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

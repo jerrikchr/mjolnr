@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>smed — Guided Onboarding & Workspace Setup</title>
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  
+  <style>
+    /* ==========================================================================
+       PREMIUM ONBOARDING WIZARD DESIGN TOKENS (MONOTONE OBSIDIAN & LINEAR SPEC)
+       ========================================================================== */
+    :root {
+      --bg-void: #090a0f;
+      --bg-surface: #0e1017;
+      --bg-card: #141622;
+      --bg-card-hover: #191c2b;
+      --bg-hover: rgba(255, 255, 255, 0.04);
+      --border-hairline: rgba(255, 255, 255, 0.07);
+      --border-subtle: rgba(255, 255, 255, 0.12);
+      --border-focus: #38bdf8;
+      
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+
+      --text-bright: #f8fafc;
+      --text-main: #94a3b8;
+      --text-muted: #64748b;
+
+      --accent-cyan: #38bdf8;
+      --accent-cyan-bg: rgba(56, 189, 248, 0.10);
+      --gov-verified: #10b981;
+      --gov-verified-bg: rgba(16, 185, 129, 0.10);
+      --gov-approval: #f59e0b;
+      --gov-approval-bg: rgba(245, 158, 11, 0.10);
+
+      --radius-sm: 6px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+      --timing-fast: 150ms;
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-void);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      font-size: 13px;
+      line-height: 1.5;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 0;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .onboarding-frame {
+      width: 900px;
+      max-width: 95vw;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      box-shadow: 0 32px 80px rgba(0,0,0,0.8);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .wizard-header {
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border-hairline);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--bg-void);
+    }
+    .brand-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .brand-mark {
+      display: block;
+      flex-shrink: 0;
+      color: var(--accent-cyan);
+    }
+    .brand-title {
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--text-bright);
+    }
+    .setup-time-pill {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-hairline);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+    }
+
+    /* STEPPER NAV (5 GUIDED STEPS) */
+    .stepper-nav {
+      background: rgba(255, 255, 255, 0.01);
+      border-bottom: 1px solid var(--border-hairline);
+      display: flex;
+      padding: 0 16px;
+    }
+    .step-item {
+      flex: 1;
+      padding: 12px 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--text-muted);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all var(--timing-fast) ease;
+    }
+    .step-item.active {
+      color: var(--text-bright);
+      border-bottom-color: var(--accent-cyan);
+      font-weight: 600;
+    }
+    .step-item.completed {
+      color: var(--gov-verified);
+    }
+    .step-badge {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.06);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-family: var(--font-mono);
+      flex-shrink: 0;
+    }
+    .step-item.active .step-badge {
+      background: var(--accent-cyan);
+      color: #000;
+      font-weight: 700;
+    }
+    .step-item.completed .step-badge {
+      background: var(--gov-verified);
+      color: #000;
+      font-weight: 700;
+    }
+
+    .wizard-body {
+      padding: 28px 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      min-height: 460px;
+    }
+
+    .wizard-step-pane {
+      display: none;
+      flex-direction: column;
+      gap: 16px;
+      animation: fadeIn 180ms ease forwards;
+    }
+    .wizard-step-pane.active {
+      display: flex;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .step-title {
+      font-size: 19px;
+      font-weight: 700;
+      color: var(--text-bright);
+      letter-spacing: -0.02em;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .step-subtitle {
+      font-size: 12px;
+      color: var(--text-main);
+      line-height: 1.6;
+      max-width: 760px;
+    }
+
+    .info-callout {
+      background: rgba(56, 189, 248, 0.05);
+      border: 1px solid rgba(56, 189, 248, 0.2);
+      border-radius: var(--radius-md);
+      padding: 12px 14px;
+      display: flex;
+      gap: 10px;
+      font-size: 12px;
+      color: var(--text-main);
+      line-height: 1.5;
+    }
+    .info-callout.verified {
+      background: var(--gov-verified-bg);
+      border-color: rgba(16, 185, 129, 0.25);
+      color: var(--text-bright);
+    }
+
+    .preset-pill-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 4px;
+    }
+    .preset-pill {
+      background: var(--bg-card);
+      border: 1px solid var(--border-hairline);
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 11px;
+      color: var(--text-main);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all var(--timing-fast) ease;
+    }
+    .preset-pill:hover {
+      background: var(--bg-hover);
+      border-color: var(--border-subtle);
+      color: var(--text-bright);
+    }
+    .preset-pill.active {
+      border-color: var(--border-focus);
+      color: var(--text-bright);
+      background: rgba(56, 189, 248, 0.08);
+      font-weight: 600;
+    }
+
+    .option-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-top: 4px;
+    }
+    .option-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-hairline);
+      border-radius: var(--radius-md);
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      cursor: pointer;
+      transition: all var(--timing-fast) ease;
+    }
+    .option-card:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--border-subtle);
+    }
+    .option-card.selected {
+      border-color: var(--border-focus);
+      background: rgba(56, 189, 248, 0.06);
+    }
+    .option-title {
+      font-weight: 600;
+      color: var(--text-bright);
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .option-desc {
+      font-size: 11px;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+
+    .system-check-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-top: 4px;
+    }
+    .check-card {
+      background: var(--bg-void);
+      border: 1px solid var(--border-hairline);
+      padding: 8px 10px;
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-family: var(--font-mono);
+      font-size: 11px;
+    }
+
+    .field-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .field-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+    }
+    .input-text {
+      width: 100%;
+      background: var(--bg-void);
+      border: 1px solid var(--border-hairline);
+      border-radius: var(--radius-sm);
+      padding: 8px 10px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-bright);
+      outline: none;
+    }
+    .input-text:focus {
+      border-color: var(--border-focus);
+    }
+
+    .wizard-footer {
+      padding: 16px 24px;
+      border-top: 1px solid var(--border-hairline);
+      background: var(--bg-void);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .btn-primary {
+      background: var(--accent-cyan);
+      color: #090a0f;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 6px 16px;
+      border-radius: var(--radius-sm);
+      font-weight: 600;
+      font-size: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: background var(--timing-fast) ease;
+    }
+    .btn-primary:hover { background: #7dd3fc; }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border-hairline);
+      color: var(--text-main);
+      padding: 6px 14px;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-secondary:hover {
+      background: var(--bg-hover);
+      color: var(--text-bright);
+    }
+
+    .icon-svg {
+      width: 14px;
+      height: 14px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .toast-container { position: fixed; bottom: 32px; right: 20px; z-index: 999; display: flex; flex-direction: column; gap: 6px; }
+    .toast {
+      background: var(--bg-card); border: 1px solid var(--border-subtle); padding: 6px 12px; border-radius: var(--radius-md);
+      color: var(--text-bright); font-size: 11px; opacity: 0; transition: opacity 180ms ease;
+    }
+    .toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+
+  <div class="onboarding-frame">
+    <!-- HEADER BRAND & TIME ESTIMATE -->
+    <header class="wizard-header">
+      <div class="brand-group">
+        <svg class="brand-mark" viewBox="0 0 28 28" width="20" height="20" aria-hidden="true">
+          <path d="M14 3 L22 6.5 L22 14 C22 18.5 18.5 22.5 14 25 C9.5 22.5 6 18.5 6 14 L6 6.5 Z"
+            fill="none" stroke="currentColor" stroke-width="1.4" opacity="0.85" />
+          <path d="M9.3 14.5 L18.7 14.5" fill="none" stroke="currentColor"
+            stroke-width="2.2" stroke-linecap="round" />
+        </svg>
+        <span class="brand-title">Welcome to smed</span>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span class="setup-time-pill">⏱ ~3 min guided setup</span>
+        <button class="btn-secondary" style="font-size: 11px; padding: 2px 8px;" onclick="quickstartPreset('standard')">⚡ Quickstart Default</button>
+      </div>
+    </header>
+
+    <!-- STEP NAVIGATION BAR (5 STEPS) -->
+    <nav class="stepper-nav">
+      <div class="step-item active" id="dot-step-1" onclick="jumpToStep(1)">
+        <span class="step-badge">1</span>
+        <span>Workspace</span>
+      </div>
+      <div class="step-item" id="dot-step-2" onclick="jumpToStep(2)">
+        <span class="step-badge">2</span>
+        <span>API Keys</span>
+      </div>
+      <div class="step-item" id="dot-step-3" onclick="jumpToStep(3)">
+        <span class="step-badge">3</span>
+        <span>Persona Assistant</span>
+      </div>
+      <div class="step-item" id="dot-step-4" onclick="jumpToStep(4)">
+        <span class="step-badge">4</span>
+        <span>Roles & Council</span>
+      </div>
+      <div class="step-item" id="dot-step-5" onclick="jumpToStep(5)">
+        <span class="step-badge">5</span>
+        <span>Policy Gate</span>
+      </div>
+    </nav>
+
+    <!-- WIZARD STEP PANES -->
+    <main class="wizard-body">
+      
+      <!-- STEP 1: TARGET WORKSPACE & SYSTEM HEALTH CHECK -->
+      <div class="wizard-step-pane active" id="pane-step-1">
+        <div>
+          <h2 class="step-title">
+            <svg class="icon-svg" style="color: var(--accent-cyan); width: 20px; height: 20px;" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L8.6 3.3A2 2 0 0 0 6.9 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
+            <span>Select Your Target Code Workspace</span>
+          </h2>
+          <p class="step-subtitle">smed operates local-first directly on your codebase. We will create a clean <code>.smed/</code> directory in your project root to hold your persona contract, routes, and advisory council review settings safely in diffable text files.</p>
+        </div>
+
+        <div class="info-callout">
+          <svg class="icon-svg" style="color: var(--accent-cyan); margin-top: 2px;" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+          <div>
+            <strong>How smed Works With Your Repo:</strong> smed never alters your git history or merges branches automatically. Everything smed proposes must pass your deterministic policy gates first. You stay in 100% control.
+          </div>
+        </div>
+
+        <div class="field-group" style="margin-top: 4px;">
+          <div class="field-label">
+            <span>Repository Path</span>
+            <span style="color: var(--text-muted); font-family: var(--font-mono);">git repository detected</span>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <input type="text" class="input-text" id="target-workspace-path" value="/Users/you/Code/example-project">
+            <button class="btn-secondary" onclick="showToast('Opened native folder picker')">Browse...</button>
+          </div>
+        </div>
+
+        <div>
+          <div style="font-size: 11px; font-weight: 600; color: var(--text-muted); margin-bottom: 6px;">Pre-Flight Environment Health Check</div>
+          <div class="system-check-grid">
+            <div class="check-card">
+              <span>Git CLI</span>
+              <span style="color: var(--gov-verified); font-weight: 600;">✓ v2.45</span>
+            </div>
+            <div class="check-card">
+              <span>Rust Core</span>
+              <span style="color: var(--gov-verified); font-weight: 600;">✓ v1.85</span>
+            </div>
+            <div class="check-card">
+              <span>Local Ollama</span>
+              <span style="color: var(--accent-cyan); font-weight: 600;">✓ Detected</span>
+            </div>
+            <div class="check-card">
+              <span>Policy Gates</span>
+              <span style="color: var(--gov-verified); font-weight: 600;">✓ Active</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 2: API CREDENTIALS & HAND-HOLDING -->
+      <div class="wizard-step-pane" id="pane-step-2">
+        <div>
+          <h2 class="step-title">
+            <svg class="icon-svg" style="color: var(--accent-cyan); width: 20px; height: 20px;" viewBox="0 0 24 24"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+            <span>Connect Model Providers</span>
+          </h2>
+          <p class="step-subtitle">smed connects directly to model provider APIs. Credentials are saved exclusively to local owner-only files (<code>.smed/credentials/</code>). They never leave your machine into logs, SQLite, or telemetry.</p>
+        </div>
+
+        <div class="info-callout verified">
+          <svg class="icon-svg" style="color: var(--gov-verified); margin-top: 2px;" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <div>
+            <strong>Strict Secret Isolation Guarantee:</strong> Provider API keys are zeroized on drop and scrubbed from child process environments. smed does not use remote cloud keychains or third-party telemetry.
+          </div>
+        </div>
+
+        <div class="option-grid">
+          <div class="option-card selected" onclick="selectProviderCard(this, 'anthropic')">
+            <div class="option-title">
+              <span>Anthropic API</span>
+              <span style="color: var(--gov-verified);">Primary</span>
+            </div>
+            <div class="option-desc">Claude 3.7 Sonnet & 3.5 Haiku for code generation and reasoning.</div>
+          </div>
+
+          <div class="option-card selected" onclick="selectProviderCard(this, 'openai')">
+            <div class="option-title">
+              <span>OpenAI API</span>
+              <span style="color: var(--gov-verified);">Auditor</span>
+            </div>
+            <div class="option-desc">o3-mini & gpt-4o for high-reasoning security checks and advisory council findings.</div>
+          </div>
+
+          <div class="option-card selected" onclick="selectProviderCard(this, 'ollama')">
+            <div class="option-title">
+              <span>Local Ollama</span>
+              <span style="color: var(--accent-cyan);">Offline</span>
+            </div>
+            <div class="option-desc">Qwen2.5-Coder & DeepSeek-R1 running 100% locally on device.</div>
+          </div>
+        </div>
+
+        <div class="field-group">
+          <div class="field-label">
+            <span>Anthropic API Key</span>
+            <button style="background: none; border: none; color: var(--accent-cyan); cursor: pointer; font-size: 11px;" onclick="testKey('anthropic')">⚡ Test Connection</button>
+          </div>
+          <input type="password" class="input-text" id="key-anthropic" placeholder="sk-ant-api03-..." value="sk-ant-api03-demo-key-unlocked">
+        </div>
+
+        <div class="field-group">
+          <div class="field-label">
+            <span>OpenAI API Key</span>
+            <button style="background: none; border: none; color: var(--accent-cyan); cursor: pointer; font-size: 11px;" onclick="testKey('openai')">⚡ Test Connection</button>
+          </div>
+          <input type="password" class="input-text" id="key-openai" placeholder="sk-proj-..." value="sk-proj-demo-key-unlocked">
+        </div>
+      </div>
+
+      <!-- STEP 3: INTERACTIVE PERSONA & SOUL ASSISTANT ("HELP ME WRITE MY PERSONA") -->
+      <div class="wizard-step-pane" id="pane-step-3">
+        <div>
+          <h2 class="step-title">
+            <svg class="icon-svg" style="color: var(--accent-cyan); width: 20px; height: 20px;" viewBox="0 0 24 24"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/></svg>
+            <span>Guided Persona & SOUL Contract Assistant</span>
+          </h2>
+          <p class="step-subtitle">Not sure what rules your agent should follow? Answer two quick questions below and smed will generate a customized <code>.smed/SOUL.md</code> persona contract tailored to your stack and coding style.</p>
+        </div>
+
+        <!-- INTERACTIVE QUESTIONNAIRE TO HELP WRITE SOUL.MD -->
+        <div style="background: var(--bg-card); border: 1px solid var(--border-hairline); border-radius: var(--radius-md); padding: 14px; display: flex; flex-direction: column; gap: 12px;">
+          <div style="font-weight: 600; color: var(--text-bright); font-size: 12px;">1. What type of project are you building?</div>
+          <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;">
+            <div class="preset-pill active" onclick="selectStackType(this, 'rust')">🦀 Rust Core / Systems</div>
+            <div class="preset-pill" onclick="selectStackType(this, 'nextjs')">⚡ Next.js / TypeScript</div>
+            <div class="preset-pill" onclick="selectStackType(this, 'python')">🐍 Python / ML Pipeline</div>
+            <div class="preset-pill" onclick="selectStackType(this, 'general')">🌐 General Web App</div>
+          </div>
+
+          <div style="font-weight: 600; color: var(--text-bright); font-size: 12px; margin-top: 4px;">2. What is your primary engineering priority?</div>
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;">
+            <div class="preset-pill active" onclick="selectPriority(this, 'strict')">🛡 Strict Safety & Zero Panics</div>
+            <div class="preset-pill" onclick="selectPriority(this, 'clean')">✨ Clean Architecture & Modularity</div>
+            <div class="preset-pill" onclick="selectPriority(this, 'speed')">🚀 Speed & Rapid Iteration</div>
+          </div>
+
+          <div style="display: flex; justify-content: flex-end; margin-top: 4px;">
+            <button class="btn-primary" style="font-size: 11px;" onclick="generateCustomSoul()">✨ Auto-Generate Custom SOUL.md Contract</button>
+          </div>
+        </div>
+
+        <div class="field-group" style="margin-top: 4px;">
+          <div class="field-label">
+            <span>Generated Contract Preview • .smed/SOUL.md</span>
+            <span style="color: var(--text-muted); font-family: var(--font-mono);">editable plain-text</span>
+          </div>
+          <textarea class="input-text" id="soul-editor-preview" style="height: 120px; line-height: 1.6; resize: none;"># SOUL.md — Rust Systems Architect Persona
+- Always prioritize structural elegance and safety over quick hacks.
+- Strictly enforce `unsafe_code = "forbid"` and zero panics outside tests.
+- Fail closed: never proceed when side effects or path containment are ambiguous.
+- Verify every code mutation with `cargo test` before declaring success.</textarea>
+        </div>
+      </div>
+
+      <!-- STEP 4: MODEL-TO-ROLE ROUTING & MULTI-MODEL COUNCIL SETUP -->
+      <div class="wizard-step-pane" id="pane-step-4">
+        <div>
+          <h2 class="step-title">
+            <svg class="icon-svg" style="color: var(--accent-cyan); width: 20px; height: 20px;" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <span>Model-to-Role Routing & Multi-Model Council</span>
+          </h2>
+          <p class="step-subtitle">smed doesn't rely on a single model's blind spots. You can assign specific provider models to specialized roles under <code>.smed/routes/*.yaml</code> and configure one bounded advisory council under <code>.smed/council.yaml</code>.</p>
+        </div>
+
+        <div class="info-callout">
+          <svg class="icon-svg" style="color: var(--accent-cyan); margin-top: 2px;" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+          <div>
+            <strong>Why Use an Advisory Council?</strong> For a PRD or plan, several configured routes can surface independent positions and preserved dissent. Findings inform a human disposition; they never vote to approve a tool or authorize a side effect.
+          </div>
+        </div>
+
+        <!-- ROLE ROUTING MATRIX MATRIX & COUNCIL PRESETS -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <!-- CARD 1: ROLE ROUTING -->
+          <div style="background: var(--bg-card); border: 1px solid var(--border-hairline); border-radius: var(--radius-md); padding: 14px; display: flex; flex-direction: column; gap: 8px;">
+            <div style="font-weight: 600; color: var(--text-bright); font-size: 12px;">1. Role Routing Matrix (.smed/routes/*.yaml)</div>
+            <div style="font-size: 11px; color: var(--text-muted);">Assign dedicated models to developer tasks:</div>
+
+            <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 4px;">
+              <div class="check-card">
+                <span>Architect & Lead Loop</span>
+                <span style="color: var(--accent-cyan); font-weight: 600;">Claude 3.7 Sonnet</span>
+              </div>
+              <div class="check-card">
+                <span>Security Auditor</span>
+                <span style="color: var(--text-bright); font-weight: 600;">OpenAI o3-mini</span>
+              </div>
+              <div class="check-card">
+                <span>Fast Refactoring</span>
+                <span style="color: var(--gov-verified); font-weight: 600;">Ollama Qwen2.5</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- CARD 2: ADVISORY COUNCIL DEPTH -->
+          <div style="background: var(--bg-card); border: 1px solid var(--border-hairline); border-radius: var(--radius-md); padding: 14px; display: flex; flex-direction: column; gap: 8px;">
+            <div style="font-weight: 600; color: var(--text-bright); font-size: 12px;">2. Advisory Council Review (.smed/council.yaml)</div>
+            <div style="font-size: 11px; color: var(--text-muted);">Pick the bounded review depth:</div>
+
+            <div class="option-grid" style="grid-template-columns: 1fr; gap: 6px; margin-top: 4px;">
+              <div class="option-card selected" style="padding: 8px 10px;" onclick="selectCouncilDepth(this, 'quick')">
+                <div class="option-title">
+                  <span>Quick read (Recommended)</span>
+                  <span style="color: var(--gov-verified);">Active</span>
+                </div>
+                <div class="option-desc">A small, bounded advisory review with human disposition still required.</div>
+              </div>
+              <div class="option-card" style="padding: 8px 10px;" onclick="selectCouncilDepth(this, 'deep')">
+                <div class="option-title">Deep review</div>
+                <div class="option-desc">More advisory positions and rounds; it still grants no execution authority.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 5: GOVERNED POLICY & TEST-DRIVE -->
+      <div class="wizard-step-pane" id="pane-step-5">
+        <div>
+          <h2 class="step-title">
+            <svg class="icon-svg" style="color: var(--accent-cyan); width: 20px; height: 20px;" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <span>Set Default Policy Gate Tier</span>
+          </h2>
+          <p class="step-subtitle">smed's core promise is <strong>governed execution</strong>: code proposes, smed disposes. Pick your default operating policy gate tier.</p>
+        </div>
+
+        <div class="option-grid">
+          <div class="option-card" onclick="selectPolicyTier(this, 'read-only')">
+            <div class="option-title">read-only</div>
+            <div class="option-desc">smed can inspect state and read files, but cannot execute commands or mutate code.</div>
+          </div>
+
+          <div class="option-card selected" onclick="selectPolicyTier(this, 'ask')">
+            <div class="option-title">
+              <span>ask (Recommended)</span>
+              <span style="color: var(--gov-approval);">★ Default</span>
+            </div>
+            <div class="option-desc">smed prompts for human approval before executing any file mutation or shell command.</div>
+          </div>
+
+          <div class="option-card" onclick="selectPolicyTier(this, 'write')">
+            <div class="option-title">write (Pre-Approved)</div>
+            <div class="option-desc">In-workspace file changes are pre-approved. Out-of-workspace actions still trigger a policy gate.</div>
+          </div>
+        </div>
+
+        <!-- DRY-RUN SIMULATOR DEMO -->
+        <div style="background: var(--bg-card); border: 1px solid var(--border-hairline); border-radius: var(--radius-md); padding: 14px; margin-top: 4px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <span style="font-weight: 600; color: var(--text-bright); font-size: 12px;">Interactive Approval Gate Test-Drive</span>
+            <span style="font-family: var(--font-mono); font-size: 10px; color: var(--gov-verified);">✓ Ready</span>
+          </div>
+          <div style="font-size: 11px; color: var(--text-main); margin-bottom: 8px;">
+            Try approving a simulated side effect request right now before entering the full workspace:
+          </div>
+          <div style="background: var(--bg-void); padding: 8px 10px; border-radius: 4px; font-family: var(--font-mono); font-size: 11px; color: var(--accent-cyan); display: flex; justify-content: space-between; align-items: center;">
+            <span>replace_file_content on /src/main.rs</span>
+            <button class="btn-primary" style="padding: 2px 8px; font-size: 10px;" onclick="showToast('Test-Drive Gate Passed! You are ready to start.')">✓ Test Approve</button>
+          </div>
+        </div>
+      </div>
+
+    </main>
+
+    <!-- FOOTER NAVIGATION CONTROLS -->
+    <footer class="wizard-footer">
+      <button class="btn-secondary" id="btn-back" style="visibility: hidden;" onclick="prevStep()">← Back</button>
+      
+      <div style="display: flex; gap: 8px;">
+        <button class="btn-secondary" onclick="showToast('Skipped optional settings')">Skip Optional</button>
+        <button class="btn-primary" id="btn-next" onclick="nextStep()">
+          <span>Continue to API Keys</span>
+          <svg class="icon-svg" viewBox="0 0 24 24"><path d="M5 12h14m-7-7 7 7-7 7"/></svg>
+        </button>
+      </div>
+    </footer>
+  </div>
+
+  <div class="toast-container" id="toast-container"></div>
+
+  <script>
+    let currentStep = 1;
+
+    function showToast(msg) {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = 'toast'; toast.innerHTML = `<span>✓</span> <span>${msg}</span>`;
+      container.appendChild(toast);
+      setTimeout(() => toast.classList.add('show'), 10);
+      setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 250); }, 2200);
+    }
+
+    function jumpToStep(stepNum) {
+      currentStep = stepNum;
+      updateStepView();
+    }
+
+    function updateStepView() {
+      document.querySelectorAll('.wizard-step-pane').forEach((p, idx) => {
+        p.classList.toggle('active', idx + 1 === currentStep);
+      });
+
+      document.querySelectorAll('.step-item').forEach((d, idx) => {
+        const stepNum = idx + 1;
+        d.classList.remove('active', 'completed');
+        if (stepNum === currentStep) d.classList.add('active');
+        else if (stepNum < currentStep) d.classList.add('completed');
+      });
+
+      const btnBack = document.getElementById('btn-back');
+      const btnNext = document.getElementById('btn-next');
+
+      btnBack.style.visibility = currentStep > 1 ? 'visible' : 'hidden';
+
+      if (currentStep === 1) btnNext.innerHTML = `<span>Continue to API Keys</span> <svg class="icon-svg" viewBox="0 0 24 24"><path d="M5 12h14m-7-7 7 7-7 7"/></svg>`;
+      else if (currentStep === 2) btnNext.innerHTML = `<span>Continue to Persona Assistant</span> <svg class="icon-svg" viewBox="0 0 24 24"><path d="M5 12h14m-7-7 7 7-7 7"/></svg>`;
+      else if (currentStep === 3) btnNext.innerHTML = `<span>Continue to Roles & Council</span> <svg class="icon-svg" viewBox="0 0 24 24"><path d="M5 12h14m-7-7 7 7-7 7"/></svg>`;
+      else if (currentStep === 4) btnNext.innerHTML = `<span>Continue to Policy Gate</span> <svg class="icon-svg" viewBox="0 0 24 24"><path d="M5 12h14m-7-7 7 7-7 7"/></svg>`;
+      else if (currentStep === 5) btnNext.innerHTML = `<span>Finish Setup & Launch Workspace ✓</span>`;
+    }
+
+    function nextStep() {
+      if (currentStep < 5) {
+        currentStep++;
+        updateStepView();
+      } else {
+        showToast('Onboarding Complete! Launching Governed Workspace...');
+        setTimeout(() => { window.location.href = 'index.html'; }, 1200);
+      }
+    }
+
+    function prevStep() {
+      if (currentStep > 1) {
+        currentStep--;
+        updateStepView();
+      }
+    }
+
+    function testKey(provider) {
+      showToast(`Testing ${provider} API connection... Connected! (200 OK)`);
+    }
+
+    function selectProviderCard(card, provider) {
+      card.classList.toggle('selected');
+      showToast(`Toggled provider: ${provider}`);
+    }
+
+    function selectStackType(pill, type) {
+      document.querySelectorAll('#pane-step-3 .preset-pill-row:nth-of-type(1) .preset-pill').forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+    }
+
+    function selectPriority(pill, priority) {
+      document.querySelectorAll('#pane-step-3 .preset-pill-row:nth-of-type(2) .preset-pill').forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+    }
+
+    function generateCustomSoul() {
+      const textarea = document.getElementById('soul-editor-preview');
+      textarea.value = `# SOUL.md — Custom Generated Persona Contract
+- Enforce strict test-driven development: every mutation requires a test proof.
+- Prioritize zero panics, strict error typing, and clean module extraction boundaries.
+- Use multi-model council findings as advisory input for high-risk plans; human approval remains required.
+- Fail closed immediately on path containment or credential boundary ambiguity.`;
+      showToast('Generated custom SOUL.md contract tailored to your stack!');
+    }
+
+    function selectCouncilDepth(card, depth) {
+      document.querySelectorAll('#pane-step-4 .option-card').forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+      showToast(`Selected advisory council depth: ${depth}`);
+    }
+
+    function selectPolicyTier(card, tier) {
+      document.querySelectorAll('#pane-step-5 .option-card').forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+      showToast(`Selected policy gate tier: ${tier}`);
+    }
+
+    function quickstartPreset(type) {
+      showToast('Quickstarting workspace with standard defaults...');
+      setTimeout(() => { window.location.href = 'index.html'; }, 1000);
+    }
+  </script>
+</body>
+</html>

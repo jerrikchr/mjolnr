@@ -1,0 +1,388 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn-svelte/tailwind.css";
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/jetbrains-mono";
+
+
+@custom-variant dark (&:is(.dark *));
+
+/* Global app styling */
+html, body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+/*
+ * Obsidian Cyan (dark) / Paper Cyan (light) theme, per ADR-0007.
+ *
+ * Two layers, both theme-dependent and both live here so a future palette
+ * change is a values-only edit to this file:
+ *
+ * 1. The shadcn variable names (--background, --primary, etc) - every
+ *    component under lib/components/ui/ reads only these, through Tailwind
+ *    generated bg-, text-, and border- utility classes, so remapping the values here
+ *    reskins the whole component library without forking a single file.
+ *    Per ADR-0007/0009, the generated shadcn-svelte component library stays
+ *    unchanged.
+ * 2. The raw mockup token names (--bg-void, --gov-verified, etc) for the
+ *    bespoke chrome this app draws that has no shadcn equivalent (header,
+ *    sidebar sections, governance modal) - scoped component CSS reads these
+ *    directly, the same way mockups/index.html reads them, rather than
+ *    inventing a parallel Tailwind utility vocabulary for a few one-off,
+ *    non-reusable pieces of chrome.
+ *
+ * Naming collision to hold in mind when touching this block: the mockup
+ * token --accent (brand cyan) maps to the shadcn token --primary, not the
+ * shadcn token --accent (a neutral hover-surface token) - not the same
+ * concept, despite the shared name.
+ */
+:root {
+  /* --- Paper Cyan (light) --- */
+  --bg-void: #f3f4f7;
+  --bg-deep: #e9ebf0;
+  --bg-surface: #ffffff;
+  --bg-card: #ffffff;
+  --bg-elevated: #ffffff;
+  --bg-hover: rgba(0, 0, 0, 0.03);
+  --bg-active: rgba(0, 0, 0, 0.06);
+  --bg-glass: rgba(255, 255, 255, 0.88);
+
+  --border-faint: rgba(0, 0, 0, 0.06);
+  --border-subtle: rgba(0, 0, 0, 0.09);
+  --border-default: rgba(0, 0, 0, 0.13);
+  --border-focus: rgba(27, 168, 214, 0.5);
+
+  --text-primary: #1a1d27;
+  --text-secondary: #5a6070;
+  --text-tertiary: #9098a6;
+  --text-inverse: #ffffff;
+
+  --accent-cyan: #1ba8d6;
+  --accent-bright: #3bc4e8;
+  --accent-deep: #1587ac;
+  --accent-muted: rgba(27, 168, 214, 0.07);
+  --accent-glow: rgba(27, 168, 214, 0.12);
+  --accent-border: rgba(27, 168, 214, 0.22);
+
+  --gov-proposal: #2e94c4;
+  --gov-proposal-bg: rgba(46, 148, 196, 0.07);
+  --gov-proposal-border: rgba(46, 148, 196, 0.2);
+
+  --gov-approval: #b87d18;
+  --gov-approval-bg: rgba(184, 125, 24, 0.07);
+  --gov-approval-border: rgba(184, 125, 24, 0.22);
+  --gov-approval-glow: rgba(184, 125, 24, 0.1);
+
+  --gov-verified: #15916a;
+  --gov-verified-bg: rgba(21, 145, 106, 0.07);
+  --gov-verified-border: rgba(21, 145, 106, 0.2);
+
+  --gov-refusal: #c84260;
+  --gov-refusal-bg: rgba(200, 66, 96, 0.07);
+  --gov-refusal-border: rgba(200, 66, 96, 0.2);
+
+  --gov-uncertain: #7b5fc8;
+  --gov-uncertain-bg: rgba(123, 95, 200, 0.07);
+
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(0, 0, 0, 0.04);
+  --shadow-elevated: 0 4px 16px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  --shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.06);
+
+  --scrollbar-thumb: rgba(0, 0, 0, 0.1);
+  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.18);
+  --scrim: rgba(243, 244, 247, 0.65);
+
+  /* --- shadcn expected names, mapped onto the above --- */
+  --background: var(--bg-void);
+  --foreground: var(--text-primary);
+  --card: var(--bg-card);
+  --card-foreground: var(--text-primary);
+  --popover: var(--bg-elevated);
+  --popover-foreground: var(--text-primary);
+  --primary: var(--accent-cyan);
+  --primary-foreground: var(--text-inverse);
+  --secondary: var(--bg-elevated);
+  --secondary-foreground: var(--text-primary);
+  --muted: var(--bg-surface);
+  --muted-foreground: var(--text-secondary);
+  --accent: var(--bg-hover);
+  --accent-foreground: var(--text-primary);
+  --destructive: var(--gov-refusal);
+  --border: var(--border-default);
+  --input: var(--border-subtle);
+  --ring: var(--border-focus);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --radius: 0.45rem;
+  --sidebar: var(--bg-surface);
+  --sidebar-foreground: var(--text-primary);
+  --sidebar-primary: var(--accent-cyan);
+  --sidebar-primary-foreground: var(--text-inverse);
+  --sidebar-accent: var(--bg-hover);
+  --sidebar-accent-foreground: var(--text-primary);
+  --sidebar-border: var(--border-subtle);
+  --sidebar-ring: var(--border-focus);
+  /* Diff semantics (Phase D3): colour carries meaning here, so it gets a
+     token with a second cue (the +/- gutter), never a literal palette value
+     inside a component. Re-pointed at the governance family so Changes-surface
+     diffs move with the palette automatically. */
+  --diff-added-bg: var(--gov-verified-bg);
+  --diff-added-fg: var(--gov-verified);
+  --diff-removed-bg: var(--gov-refusal-bg);
+  --diff-removed-fg: var(--gov-refusal);
+}
+
+/* --- Motion and scale: identical across both themes, so they live once. --- */
+:root {
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --t-fast: 120ms;
+  --t-normal: 200ms;
+  --t-slow: 320ms;
+
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 16px;
+  --r-pill: 999px;
+
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+
+  /* The mockup's compact type scale (mockups/index.html 76-83). Tailwind's
+     defaults (xs 12 / base 14 px) were rendering everything one step larger
+     than the design; this is the density correction, mapped onto Tailwind
+     utilities in @theme inline below exactly like the radius scale. */
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 13px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+
+  --header-h: 48px;
+  --footer-h: 32px;
+  --sidebar-w: 256px;
+  --inspector-w: 320px;
+}
+
+.dark {
+  /* --- Obsidian Cyan (dark) --- */
+  --bg-void: #060709;
+  --bg-deep: #0c0e15;
+  --bg-surface: #131620;
+  --bg-card: #1a1e2a;
+  --bg-elevated: #232838;
+  --bg-hover: rgba(255, 255, 255, 0.04);
+  --bg-active: rgba(255, 255, 255, 0.07);
+  --bg-glass: rgba(12, 14, 21, 0.85);
+
+  --border-faint: rgba(255, 255, 255, 0.05);
+  --border-subtle: rgba(255, 255, 255, 0.09);
+  --border-default: rgba(255, 255, 255, 0.13);
+  --border-focus: rgba(59, 196, 232, 0.5);
+
+  --text-primary: #e8eaf0;
+  --text-secondary: #98a0b0;
+  --text-tertiary: #5a606e;
+  --text-inverse: #060709;
+
+  --accent-cyan: #3bc4e8;
+  --accent-bright: #5dd4f0;
+  --accent-deep: #2298c4;
+  --accent-muted: rgba(59, 196, 232, 0.1);
+  --accent-glow: rgba(59, 196, 232, 0.2);
+  --accent-border: rgba(59, 196, 232, 0.3);
+
+  --gov-proposal: #6ab4f0;
+  --gov-proposal-bg: rgba(106, 180, 240, 0.1);
+  --gov-proposal-border: rgba(106, 180, 240, 0.25);
+
+  --gov-approval: #e8a838;
+  --gov-approval-bg: rgba(232, 168, 56, 0.1);
+  --gov-approval-border: rgba(232, 168, 56, 0.3);
+  --gov-approval-glow: rgba(232, 168, 56, 0.15);
+
+  --gov-verified: #3ad8a0;
+  --gov-verified-bg: rgba(58, 216, 160, 0.08);
+  --gov-verified-border: rgba(58, 216, 160, 0.25);
+
+  --gov-refusal: #ec6a8a;
+  --gov-refusal-bg: rgba(236, 106, 138, 0.1);
+  --gov-refusal-border: rgba(236, 106, 138, 0.25);
+
+  --gov-uncertain: #a78bfa;
+  --gov-uncertain-bg: rgba(167, 139, 250, 0.1);
+
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-elevated: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
+
+  --scrollbar-thumb: rgba(255, 255, 255, 0.08);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.14);
+  --scrim: rgba(6, 7, 9, 0.55);
+
+  /* --- shadcn expected names, mapped onto the above --- */
+  --background: var(--bg-void);
+  --foreground: var(--text-primary);
+  --card: var(--bg-card);
+  --card-foreground: var(--text-primary);
+  --popover: var(--bg-elevated);
+  --popover-foreground: var(--text-primary);
+  --primary: var(--accent-cyan);
+  --primary-foreground: var(--text-inverse);
+  --secondary: var(--bg-elevated);
+  --secondary-foreground: var(--text-primary);
+  --muted: var(--bg-surface);
+  --muted-foreground: var(--text-secondary);
+  --accent: var(--bg-hover);
+  --accent-foreground: var(--text-primary);
+  --destructive: var(--gov-refusal);
+  --border: var(--border-default);
+  --input: var(--border-subtle);
+  --ring: var(--border-focus);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar: var(--bg-surface);
+  --sidebar-foreground: var(--text-primary);
+  --sidebar-primary: var(--accent-cyan);
+  --sidebar-primary-foreground: var(--text-inverse);
+  --sidebar-accent: var(--bg-hover);
+  --sidebar-accent-foreground: var(--text-primary);
+  --sidebar-border: var(--border-subtle);
+  --sidebar-ring: var(--border-focus);
+  --diff-added-bg: var(--gov-verified-bg);
+  --diff-added-fg: var(--gov-verified);
+  --diff-removed-bg: var(--gov-refusal-bg);
+  --diff-removed-fg: var(--gov-refusal);
+}
+
+/*
+ * Governance and brand-accent tokens with no shadcn equivalent are also
+ * registered here (--color-gov-*, --color-accent-bright, etc) so
+ * route/component markup can use them as ordinary Tailwind
+ * bg-, text-, and border- utilities, the existing convention in this codebase,
+ * instead of arbitrary-value or inline-style escapes. Bespoke chrome
+ * components with their own scoped style block (AppEmblem, StatusOrb, etc)
+ * still read the underlying --gov- and --accent- custom properties directly.
+ */
+@theme inline {
+  --font-sans: 'Inter Variable', sans-serif;
+  /* Mockup type scale → Tailwind utilities (same pattern as the radius
+     mapping below): every text-xs/sm/base/lg/xl class now renders at the
+     mockup size, no component change required. */
+  --text-xs: var(--text-xs);
+  --text-sm: var(--text-sm);
+  --text-base: var(--text-base);
+  --text-lg: var(--text-lg);
+  --text-xl: var(--text-xl);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-accent-bright: var(--accent-bright);
+  --color-accent-deep: var(--accent-deep);
+  --color-accent-muted: var(--accent-muted);
+  --color-accent-border: var(--accent-border);
+  --color-gov-proposal: var(--gov-proposal);
+  --color-gov-proposal-bg: var(--gov-proposal-bg);
+  --color-gov-proposal-border: var(--gov-proposal-border);
+  --color-gov-approval: var(--gov-approval);
+  --color-gov-approval-bg: var(--gov-approval-bg);
+  --color-gov-approval-border: var(--gov-approval-border);
+  --color-gov-verified: var(--gov-verified);
+  --color-gov-verified-bg: var(--gov-verified-bg);
+  --color-gov-verified-border: var(--gov-verified-border);
+  --color-gov-refusal: var(--gov-refusal);
+  --color-gov-refusal-bg: var(--gov-refusal-bg);
+  --color-gov-refusal-border: var(--gov-refusal-border);
+  --color-gov-uncertain: var(--gov-uncertain);
+  --color-gov-uncertain-bg: var(--gov-uncertain-bg);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  /*
+   * The ADR-0007 radius scale (--r-xs..--r-pill above) replaces the previous
+   * calc(var(--radius) * N) formula with the mockup literal steps, so
+   * every existing rounded-sm/md/lg/xl shadcn class renders at the mockup
+   * exact radius with no component change.
+   */
+  --radius-xs: var(--r-xs);
+  --radius-sm: var(--r-sm);
+  --radius-md: var(--r-md);
+  --radius-lg: var(--r-lg);
+  --radius-xl: var(--r-xl);
+  --radius-2xl: var(--r-xl);
+  --radius-3xl: var(--r-xl);
+  --radius-4xl: var(--r-xl);
+  --radius-full: var(--r-pill);
+  --font-mono: 'JetBrains Mono Variable', monospace;
+}
+
+@layer base {
+	* {
+		@apply border-border outline-ring/50;
+  }
+	body {
+		@apply bg-background text-foreground;
+		/* Mockup body: Inter at --text-base with 1.5 line-height (mockups/
+		   index.html 239-240). font-sans on html below makes every text node
+		   inherit Inter; mono stays scoped to code/value nodes via the
+		   explicit font-mono classes that already exist. */
+		font-family: var(--font-sans);
+		font-size: var(--text-base);
+		line-height: 1.5;
+	}
+	html {
+		@apply font-sans;
+	}
+	/* Semantic diff lines (Phase D3). The visual contract for added/removed
+	   lines lives here exactly once; components combine these with the +/-
+	   gutter so colour is never the only cue. */
+	.diff-added {
+		background-color: var(--diff-added-bg);
+		color: var(--diff-added-fg);
+  }
+	.diff-removed {
+		background-color: var(--diff-removed-bg);
+		color: var(--diff-removed-fg);
+  }
+}

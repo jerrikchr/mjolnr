@@ -1,0 +1,38 @@
+name: vercel.deployments
+version: 0.1.0
+publisher: acme
+description: Vercel deployment inspector via ADR-0016 plugin protocol
+protocol_version: 1
+run:
+  program: node
+  arguments: ["examples/plugins/vercel-deployments/index.js"]
+tools:
+  - name: list_deployments
+    description: List recent Vercel deployments for a project
+    parameters:
+      type: object
+      properties:
+        project_id:
+          type: string
+          description: Vercel project identifier
+      required: ["project_id"]
+      additionalProperties: false
+  - name: get_deployment
+    description: Fetch one Vercel deployment by id
+    parameters:
+      type: object
+      properties:
+        deployment_id:
+          type: string
+          description: Vercel deployment id (e.g. dpl_abc123)
+      required: ["deployment_id"]
+      additionalProperties: false
+hooks:
+  - session_start
+required_credentials:
+  - VERCEL_TOKEN
+views:
+  - id: deployments
+    title: Vercel Deployments
+    view_type: table
+source_url: https://github.com/jerrikchr/smed/tree/main/examples/plugins/vercel-deployments

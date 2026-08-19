@@ -1,0 +1,29 @@
+# Clippy configuration backing AGENTS.md §10.
+
+# Tests may unwrap/expect/panic freely: clarity beats ceremony (AGENTS.md §7).
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true
+allow-print-in-tests = true
+
+# Backstops, not targets. AGENTS.md §2.3 asks for stricter numbers in review.
+too-many-lines-threshold = 100
+cognitive-complexity-threshold = 15
+
+# Product names that appear in prose. `doc_markdown` flags any camel-case word as
+# an un-backticked code item, but ``OpenAI`` in a sentence is wrong: these are
+# names, not identifiers. Whitelisting them keeps the lint useful for genuine
+# code references instead of training everyone to ignore it.
+# `..` extends clippy's defaults rather than replacing them.
+doc-valid-idents = ["OpenAI", "OpenAPI", "OpenRouter", "SQLite", "NDJSON", ".."]
+
+# AGENTS.md §4: backpressure is a feature. A slow TUI must slow the producer
+# rather than grow the heap, so unbounded queues are denied outright.
+disallowed-methods = [
+  { path = "tokio::sync::mpsc::unbounded_channel", reason = "use a bounded channel: AGENTS.md §4" },
+]
+
+disallowed-types = [
+  { path = "tokio::sync::mpsc::UnboundedSender", reason = "use a bounded channel: AGENTS.md §4" },
+  { path = "tokio::sync::mpsc::UnboundedReceiver", reason = "use a bounded channel: AGENTS.md §4" },
+]
