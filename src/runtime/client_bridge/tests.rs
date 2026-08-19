@@ -1084,7 +1084,7 @@ fn well_formed_repository_commands_map_through_with_their_expected_revisions() {
     ));
 
     let mapped = command_to_smed(&ClientCommand::IntegrateChildBranch {
-        name: "smed/sub-1".to_owned(),
+        name: "mjolnr/sub-1".to_owned(),
         message: "Take the child's work after review".to_owned(),
         expected_head: "deadbeef".to_owned(),
     })

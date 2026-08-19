@@ -7,7 +7,8 @@
 //! default model. Pretending each needs its own adapter would be the opposite
 //! lie to the one §30.3 warns about.
 //!
-//! Base URLs may be overridden per provider with `SMED_<ID>_BASE_URL`
+//! Base URLs may be overridden per provider with `MJOLNR_<ID>_BASE_URL`; the
+//! pre-rename `SMED_<ID>_BASE_URL` is still read as a fallback (ADR-0018)
 //! (hyphens become underscores), which is how account-scoped gateways and
 //! non-default local ports are configured.
 
@@ -48,7 +49,7 @@ pub struct CompatDescriptor {
     pub label: &'static str,
     /// Default endpoint root (the adapter appends `/chat/completions`).
     /// Empty means "no usable default" — the URL is account-specific and must
-    /// come from `SMED_<ID>_BASE_URL`.
+    /// come from `MJOLNR_<ID>_BASE_URL`, or the legacy `SMED_<ID>_BASE_URL`.
     pub default_base_url: &'static str,
     /// Model requested when the user has not picked one.
     pub default_model: &'static str,
@@ -105,7 +106,7 @@ pub static CATALOG: &[CompatDescriptor] = &[
         id: "cloudflare-gateway",
         label: "Cloudflare AI Gateway",
         // Gateway URLs embed the account and gateway name; there is no
-        // meaningful default. Set SMED_CLOUDFLARE_GATEWAY_BASE_URL to the
+        // meaningful default. Set MJOLNR_CLOUDFLARE_GATEWAY_BASE_URL to the
         // gateway's OpenAI-compatible endpoint.
         default_base_url: "",
         default_model: "anthropic/claude-opus-4-8",
@@ -227,6 +228,16 @@ pub static CATALOG: &[CompatDescriptor] = &[
 /// The environment variable that overrides a descriptor's base URL.
 #[must_use]
 pub fn base_url_variable(id: &str) -> String {
+    format!("MJOLNR_{}_BASE_URL", id.to_uppercase().replace('-', "_"))
+}
+
+/// The pre-rename spelling of [`base_url_variable`], still read as a fallback.
+///
+/// ADR-0018 renamed the product, and an environment variable is a contract with
+/// whoever exported it in their shell profile. The canonical name wins; the old
+/// one keeps working rather than silently sending traffic to the default host.
+#[must_use]
+pub fn legacy_base_url_variable(id: &str) -> String {
     format!("SMED_{}_BASE_URL", id.to_uppercase().replace('-', "_"))
 }
 
@@ -235,12 +246,13 @@ const LM_STUDIO_CONFIG_FILE: &str = "lm-studio.url";
 
 fn environment_base_url(descriptor: &CompatDescriptor) -> Option<String> {
     std::env::var(base_url_variable(descriptor.id))
+        .or_else(|_| std::env::var(legacy_base_url_variable(descriptor.id)))
         .ok()
         .map(|value| value.trim().trim_end_matches('/').to_owned())
         .filter(|value| !value.is_empty())
 }
 
-/// The diffable project setting used by `smed auth login lm-studio`.
+/// The diffable project setting used by `mjolnr auth login lm-studio`.
 #[must_use]
 pub fn lm_studio_config_path(workspace_root: &Path) -> PathBuf {
     crate::core::paths::resolve_workspace_config_dir(workspace_root)

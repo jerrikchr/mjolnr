@@ -1,6 +1,12 @@
 # Renaming smed → mjolnr
 
-**Status:** Migrated — see [ADR-0018](adr/0018-rename-smed-to-mjolnr.md).
+**Status:** Partially migrated — see [ADR-0018](adr/0018-rename-smed-to-mjolnr.md).
+Contract surfaces are done and guarded by `tests/branding.rs`: commands, branch
+prefixes (`mjolnr/sub-*`, `mjolnr/ext-*`), the `MJOLNR_` environment prefix, the
+user config directory, `.gitignore`, and the install/release scripts. The
+cosmetic prose sweep (checklist item 4) is **outstanding** — see
+[`rename-sweep.md`](rename-sweep.md). Flip this line to *Migrated* when that
+lands, not before.
 **Author:** Jerrik + agent discussion
 **Date:** 2026-08-19
 **Decision:** Rename `smed` → `mjolnr`. Keep internal crate/module names stable where possible and add the mythic layer for UI/copy first; migrate code names incrementally. `mjolnir` is the English spelling — `mjolnr` is the short, 6-char binary name.

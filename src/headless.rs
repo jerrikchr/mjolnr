@@ -64,7 +64,7 @@ pub async fn run(
     runtime
         .dispatch(SmedCommand::SendUserMessage {
             text: directive,
-            // `smed exec` is run by the person at the keyboard, or by a CI job
+            // `mjolnr exec` is run by the person at the keyboard, or by a CI job
             // they configured. Either way the directive is theirs.
             source: crate::core::directive::DirectiveSource::Human,
         })

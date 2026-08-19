@@ -1,6 +1,6 @@
 //! Opt-in `ChatGPT` subscription smoke test (plan Phase 6.5).
 //!
-//! Run after `smed auth login openai-codex`:
+//! Run after `mjolnr auth login openai-codex`:
 //!
 //! ```text
 //! cargo test --test live_openai_codex -- --ignored --nocapture
@@ -53,7 +53,7 @@ async fn wait_for_session(runtime: &Runtime, session: smed::core::event::Session
 /// waits on the `ask`-policy approval gate. A regressed decoder produces
 /// `RunFailed(PROVIDER_PROTOCOL)` before any proposal instead.
 #[tokio::test]
-#[ignore = "requires `smed auth login openai-codex` and spends subscription quota"]
+#[ignore = "requires `mjolnr auth login openai-codex` and spends subscription quota"]
 async fn a_tool_call_assembles_over_the_subscription_backend() {
     let directory = tempfile::tempdir().expect("tempdir");
     let store = Arc::new(
@@ -141,7 +141,7 @@ enum Outcome {
 }
 
 #[tokio::test]
-#[ignore = "requires `smed auth login openai-codex` and spends subscription quota"]
+#[ignore = "requires `mjolnr auth login openai-codex` and spends subscription quota"]
 async fn live_guarded_turn_completes_and_provider_selection_resumes() {
     let directory = tempfile::tempdir().expect("tempdir");
     let store = Arc::new(

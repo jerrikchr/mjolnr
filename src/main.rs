@@ -88,7 +88,7 @@ fn main() -> ExitCode {
 
     let file_secrets = OsSecretStore::new();
     // One-shot, and a no-op for anyone who never ran a keychain build. Before
-    // the auth subcommands so `smed auth list` reflects the move immediately.
+    // the auth subcommands so `mjolnr auth list` reflects the move immediately.
     let migrated = smed::store::secrets::migrate_from_keyring(&file_secrets, &keyring_providers());
     if !migrated.is_empty() {
         let names: Vec<&str> = migrated.iter().map(ProviderId::as_str).collect();
@@ -127,7 +127,7 @@ fn main() -> ExitCode {
     // Setup runs instead of the TUI and needs no database — only the resolved
     // credentials and the working directory it writes into.
     //
-    // Bare `smed init` is the guided wizard, because that is what `init` means
+    // Bare `mjolnr init` is the guided wizard, because that is what `init` means
     // in every other tool and what someone reaching for it actually wants. The
     // scaffolder it used to be is one step inside that wizard now.
     //
@@ -274,7 +274,7 @@ fn is_setup(command: &mut Command) -> bool {
     matches!(command, Command::Init { .. } | Command::Onboard)
 }
 
-/// The providers `smed init` scaffolds a route for, primary first.
+/// The providers `mjolnr init` scaffolds a route for, primary first.
 ///
 /// Reuses the same preference order and per-provider default-model constants as
 /// [`default_model`], so the route `init` writes for a provider opens on exactly
@@ -467,7 +467,7 @@ async fn run_exec(
     print_headless_report(&report)
 }
 
-/// `smed triggers run`: the scheduler process.
+/// `mjolnr triggers run`: the scheduler process.
 ///
 /// The composition-root twin of [`run_exec`] — same providers, same project
 /// context, same MCP catalogue — handed to
@@ -547,20 +547,20 @@ fn print_plugin_list(project_root: &Path) {
     let discovery = match DiscoveryConfig::for_workspace(project_root.to_owned()) {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("smed plugin list: {e}");
+            eprintln!("mjolnr plugin list: {e}");
             return;
         }
     };
     let ctx = match ProjectContext::discover(discovery) {
         Ok(ctx) => ctx,
         Err(e) => {
-            eprintln!("smed plugin list: {e}");
+            eprintln!("mjolnr plugin list: {e}");
             return;
         }
     };
     if ctx.plugins().is_empty() {
         println!("no plugins discovered in .mjolnr/plugins/*.yaml or user config dir");
-        println!("hint: smed plugin create <name> [--template node|rust|python] [--yes]");
+        println!("hint: mjolnr plugin create <name> [--template node|rust|python] [--yes]");
         return;
     }
     for summary in ctx.plugins().list() {
@@ -1041,7 +1041,7 @@ async fn resolve_resume(cli: &Cli, store: &SqliteEventStore) -> Result<Option<Se
 
     let session = uuid::Uuid::parse_str(raw.trim())
         .map(SessionId::from_uuid)
-        .map_err(|_| format!("`{raw}` is not a session id — `smed sessions list` shows them"))?;
+        .map_err(|_| format!("`{raw}` is not a session id — `mjolnr sessions list` shows them"))?;
 
     let summaries = store
         .sessions()
@@ -1049,7 +1049,7 @@ async fn resolve_resume(cli: &Cli, store: &SqliteEventStore) -> Result<Option<Se
         .map_err(|error: StoreError| error.to_string())?;
     let Some(summary) = summaries.into_iter().find(|summary| summary.id == session) else {
         return Err(format!(
-            "no session {session} — `smed sessions list` shows them"
+            "no session {session} — `mjolnr sessions list` shows them"
         ));
     };
 
@@ -1062,7 +1062,7 @@ async fn resolve_resume(cli: &Cli, store: &SqliteEventStore) -> Result<Option<Se
     if summary.leased {
         return Err(format!(
             "session {session} is already open in another smed process.\n       \
-             If that process is gone, `smed sessions release {session}` reclaims it."
+             If that process is gone, `mjolnr sessions release {session}` reclaims it."
         ));
     }
 

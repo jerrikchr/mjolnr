@@ -256,7 +256,7 @@ async fn a_trigger_disables_itself_after_repeated_failure_and_is_visibly_rearmab
     cancel.cancel();
     let _ = handle.await;
 
-    // Re-armable: the same CLI path `smed triggers rearm` drives.
+    // Re-armable: the same CLI path `mjolnr triggers rearm` drives.
     let exit = smed::cli::triggers::run(
         TriggersCommand::Rearm {
             name: "flaky".to_owned(),

@@ -389,7 +389,7 @@ async fn an_account_scoped_gateway_without_a_url_refuses_with_the_variable_name(
     match result {
         Err(ProviderError::Protocol { detail }) => {
             assert!(
-                detail.contains("SMED_CLOUDFLARE_GATEWAY_BASE_URL"),
+                detail.contains("MJOLNR_CLOUDFLARE_GATEWAY_BASE_URL"),
                 "refusal must name the variable to set, got: {detail}"
             );
         }

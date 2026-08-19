@@ -2,7 +2,7 @@
 //! .
 //!
 //! Every firing dispatches through [`crate::headless::run`] on an ordinary
-//! [`Runtime`] — the same host `smed exec` drives — so a scheduled run's
+//! [`Runtime`] — the same host `mjolnr exec` drives — so a scheduled run's
 //! transcript is, by construction, the transcript a manual headless run would
 //! produce: same policy gate, same budgets, same approval-denial rule, same
 //! evidence discipline. The only addition is identity: the firing session is
@@ -52,7 +52,7 @@ const RECHECK_IDLE: Duration = Duration::from_hours(1);
 
 /// Everything every firing needs, assembled once by the composition root
 /// (`main.rs`), exactly as `mcp::connect_project` and `provider_registry` are
-/// assembled once for `smed exec`.
+/// assembled once for `mjolnr exec`.
 #[derive(Clone)]
 #[allow(
     missing_debug_implementations,
@@ -336,7 +336,7 @@ async fn handle_occurrence(
 }
 
 /// Start one firing: an ordinary session, linked to the control session,
-/// driven exactly as `smed exec` drives one.
+/// driven exactly as `mjolnr exec` drives one.
 async fn start_firing(
     deps: &SchedulerDeps,
     control_session: SessionId,
@@ -399,7 +399,7 @@ fn directive_for(definition: &TriggerDefinition, payload: Option<&serde_json::Va
 
 /// Drive one firing to its terminal outcome: an ordinary `OpenProject` /
 /// `CreateSession` / `SetPolicy` setup, then [`crate::headless::run`] — the
-/// same sequence `smed exec` runs, so the transcript this produces is a
+/// same sequence `mjolnr exec` runs, so the transcript this produces is a
 /// manual headless run's transcript in every respect but its parentage.
 async fn fire(
     deps: &SchedulerDeps,

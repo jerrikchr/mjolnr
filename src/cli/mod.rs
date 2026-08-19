@@ -13,7 +13,7 @@
 //! its compact `/skills` and `/model` commands; session selection and database
 //! integrity remain explicit process-level operations.
 //!
-//! - `smed diagnostics` must work when the TUI cannot start, which is exactly
+//! - `mjolnr diagnostics` must work when the TUI cannot start, which is exactly
 //!   when a database diagnostic matters most.
 //! - Choosing a session happens *before* a runtime exists to hold it. A slash
 //!   command would have to tear down and rebuild the session it is running in.
@@ -96,7 +96,7 @@ impl Cli {
     ///
     /// Checked here rather than with clap's `args_conflicts_with_subcommands`,
     /// which also rejects the **global** `--data-dir` when it precedes a
-    /// subcommand — turning `smed --data-dir /tmp diagnostics` into an error.
+    /// subcommand — turning `mjolnr --data-dir /tmp diagnostics` into an error.
     /// A manual smoke test caught that; the unit test had written the flag on
     /// the other side of the subcommand and never saw it.
     #[must_use]
@@ -305,7 +305,7 @@ mod tests {
 
     #[test]
     fn init_is_the_wizard_and_only_yes_is_the_silent_scaffold() {
-        // The distinction main.rs branches on. `smed init` bare must stay the
+        // The distinction main.rs branches on. `mjolnr init` bare must stay the
         // guided flow — a user reaching for `init` on a fresh machine wants
         // setup, not two YAML files and a prompt about them.
         let bare = Cli::try_parse_from(["smed", "init"]).expect("parse");
@@ -322,7 +322,7 @@ mod tests {
 
     #[test]
     fn onboard_still_parses_as_the_hidden_alias() {
-        // Hidden from help, not removed: a scripted `smed onboard` must keep
+        // Hidden from help, not removed: a scripted `mjolnr onboard` must keep
         // working even though `init` is the name we now document.
         let cli = Cli::try_parse_from(["smed", "onboard"]).expect("parse");
         assert!(matches!(cli.command, Some(Command::Onboard)));
@@ -341,7 +341,7 @@ mod tests {
         // Both orders, because a manual smoke test found that only one of them
         // worked: `args_conflicts_with_subcommands` rejected the global flag when
         // it came *first*, which is where anyone would naturally type it. The
-        // original test wrote it last and passed while `smed --data-dir /tmp
+        // original test wrote it last and passed while `mjolnr --data-dir /tmp
         // diagnostics` was broken.
         for arguments in [
             ["smed", "diagnostics", "--data-dir", "/tmp/x"],

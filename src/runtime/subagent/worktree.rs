@@ -3,7 +3,7 @@
 //! One reason to change: how a child's isolated checkout is created, preserved,
 //! and cleaned up.
 //!
-//! Every child works in a fresh `git worktree` on its own `smed/sub-*` branch,
+//! Every child works in a fresh `git worktree` on its own `mjolnr/sub-*` branch,
 //! rooted under the OS temp directory so sibling containment is a path property
 //! rather than a convention. Cleanup is idempotent: a settled child's worktree
 //! is removed whether or not the run crashed between dispatch and settlement,
@@ -34,7 +34,7 @@ pub(super) fn branch_name(child: SessionId) -> String {
     // UUIDv7's leading bytes are a timestamp. Siblings minted in one fan-out
     // commonly share the first eight characters, so truncating the front can
     // alias two children onto one branch. The full session id is the identity.
-    format!("smed/sub-{child}")
+    format!("mjolnr/sub-{child}")
 }
 
 /// The sidecar file naming a worktree's owning process. A sibling of the
@@ -339,7 +339,7 @@ mod tests {
     fn branch_names_are_namespaced_per_child() {
         let child = SessionId::new();
         let branch = branch_name(child);
-        assert!(branch.starts_with("smed/sub-"));
+        assert!(branch.starts_with("mjolnr/sub-"));
         assert_ne!(branch, branch_name(SessionId::new()));
     }
 

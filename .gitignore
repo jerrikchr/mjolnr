@@ -11,8 +11,11 @@
 .vscode/
 *.swp
 
-# smed runtime state produced by local runs. Never commit sessions or logs:
-# they may contain repository contents and provider output.
+# mjolnr runtime state produced by local runs. Never commit sessions or logs:
+# they may contain repository contents and provider output. `.smed/` stays
+# listed for the ADR-0018 compat window: a workspace that predates the rename
+# still writes there until its first migrated write.
+/.mjolnr/
 /.smed/
 
 # Local agent-tooling state (oh-my-codex, CommandCode). Contains turn logs,
@@ -26,10 +29,11 @@
 *.log
 
 # Research clones and scratch space
+/mjolnr-research/
 /smed-research/
 /scratch/
 
-# Never commit credentials. AGENTS.md §3 confines secrets to smed's owner-only
+# Never commit credentials. AGENTS.md §3 confines secrets to mjolnr's owner-only
 # credential files or the environment; this is a backstop, not a sanctioned
 # location.
 .env

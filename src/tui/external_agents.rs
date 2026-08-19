@@ -15,7 +15,7 @@ pub(super) fn render(frame: &mut Frame, area: Rect, view: &ViewState) {
 
     let mut lines = vec![
         Line::from(Span::styled(
-            "Dedicated worktrees (smed/ext-*). Work is isolated and untrusted until you import.",
+            "Dedicated worktrees (mjolnr/ext-*). Work is isolated and untrusted until you import.",
             theme::muted(),
         )),
         Line::from(""),

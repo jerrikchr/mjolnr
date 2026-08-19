@@ -318,17 +318,12 @@ pub fn active_preference_name() -> String {
 /// root rather than reaching into `tui` directly.
 #[must_use]
 pub fn persist_preference(name: &str) -> bool {
-    use etcetera::app_strategy::{AppStrategy, AppStrategyArgs, choose_native_strategy};
     let Some(id) = ThemeId::parse(name) else {
         return false;
     };
     set_active_theme_id(id);
-    if let Ok(strategy) = choose_native_strategy(AppStrategyArgs {
-        top_level_domain: String::new(),
-        author: String::new(),
-        app_name: "smed".to_owned(),
-    }) {
-        let path = strategy.config_dir().join("theme");
+    if let Some(directory) = crate::core::paths::resolve_user_config_dir() {
+        let path = directory.join("theme");
         let parent_ok = path
             .parent()
             .is_none_or(|parent| std::fs::create_dir_all(parent).is_ok());

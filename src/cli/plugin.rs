@@ -1,4 +1,4 @@
-//! `smed plugin` — third-party plugin scaffolding (Phase 6, ADR-0016).
+//! `mjolnr plugin` — third-party plugin scaffolding (Phase 6, ADR-0016).
 //!
 //! Generates a fail-closed `smed-plugin.yaml` manifest under
 //! `.mjolnr/plugins/<name>.yaml` plus an optional language starter that speaks
@@ -72,7 +72,7 @@ fn scaffold_manifest(name: &str, template: Option<PluginTemplate>) -> String {
         "name: {name}\n\
          version: 0.1.0\n\
          publisher: local\n\
-         description: A smed plugin — replace this description\n\
+         description: A mjolnr plugin — replace this description\n\
          protocol_version: {PLUGIN_PROTOCOL_VERSION}\n\
          run:\n  program: {program}\n\
          {run_args}\
@@ -309,7 +309,7 @@ pub fn run_create(args: CreateArgs, project_root: &Path) -> i32 {
     let files = match scaffold_plugin(&args.name, args.template) {
         Ok(files) => files,
         Err(error) => {
-            eprintln!("smed plugin create: {error}");
+            eprintln!("mjolnr plugin create: {error}");
             return 1;
         }
     };

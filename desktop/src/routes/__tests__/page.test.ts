@@ -629,14 +629,14 @@ describe('Desktop workspace route', () => {
         child: '0190d5f0-child',
         directive: 'refactor the auth module',
         directiveTruncated: false,
-        branch: 'smed/sub-0190d5f0-child',
+        branch: 'mjolnr/sub-0190d5f0-child',
         worktree: '/work/.smed/worktrees/0190d5f0-child'
       }
     });
 
     await waitFor(() => expect(getAllByTestId('worktree-item').length).toBeGreaterThan(0));
     const items = getAllByTestId('worktree-item');
-    expect(items[0].textContent).toContain('smed/sub-0190d5f0-child');
+    expect(items[0].textContent).toContain('mjolnr/sub-0190d5f0-child');
     expect(items[0].textContent).toContain('/work/.smed/worktrees/0190d5f0-child');
 
     clientStore.handleUpdate({

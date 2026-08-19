@@ -1160,7 +1160,7 @@ fn auth_overlay_reports_provider_state_without_offering_a_key_field() {
     assert!(frame.contains("DISCONNECTED"), "frame:\n{frame}");
     assert!(frame.contains("gemini"), "frame:\n{frame}");
     // The remedy is the CLI, so a secret never enters this transcript.
-    assert!(frame.contains("smed auth login"), "frame:\n{frame}");
+    assert!(frame.contains("mjolnr auth login"), "frame:\n{frame}");
 }
 
 #[test]

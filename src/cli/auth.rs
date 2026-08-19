@@ -26,7 +26,7 @@ use crate::core::secrets::{
 
 /// Providers a credential can be stored for.
 ///
-/// A closed set rather than a free string: a typo'd `smed auth login openai2`
+/// A closed set rather than a free string: a typo'd `mjolnr auth login openai2`
 /// would otherwise store a key under a name nothing reads, and the user would
 /// debug a "missing credential" error with the credential sitting right there.
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
@@ -446,7 +446,7 @@ fn status(secrets: &Arc<dyn SecretStore>) -> i32 {
                         "{id}: no API token configured (optional); runtime checks the local server"
                     );
                 } else {
-                    println!("{id}: not configured — run `smed auth login {id}`");
+                    println!("{id}: not configured — run `mjolnr auth login {id}`");
                 }
             }
             Some(Err(error)) => {

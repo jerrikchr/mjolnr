@@ -44,7 +44,7 @@ async fn a_remote_server_with_bearer_and_headers_still_reports_honestly_when_dea
     // `Unavailable` still results.
     let catalog = connect_with(
         "servers:\n  - name: remote-auth\n    url: \"http://127.0.0.1:1/mcp\"\n    \
-         bearer_token_env_var: \"SMED_TEST_MCP_TOKEN\"\n    headers:\n      X-Client: \"smed\"\n",
+         bearer_token_env_var: \"MJOLNR_TEST_MCP_TOKEN\"\n    headers:\n      X-Client: \"smed\"\n",
     )
     .await;
     assert_eq!(catalog.servers[0].state, McpConnectionState::Unavailable);

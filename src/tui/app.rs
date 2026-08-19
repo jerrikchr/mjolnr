@@ -14,7 +14,6 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use crossterm::event::{Event, EventStream, KeyEventKind};
-use etcetera::app_strategy::{AppStrategy, AppStrategyArgs, choose_native_strategy};
 use futures_util::StreamExt;
 use ratatui::DefaultTerminal;
 use tokio::sync::broadcast::error::RecvError;
@@ -1263,13 +1262,7 @@ fn initialize_theme() {
 }
 
 fn theme_path() -> Option<PathBuf> {
-    choose_native_strategy(AppStrategyArgs {
-        top_level_domain: String::new(),
-        author: String::new(),
-        app_name: "mjolnr".to_owned(),
-    })
-    .ok()
-    .map(|strategy| strategy.config_dir().join("theme"))
+    crate::core::paths::resolve_user_config_dir().map(|directory| directory.join("theme"))
 }
 
 fn read_theme(path: &Path) -> Option<crate::tui::theme::ThemeId> {

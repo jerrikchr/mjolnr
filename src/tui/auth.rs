@@ -100,7 +100,7 @@ pub(super) fn render(frame: &mut Frame, area: Rect, view: &ViewState) {
 
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
-        "CLI fallback: `smed auth login <provider>`",
+        "CLI fallback: `mjolnr auth login <provider>`",
         theme::muted(),
     )));
 

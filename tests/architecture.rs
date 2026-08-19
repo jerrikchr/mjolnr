@@ -131,8 +131,8 @@ const RULES: &[Rule] = &[
     },
     // The scheduler process. It drives a `Runtime` to fire
     // scheduled and webhook directives, so — unlike `cli` — it *is* allowed to
-    // depend on `runtime`; main.rs wires `smed triggers run` to it exactly as
-    // it wires `smed exec` to `headless`. What it must never become is a
+    // depend on `runtime`; main.rs wires `mjolnr triggers run` to it exactly as
+    // it wires `mjolnr exec` to `headless`. What it must never become is a
     // second terminal UI.
     Rule {
         module: "triggers",

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Install smed and sign it with a STABLE identity.
+# Install mjolnr and sign it with a STABLE identity.
 #
 # Why: macOS keychain ACLs are keyed to the binary's code signature. Plain
 # `cargo install` (and `codesign -s -`) produce a fresh ad-hoc signature per
@@ -11,9 +11,9 @@
 # List candidates with:  security find-identity -v -p codesigning
 set -eu
 
-IDENTITY="${SMED_SIGN_IDENTITY:-D507F58CF5AD58A6472534ED911C4E9F02D66642}"
+IDENTITY="${MJOLNR_SIGN_IDENTITY:-D507F58CF5AD58A6472534ED911C4E9F02D66642}"
 
 cargo install --path "$(dirname "$0")/.." --force
-codesign -f -s "$IDENTITY" "$HOME/.cargo/bin/smed"
-codesign -dv "$HOME/.cargo/bin/smed" 2>&1 | sed -n 's/^Authority=/signed by: /p' | head -1
-echo "installed and signed: $HOME/.cargo/bin/smed"
+codesign -f -s "$IDENTITY" "$HOME/.cargo/bin/mjolnr"
+codesign -dv "$HOME/.cargo/bin/mjolnr" 2>&1 | sed -n 's/^Authority=/signed by: /p' | head -1
+echo "installed and signed: $HOME/.cargo/bin/mjolnr"

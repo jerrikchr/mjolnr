@@ -3,8 +3,8 @@
 //! smed fires headless runs from cron-style schedules and local webhook
 //! triggers, defined in diffable per-project files, with the same budgets,
 //! policy ceilings, and evidence as interactive work. This module is the
-//! scheduler *process* — `main.rs` wires `smed triggers run` to
-//! [`scheduler::run`] exactly as it wires `smed exec` to
+//! scheduler *process* — `main.rs` wires `mjolnr triggers run` to
+//! [`scheduler::run`] exactly as it wires `mjolnr exec` to
 //! [`crate::headless::run`]. Everything else (the CLI's `list`/`rearm`
 //! surfaces, and the TUI's `/triggers` overlay) reads the same durable state
 //! through [`status::collect`] rather than duplicating the read model.

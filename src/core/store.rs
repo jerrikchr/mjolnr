@@ -152,7 +152,7 @@ impl SessionStatus {
     }
 }
 
-/// What `smed sessions list` shows.
+/// What `mjolnr sessions list` shows.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SessionSummary {
     pub id: SessionId,
@@ -504,7 +504,7 @@ pub trait EventStore: Send + Sync + std::fmt::Debug {
 
     /// Forcibly clear a lease, whoever holds it.
     ///
-    /// The explicit human act behind `smed sessions release`. smed never does
+    /// The explicit human act behind `mjolnr sessions release`. smed never does
     /// this on its own: it cannot prove the holder is dead.
     async fn break_lease(&self, session: SessionId) -> Result<(), StoreError>;
 
@@ -571,7 +571,7 @@ pub struct WorkspaceSearchPage {
     pub next_cursor: Option<String>,
 }
 
-/// The state of the durable store, for `smed diagnostics`.
+/// The state of the durable store, for `mjolnr diagnostics`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DiagnosticsReport {
     pub database_path: PathBuf,

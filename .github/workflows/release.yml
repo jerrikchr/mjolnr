@@ -37,9 +37,9 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          cp "target/${{ matrix.target }}/release/smed" "dist/smed-${{ matrix.target }}"
-          shasum -a 256 "dist/smed-${{ matrix.target }}" > "dist/smed-${{ matrix.target }}.sha256"
+          cp "target/${{ matrix.target }}/release/mjolnr" "dist/mjolnr-${{ matrix.target }}"
+          shasum -a 256 "dist/mjolnr-${{ matrix.target }}" > "dist/mjolnr-${{ matrix.target }}.sha256"
       - uses: actions/upload-artifact@v4
         with:
-          name: smed-${{ matrix.target }}
+          name: mjolnr-${{ matrix.target }}
           path: dist/

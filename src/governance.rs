@@ -162,7 +162,7 @@ pub fn load_dir(project_root: &Path) -> (GovernanceTable, Vec<GovernanceLoadDiag
     }
 }
 
-/// The starting `governance.yaml`, for `smed init` to preview and write.
+/// The starting `governance.yaml`, for `mjolnr init` to preview and write.
 ///
 /// Ships with rows rather than empty, and with `default: supervised` rather
 /// than `trusted`, and both choices are deliberate. An empty file teaches
@@ -172,7 +172,7 @@ pub fn load_dir(project_root: &Path) -> (GovernanceTable, Vec<GovernanceLoadDiag
 ///
 /// The rows are the owner's standing judgement and will age — model names
 /// change, and a model that needed watching last year may not. That is the
-/// argument for it being a file: `smed init` previews it, never overwrites
+/// argument for it being a file: `mjolnr init` previews it, never overwrites
 /// it, and the owner edits or deletes it like any other.
 #[must_use]
 pub fn starting_file() -> (std::path::PathBuf, String) {
@@ -291,7 +291,7 @@ models:
 
     #[test]
     fn the_shipped_file_parses_to_what_it_reads_as() {
-        let table = parse(SHIPPED).expect("the file smed init writes must load");
+        let table = parse(SHIPPED).expect("the file mjolnr init writes must load");
         assert_eq!(table.default_tier, GovernanceTier::Supervised);
         assert_eq!(
             tier(&table, "anthropic", "claude-opus-5"),

@@ -77,7 +77,7 @@ async fn list(store: &Store) -> Result<i32, StoreError> {
         println!();
         println!(
             "* held by a running smed, or left behind by one that crashed. \
-             `smed sessions release <id>` reclaims it."
+             `mjolnr sessions release <id>` reclaims it."
         );
     }
 
@@ -94,7 +94,7 @@ fn lease_marker(summary: &SessionSummary) -> &'static str {
 
 async fn release(store: &Store, raw: &str) -> Result<i32, StoreError> {
     let Some(session) = parse_session(raw) else {
-        eprintln!("`{raw}` is not a session id — `smed sessions list` shows them");
+        eprintln!("`{raw}` is not a session id — `mjolnr sessions list` shows them");
         return Ok(1);
     };
 
@@ -220,7 +220,7 @@ mod tests {
 
     #[test]
     fn a_session_id_round_trips_through_its_display_form() {
-        // `smed sessions list` prints ids that `smed --resume` must accept.
+        // `mjolnr sessions list` prints ids that `mjolnr --resume` must accept.
         let session = SessionId::new();
         assert_eq!(parse_session(&session.to_string()), Some(session));
     }

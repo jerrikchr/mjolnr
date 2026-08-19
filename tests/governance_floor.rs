@@ -32,7 +32,7 @@ use tempfile::TempDir;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
-/// The file `smed init` writes, reduced to the two rows this test needs.
+/// The file `mjolnr init` writes, reduced to the two rows this test needs.
 const GOVERNANCE: &str = "\
 default: supervised
 models:

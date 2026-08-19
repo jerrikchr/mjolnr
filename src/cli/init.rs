@@ -1,4 +1,4 @@
-//! `smed init`: scaffold a starter routing config (Pillar 2).
+//! `mjolnr init`: scaffold a starter routing config (Pillar 2).
 //!
 //! One reason to change: how a first routing config is offered and written.
 //!
@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 
 use crate::routing::scaffold::{self, ProviderSeed, ScaffoldFile};
 
-/// How `smed init` was invoked.
+/// How `mjolnr init` was invoked.
 #[derive(Debug)]
 pub struct InitOptions {
     /// Skip the interactive confirmation. The scriptable path; still
@@ -40,7 +40,7 @@ pub(crate) struct Plan {
     pub(crate) existing: Vec<PathBuf>,
 }
 
-/// Run `smed init`. Returns the process exit code.
+/// Run `mjolnr init`. Returns the process exit code.
 ///
 /// Never overwrites: a generated file whose path already exists is reported and
 /// left untouched, so re-running after hand-editing a route can only add the

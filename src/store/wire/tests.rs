@@ -133,7 +133,7 @@ fn every_durable_event(session: SessionId, run: RunId) -> Vec<SmedEvent> {
             child: SessionId::new(),
             directive: "worker:alpha.txt".to_owned(),
             policy: PolicyMode::WorkspaceWrite,
-            branch: "smed/sub-abc12345".to_owned(),
+            branch: "mjolnr/sub-abc12345".to_owned(),
             worktree: "/tmp/smed-worktrees/abc".to_owned(),
         },
         SmedEvent::SubagentResultLate {

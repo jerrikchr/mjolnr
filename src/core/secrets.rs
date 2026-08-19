@@ -301,7 +301,7 @@ pub trait SecretStore: Send + Sync + std::fmt::Debug {
 ///
 /// Uses each provider's conventional name (`OPENAI_API_KEY`) rather than a
 /// smed-specific one: a user who already exports it expects it to work, and
-/// inventing `SMED_OPENAI_KEY` would be a papercut with no benefit.
+/// inventing `MJOLNR_OPENAI_KEY` would be a papercut with no benefit.
 #[must_use]
 pub fn environment_variable(provider: &ProviderId) -> String {
     if provider.as_str() == "lm-studio" {

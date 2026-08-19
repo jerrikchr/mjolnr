@@ -581,7 +581,7 @@ async fn a_second_writer_is_refused_and_told_who_holds_the_session() {
 #[tokio::test]
 async fn a_lease_left_by_a_crash_is_reclaimed_only_by_an_explicit_act() {
     // smed cannot prove the holder is dead, so it does not steal the lease. The
-    // explicit act is `smed sessions release`.
+    // explicit act is `mjolnr sessions release`.
     let fixture = Fixture::new();
     let store = fixture.store().await;
     let session = open_session(&store, &fixture.workspace).await;
@@ -604,7 +604,7 @@ async fn a_lease_left_by_a_crash_is_reclaimed_only_by_an_explicit_act() {
         listed
             .iter()
             .any(|summary| summary.id == session && summary.leased),
-        "`smed sessions list` must show the held lease"
+        "`mjolnr sessions list` must show the held lease"
     );
 
     store.break_lease(session).await.expect("break");

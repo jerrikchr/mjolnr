@@ -104,7 +104,7 @@ pub fn default_credentials_dir() -> Result<PathBuf, PathError> {
 ///
 /// The seam that makes every persistence test run against a temporary directory
 /// rather than the developer's real database (`AGENTS.md` §7: the default test
-/// run touches nothing real), and what `smed --data-dir` drives.
+/// run touches nothing real), and what `mjolnr --data-dir` drives.
 ///
 /// # Errors
 /// When the directory cannot be created.

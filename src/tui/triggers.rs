@@ -4,7 +4,7 @@
 //! Read-only, like `/mcp` and `/usage`: this renders `snapshot.triggers`,
 //! computed once at startup by the composition root exactly the way
 //! `snapshot.mcp_servers` is. Firing a trigger, disabling it, or re-arming it
-//! all happen through `smed triggers run` and `smed triggers rearm` — a
+//! all happen through `mjolnr triggers run` and `mjolnr triggers rearm` — a
 //! background process and a CLI command, neither of which the TUI may drive
 //! (`tests/architecture.rs`: `tui` may not depend on `runtime` or `store`).
 
@@ -60,7 +60,7 @@ pub(super) fn render(frame: &mut Frame, area: Rect, view: &ViewState) {
         if let Some(code) = trigger.disabled_reason {
             lines.push(Line::from(Span::styled(
                 format!(
-                    "  {code} — {} · `smed triggers rearm {}`",
+                    "  {code} — {} · `mjolnr triggers rearm {}`",
                     code.sentence(),
                     trigger.name
                 ),
@@ -83,7 +83,7 @@ pub(super) fn render(frame: &mut Frame, area: Rect, view: &ViewState) {
     }
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
-        "Triggers fire through `smed triggers run`, not this session · type /triggers again to close",
+        "Triggers fire through `mjolnr triggers run`, not this session · type /triggers again to close",
         theme::muted(),
     )));
     frame.render_widget(Clear, modal);

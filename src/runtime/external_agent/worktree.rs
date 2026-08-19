@@ -13,7 +13,7 @@ fn worktree_path(ext_id: &str) -> PathBuf {
 }
 
 fn branch_name(ext_id: &str) -> String {
-    format!("smed/ext-{ext_id}")
+    format!("mjolnr/ext-{ext_id}")
 }
 
 async fn git(workspace: &Path, args: &[&str]) -> Result<std::process::Output, String> {

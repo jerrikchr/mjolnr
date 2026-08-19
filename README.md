@@ -24,7 +24,7 @@ cargo install --path .
 
 On macOS, `scripts/install.sh` installs and code-signs with a stable identity, so
 the keychain stops re-asking for your password after every rebuild. Set
-`SMED_SIGN_IDENTITY` to your own certificate (`security find-identity -v -p codesigning`).
+`MJOLNR_SIGN_IDENTITY` to your own certificate (`security find-identity -v -p codesigning`).
 
 ## Quick start
 
@@ -116,7 +116,7 @@ provider rather than a mode on `openai`. Ollama uses `http://localhost:11434` an
 needs no credential. LM Studio defaults to `http://localhost:1234`;
 `mjolnr auth login lm-studio` asks for another address if your server is elsewhere and
 writes it to `.mjolnr/providers/lm-studio.url`, overridable with
-`SMED_LM_STUDIO_BASE_URL`.
+`MJOLNR_LM_STUDIO_BASE_URL`.
 
 `/model` lists only models actually discovered from connected providers, so a
 catalogue failure shows as `needs re-auth` or `unavailable` rather than a stale

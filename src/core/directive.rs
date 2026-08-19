@@ -30,7 +30,7 @@ use super::policy::PolicyMode;
 /// Who produced the text of a directive.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DirectiveSource {
-    /// Typed by the owner: the TUI composer, or the argument to `smed exec`
+    /// Typed by the owner: the TUI composer, or the argument to `mjolnr exec`
     /// run by the person at the keyboard.
     Human,
     /// Produced by smed itself for one of its own runs — a subagent directive

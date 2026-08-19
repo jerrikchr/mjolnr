@@ -1,4 +1,4 @@
-//! The one read model behind `smed triggers list`, the `/triggers` TUI
+//! The one read model behind `mjolnr triggers list`, the `/triggers` TUI
 //! overlay, and the scheduler's own startup state.
 //!
 //! One function, three consumers: this is deliberate. A second, divergent way

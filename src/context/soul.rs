@@ -16,7 +16,7 @@ use std::path::{Path, PathBuf};
 use crate::core::context::{ContextDiagnostic, SkillScope};
 use crate::core::error::ReasonCode;
 
-/// A starting `SOUL.md` for `smed init` to offer.
+/// A starting `SOUL.md` for `mjolnr init` to offer.
 ///
 /// Shipped as a **file the wizard previews and writes**, never as a built-in
 /// default applied when the file is absent. That is `AGENTS.md` §11 law 7: a

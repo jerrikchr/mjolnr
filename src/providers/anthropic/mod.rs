@@ -24,7 +24,7 @@ const API_VERSION: &str = "2023-06-01";
 // smed's request ceiling, not a claim about each model's provider maximum.
 // Keeping one bounded client-side limit is intentional until output budgets are
 // configurable in the canonical request contract.
-const SMED_MAX_OUTPUT_TOKENS: u32 = 16_384;
+const MJOLNR_MAX_OUTPUT_TOKENS: u32 = 16_384;
 
 pub const PROVIDER_ID: &str = "anthropic";
 pub const DEFAULT_MODEL: &str = "claude-haiku-4-5-20251001";
@@ -173,7 +173,7 @@ impl Provider for AnthropicProvider {
         let max_tokens = MODELS
             .iter()
             .find(|(id, _, _, _)| *id == request.model.as_str())
-            .map_or(SMED_MAX_OUTPUT_TOKENS, |(_, _, _, max_out)| *max_out);
+            .map_or(MJOLNR_MAX_OUTPUT_TOKENS, |(_, _, _, max_out)| *max_out);
 
         let body = wire::CreateMessage {
             model: request.model.to_string(),

@@ -30,7 +30,7 @@ use crate::core::secrets::{
     Credential, CredentialKind, OAuthCredential, Secret, SecretError, SecretStore,
 };
 
-/// Claude Code's public OAuth client id; smed authenticates the same way the
+/// Claude Code's public OAuth client id; mjolnr authenticates the same way the
 /// official CLI does, against the user's own subscription.
 pub(crate) const CLIENT_ID: &str = "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
 const DEFAULT_AUTHORIZE_BASE_URL: &str = "https://claude.ai";

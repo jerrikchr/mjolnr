@@ -35,7 +35,7 @@ pub(super) fn render(frame: &mut Frame, area: Rect, view: &ViewState) {
             theme::muted(),
         )));
         lines.push(Line::from(Span::styled(
-            "  run smed plugin create <name> or place a manifest at .mjolnr/plugins/<name>.yaml",
+            "  run mjolnr plugin create <name> or place a manifest at .mjolnr/plugins/<name>.yaml",
             theme::muted(),
         )));
     } else {

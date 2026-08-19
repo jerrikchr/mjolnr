@@ -273,7 +273,7 @@ describe('worktree list reduction (E2)', () => {
   }
 
   it('adds an entry on spawn and marks it done on a finished/failed activity label', () => {
-    spawn('child-a', 'smed/sub-child-a', '/work/.smed/worktrees/child-a');
+    spawn('child-a', 'mjolnr/sub-child-a', '/work/.smed/worktrees/child-a');
     expect(client.worktrees).toHaveLength(1);
     expect(client.worktrees[0].done).toBe(false);
 
@@ -285,9 +285,9 @@ describe('worktree list reduction (E2)', () => {
   });
 
   it('does not clear on a fresh convocation, unlike the fleet roster — the worktree still exists on disk', () => {
-    spawn('child-a', 'smed/sub-child-a', '/work/a');
+    spawn('child-a', 'mjolnr/sub-child-a', '/work/a');
     activity('child-a', 'finished');
-    spawn('child-b', 'smed/sub-child-b', '/work/b');
+    spawn('child-b', 'mjolnr/sub-child-b', '/work/b');
 
     expect(client.worktrees.map((entry) => entry.child)).toEqual(['child-a', 'child-b']);
   });

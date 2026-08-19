@@ -45,7 +45,7 @@ const SERVICE: &str = "dev.smed";
 ///
 /// One file per provider rather than a shared `auth.json` (which is what `pi`
 /// and `opencode` do) because a shared map has to be read, mutated, and written
-/// back: two smed sessions refreshing different providers at once can then lose
+/// back: two mjolnr sessions refreshing different providers at once can then lose
 /// one another's writes. Separate files make each save an independent atomic
 /// rename, so that whole class of race does not arise.
 #[derive(Debug)]
@@ -183,7 +183,7 @@ impl StoredCredential {
 /// Best-effort by construction. A keychain read may prompt for the login
 /// password (that is the very friction being removed, one last time) and the
 /// user may cancel it. A cancelled or failed migration must not stop smed from
-/// starting — the credential is simply still in the keychain, and `smed auth
+/// starting — the credential is simply still in the keychain, and `mjolnr auth
 /// login` remains the way out. The keychain entry is left in place rather than
 /// deleted, so a failure part-way cannot lose a credential.
 ///

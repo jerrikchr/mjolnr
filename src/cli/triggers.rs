@@ -1,11 +1,11 @@
-//! `smed triggers list` and `smed triggers rearm` — the store-only trigger
+//! `mjolnr triggers list` and `mjolnr triggers rearm` — the store-only trigger
 //! surfaces.
 //!
-//! `smed triggers run` (the scheduler process) is deliberately absent here:
+//! `mjolnr triggers run` (the scheduler process) is deliberately absent here:
 //! it drives a `Runtime`, and this module answers to the same rule
 //! `tests/architecture.rs` enforces for `cli` — it must never become a second
 //! client of the agent loop. `main.rs` wires `run` directly, exactly as it
-//! wires `smed exec`.
+//! wires `mjolnr exec`.
 #![allow(
     clippy::print_stdout,
     clippy::print_stderr,

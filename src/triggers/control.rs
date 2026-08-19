@@ -44,7 +44,7 @@ pub fn control_session_id(project_root_realpath: &str, trigger_name: &str) -> Se
 
 /// The canonical string every control-session identity is hashed from.
 ///
-/// One function so the scheduler, `smed triggers list`/`rearm`, and the TUI
+/// One function so the scheduler, `mjolnr triggers list`/`rearm`, and the TUI
 /// snapshot always agree on the same control session for the same project —
 /// disagreement here would mean two processes computing two different
 /// identities for what a human sees as "one trigger".
