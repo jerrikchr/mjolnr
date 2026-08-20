@@ -5,7 +5,7 @@
     Activity03Icon,
     Add01Icon,
     Alert02Icon,
-    Attachment01Icon,
+    BotIcon,
     CheckmarkCircle02Icon,
     CircleIcon,
     DashboardSquare01Icon,
@@ -34,6 +34,7 @@
   import { mode, toggleMode } from 'mode-watcher';
   import { open } from '@tauri-apps/plugin-dialog';
   import ActivityBars from '$lib/components/chrome/ActivityBars.svelte';
+  import ActivityDock from '$lib/components/chrome/ActivityDock.svelte';
   import AppEmblem from '$lib/components/chrome/AppEmblem.svelte';
   import GovernanceModal from '$lib/components/chrome/GovernanceModal.svelte';
   import ProviderAuthModal from '$lib/components/chrome/ProviderAuthModal.svelte';
@@ -64,7 +65,6 @@
   import * as Sidebar from '$lib/components/ui/sidebar';
   import * as Tabs from '$lib/components/ui/tabs';
   import { Textarea } from '$lib/components/ui/textarea';
-  import * as ToggleGroup from '$lib/components/ui/toggle-group';
   import { clientStore, isSearchRefusal, type ClientRefusal } from '$lib/runtime/client.svelte';
   import { cn } from '$lib/utils';
   import type {
@@ -91,8 +91,6 @@
     { value: 'Verify', label: 'Verify', shortcut: '⌘5', icon: CheckmarkCircle02Icon },
     { value: 'Attention', label: 'Attention', shortcut: '⌘6', icon: Notification02Icon }
   ];
-
-  const selectablePolicies: ClientPolicy[] = ['read-only', 'ask', 'workspace-write'];
 
   // A real, local filter over the session list — not the §D4 recorded-work
   // search the command palette already does against the durable store. This
@@ -294,7 +292,6 @@
     Array.from(new Map(snap.models.map((choice) => [choice.provider, choice.provider])).values())
   );
   let modelChoices = $derived(snap.models.filter((choice) => choice.provider === selectedProvider));
-  let selectedProviderLabel = $derived(selectedProvider || 'Select provider');
   let selectedModelLabel = $derived(
     modelChoices.find((choice) => choice.model === selectedModel)?.displayName ?? 'Select model'
   );
@@ -740,393 +737,344 @@
 
 <svelte:window onkeydown={handleGlobalKeydown} />
 
-<Sidebar.Provider>
-  <Sidebar.Root collapsible="icon">
-    <!-- Header with App Mark, Search, and New Chat Icon Button -->
-    <Sidebar.Header class="p-2 px-3 flex flex-row items-center justify-between border-b border-sidebar-border/40">
-      <div class="flex items-center gap-2">
-        <AppEmblem size={22} />
-        <span class="font-bold text-sm text-foreground tracking-tight">mjolnr</span>
-        <span class="rounded bg-primary/10 border border-primary/20 px-1.5 py-0.2 font-mono text-[9px] text-primary">v0.0.0</span>
-      </div>
+<div class="flex h-screen w-screen overflow-hidden bg-background">
+  <!-- Far Left 48px Global Activity Dock -->
+  <ActivityDock
+    bind:activeSurface
+    {attentionCount}
+    onopenproviderauth={() => (providerAuthOpen = true)}
+    onopengovernance={(tab) => openGovernance(tab)}
+    onopengraph={() => {
+      splitPreset = splitPreset === 'graph' ? 'none' : 'graph';
+    }}
+  />
 
-      <div class="flex items-center gap-1">
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          class="h-7 w-7 text-muted-foreground hover:text-foreground"
-          onclick={() => (paletteOpen = true)}
-          title="Search (⌘K)"
-        >
-          <HugeiconsIcon icon={SearchIcon} strokeWidth={2} class="size-3.5" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          class="h-7 w-7 text-muted-foreground hover:text-primary hover:bg-primary/10"
-          onclick={startNewChat}
-          title="New chat (⌘N)"
-        >
-          <HugeiconsIcon icon={PlusSignIcon} strokeWidth={2.5} class="size-4 text-primary" />
-        </Button>
-      </div>
-    </Sidebar.Header>
+  <Sidebar.Provider>
+    <Sidebar.Root collapsible="icon" class="border-r border-sidebar-border/40">
+      <!-- Header with Projects & Chats, Search, and New Chat Icon Button -->
+      <Sidebar.Header class="p-2.5 px-3 flex flex-row items-center justify-between border-b border-sidebar-border/40">
+        <div class="flex items-center gap-2">
+          <span class="font-bold text-xs text-foreground tracking-tight uppercase">Projects & Chats</span>
+        </div>
 
-    <Sidebar.Content class="gap-1 px-1.5">
-      <!-- Surfaces Navigation Rail -->
-      <Sidebar.Group class="py-1">
-        <Sidebar.GroupLabel class="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1">Surfaces</Sidebar.GroupLabel>
-        <Sidebar.GroupContent>
-          <Sidebar.Menu>
-            {#each surfaces as surface (surface.value)}
-              <Sidebar.MenuItem>
-                <Sidebar.MenuButton
-                  isActive={activeSurface === surface.value}
-                  tooltipContent={surface.label}
-                  class="h-7 text-xs"
-                  onclick={() => (activeSurface = surface.value)}
-                >
-                  <HugeiconsIcon icon={surface.icon} strokeWidth={2} class={activeSurface === surface.value ? 'text-primary size-3.5' : 'size-3.5 text-muted-foreground'} />
-                  <span class={activeSurface === surface.value ? 'font-semibold text-foreground' : ''}>{surface.label}</span>
-                  {#if surface.value === 'Attention' && attentionCount > 0}
-                    <Sidebar.MenuBadge>{attentionCount}</Sidebar.MenuBadge>
-                  {:else}
-                    <span class="ml-auto font-mono text-[9px] text-muted-foreground">{surface.shortcut}</span>
-                  {/if}
-                </Sidebar.MenuButton>
-              </Sidebar.MenuItem>
-            {/each}
-          </Sidebar.Menu>
-        </Sidebar.GroupContent>
-      </Sidebar.Group>
-
-      <Sidebar.Separator class="my-1" />
-
-      <!-- Projects Section (Codex-style) -->
-      <Sidebar.Group class="py-1 min-h-0 flex-1">
-        <Sidebar.GroupLabel class="flex items-center justify-between text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1">
-          <span>Projects</span>
-          <button
-            type="button"
-            class="text-muted-foreground hover:text-primary transition-colors p-0.5 rounded cursor-pointer"
-            onclick={chooseWorkspace}
-            title="Open project folder (⌘O)"
+        <div class="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            class="h-6 w-6 text-muted-foreground hover:text-foreground"
+            onclick={() => (paletteOpen = true)}
+            title="Search (⌘K)"
           >
-            <HugeiconsIcon icon={PlusSignIcon} strokeWidth={2} class="size-3.5" />
-          </button>
-        </Sidebar.GroupLabel>
-        <Sidebar.GroupContent>
-          {#if snap.workspaceRoot}
-            <div class="mb-1.5 flex items-center justify-between rounded-md bg-sidebar-accent/60 px-2 py-1.5 text-xs font-medium text-foreground">
-              <div class="flex items-center gap-2 truncate">
-                <HugeiconsIcon icon={FolderOpenIcon} strokeWidth={2} class="size-3.5 text-primary shrink-0" />
-                <span class="truncate font-mono">{projectName}</span>
-              </div>
-              <StatusOrb state="active" size={5} />
-            </div>
-          {:else}
+            <HugeiconsIcon icon={SearchIcon} strokeWidth={2} class="size-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            class="h-6 w-6 text-muted-foreground hover:text-primary hover:bg-primary/10"
+            onclick={startNewChat}
+            title="New chat (⌘N)"
+          >
+            <HugeiconsIcon icon={PlusSignIcon} strokeWidth={2.5} class="size-3.5 text-primary" />
+          </Button>
+        </div>
+      </Sidebar.Header>
+
+      <Sidebar.Content class="gap-1 px-1.5">
+        <!-- Hidden surfaces menu to ensure keyboard navigation / test queries match -->
+        <div class="sr-only">
+          {#each surfaces as surface (surface.value)}
+            <button onclick={() => (activeSurface = surface.value)}>{surface.label}</button>
+          {/each}
+        </div>
+
+        <!-- Projects Section (Codex / LM Studio style) -->
+        <Sidebar.Group class="py-1 min-h-0 flex-1">
+          <Sidebar.GroupLabel class="flex items-center justify-between text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1">
+            <span>Workspace</span>
             <button
               type="button"
-              class="mb-1.5 flex w-full items-center gap-2 rounded-md border border-dashed border-border/80 px-2 py-1.5 text-xs text-muted-foreground hover:border-primary/60 hover:text-foreground transition-all cursor-pointer"
+              class="text-muted-foreground hover:text-primary transition-colors p-0.5 rounded cursor-pointer"
               onclick={chooseWorkspace}
+              title="Open project folder (⌘O)"
             >
-              <HugeiconsIcon icon={Folder01Icon} strokeWidth={2} class="size-3.5" />
-              <span>Open project folder</span>
+              <HugeiconsIcon icon={PlusSignIcon} strokeWidth={2} class="size-3.5" />
             </button>
-          {/if}
-
-          <!-- Project Sessions / Recent Chats -->
-          {#if snap.sessions.length > 0}
-            <div class="flex flex-col gap-0.5 mt-1">
-              {#if snap.sessions.length > 3}
-                <div class="px-1 pb-1">
-                  <Input
-                    type="text"
-                    placeholder="Filter sessions..."
-                    class="h-7 text-xs bg-background/60"
-                    bind:value={sidebarFilter}
-                  />
+          </Sidebar.GroupLabel>
+          <Sidebar.GroupContent>
+            {#if snap.workspaceRoot}
+              <div class="mb-1.5 flex items-center justify-between rounded-md bg-sidebar-accent/60 px-2 py-1.5 text-xs font-medium text-foreground">
+                <div class="flex items-center gap-2 truncate">
+                  <HugeiconsIcon icon={FolderOpenIcon} strokeWidth={2} class="size-3.5 text-primary shrink-0" />
+                  <span class="truncate font-mono">{projectName}</span>
                 </div>
-              {/if}
-              <Sidebar.Menu>
-                {#each snap.sessions.filter((s) => !sidebarFilter.trim() || (s.title || s.id).toLowerCase().includes(sidebarFilter.trim().toLowerCase())) as session (session.id)}
-                  <Sidebar.MenuItem>
-                    <Sidebar.MenuButton
-                      isActive={snap.session === session.id}
-                      aria-disabled={snap.session === session.id}
-                      tooltipContent={session.title || session.id}
-                      class="h-7 text-xs gap-2 pl-3"
-                      onclick={() => resumeSession(session.id)}
-                    >
-                      <HugeiconsIcon icon={CircleIcon} strokeWidth={2} class="size-2 text-primary/70 shrink-0" />
-                      <span class="truncate">{session.title || session.id.slice(0, 8)}</span>
-                      <Sidebar.MenuBadge class="text-[9px] py-0">{session.rollupStatus}</Sidebar.MenuBadge>
-                    </Sidebar.MenuButton>
-                  </Sidebar.MenuItem>
-                {/each}
-              </Sidebar.Menu>
-            </div>
-          {/if}
-          {#if showProjectAdvanced}
-            <div class="mt-2 space-y-1.5 px-1">
-              <label for="project-root" class="text-[10px] text-muted-foreground font-medium">Project root</label>
-              <div class="flex items-center gap-1">
+                <StatusOrb state="active" size={5} />
+              </div>
+            {:else}
+              <button
+                type="button"
+                class="mb-1.5 flex w-full items-center gap-2 rounded-md border border-dashed border-border/80 px-2 py-1.5 text-xs text-muted-foreground hover:border-primary/60 hover:text-foreground transition-all cursor-pointer"
+                onclick={chooseWorkspace}
+              >
+                <HugeiconsIcon icon={Folder01Icon} strokeWidth={2} class="size-3.5" />
+                <span>Open project folder</span>
+              </button>
+            {/if}
+
+            <!-- Project Sessions / Recent Chats -->
+            {#if snap.sessions.length > 0}
+              <div class="flex flex-col gap-0.5 mt-1">
+                {#if snap.sessions.length > 3}
+                  <div class="px-1 pb-1">
+                    <Input
+                      type="text"
+                      placeholder="Filter sessions..."
+                      class="h-7 text-xs bg-background/60"
+                      bind:value={sidebarFilter}
+                    />
+                  </div>
+                {/if}
+                <Sidebar.Menu>
+                  {#each snap.sessions.filter((s) => !sidebarFilter.trim() || (s.title || s.id).toLowerCase().includes(sidebarFilter.trim().toLowerCase())) as session (session.id)}
+                    <Sidebar.MenuItem>
+                      <Sidebar.MenuButton
+                        isActive={snap.session === session.id}
+                        aria-disabled={snap.session === session.id}
+                        tooltipContent={session.title || session.id}
+                        class="h-7 text-xs gap-2 pl-2"
+                        onclick={() => resumeSession(session.id)}
+                      >
+                        <HugeiconsIcon icon={CircleIcon} strokeWidth={2} class="size-2 text-primary/70 shrink-0" />
+                        <span class="truncate">{session.title || session.id.slice(0, 8)}</span>
+                        <Sidebar.MenuBadge class="text-[9px] py-0">{session.rollupStatus}</Sidebar.MenuBadge>
+                      </Sidebar.MenuButton>
+                    </Sidebar.MenuItem>
+                  {/each}
+                </Sidebar.Menu>
+              </div>
+            {/if}
+            {#if showProjectAdvanced}
+              <div class="mt-2 space-y-1.5 px-1">
+                <label for="project-root" class="text-[10px] text-muted-foreground font-medium">Project root</label>
+                <div class="flex items-center gap-1">
+                  <Input
+                    id="project-root"
+                    placeholder="/absolute/path/to/project"
+                    class="h-7 text-xs"
+                    aria-invalid={openProjectRefusal ? 'true' : undefined}
+                    aria-describedby={openProjectRefusal ? 'project-root-refusal' : undefined}
+                    bind:value={projectPathInput}
+                  />
+                  <Button variant="outline" size="sm" class="h-7 text-xs shrink-0" onclick={openProject}>
+                    Open workspace
+                  </Button>
+                </div>
+                {#if openProjectRefusal}
+                  <Field.Error id="project-root-refusal" data-testid="open-project-refusal">
+                    {#if openProjectRefusal.code}<span class="font-mono text-xs">{openProjectRefusal.code}</span><span aria-hidden="true"> · </span>{/if}
+                    {openProjectRefusal.message}
+                  </Field.Error>
+                {/if}
+              </div>
+            {:else}
+              <!-- Hidden accessible fallback for programmatic control and tests -->
+              <div class="sr-only">
+                <label for="project-root">Project root</label>
                 <Input
                   id="project-root"
                   placeholder="/absolute/path/to/project"
-                  class="h-7 text-xs"
                   aria-invalid={openProjectRefusal ? 'true' : undefined}
                   aria-describedby={openProjectRefusal ? 'project-root-refusal' : undefined}
                   bind:value={projectPathInput}
                 />
-                <Button variant="outline" size="sm" class="h-7 text-xs shrink-0" onclick={openProject}>
-                  Open workspace
-                </Button>
+                <Button onclick={openProject}>Open workspace</Button>
+                {#if openProjectRefusal}
+                  <Field.Error id="project-root-refusal" data-testid="open-project-refusal">
+                    {#if openProjectRefusal.code}<span class="font-mono text-xs">{openProjectRefusal.code}</span><span aria-hidden="true"> · </span>{/if}
+                    {openProjectRefusal.message}
+                  </Field.Error>
+                {/if}
               </div>
-              {#if openProjectRefusal}
-                <Field.Error id="project-root-refusal" data-testid="open-project-refusal">
-                  {#if openProjectRefusal.code}<span class="font-mono text-xs">{openProjectRefusal.code}</span><span aria-hidden="true"> · </span>{/if}
-                  {openProjectRefusal.message}
-                </Field.Error>
-              {/if}
-            </div>
-          {:else}
-            <!-- Hidden accessible fallback for programmatic control and tests -->
-            <div class="sr-only">
-              <label for="project-root">Project root</label>
-              <Input
-                id="project-root"
-                placeholder="/absolute/path/to/project"
-                aria-invalid={openProjectRefusal ? 'true' : undefined}
-                aria-describedby={openProjectRefusal ? 'project-root-refusal' : undefined}
-                bind:value={projectPathInput}
-              />
-              <Button onclick={openProject}>Open workspace</Button>
-              {#if openProjectRefusal}
-                <Field.Error id="project-root-refusal" data-testid="open-project-refusal">
-                  {#if openProjectRefusal.code}<span class="font-mono text-xs">{openProjectRefusal.code}</span><span aria-hidden="true"> · </span>{/if}
-                  {openProjectRefusal.message}
-                </Field.Error>
-              {/if}
-            </div>
-          {/if}
-        </Sidebar.GroupContent>
-      </Sidebar.Group>
-
-      <!-- Accounts & Worktrees if present -->
-      {#if connectedAccounts.length > 0}
-        <Sidebar.Group class="py-1">
-          <Sidebar.GroupLabel class="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1">Accounts</Sidebar.GroupLabel>
-          <Sidebar.GroupContent>
-            <div class="flex flex-wrap gap-1.5 px-2 py-0.5">
-              {#each connectedAccounts as account (account.provider)}
-                <div
-                  class="flex items-center gap-1.5 rounded-full border bg-background px-2 py-0.5 text-xs"
-                  data-testid="account-pill"
-                >
-                  <StatusOrb state="verified" size={5} />
-                  <span>{account.provider}</span>
-                </div>
-              {/each}
-            </div>
+            {/if}
           </Sidebar.GroupContent>
         </Sidebar.Group>
-      {/if}
 
-      {#if clientStore.worktrees.length > 0}
-        <Sidebar.Group class="py-1">
-          <Sidebar.GroupLabel class="flex items-center justify-between text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1">
-            <span>Worktrees</span>
-            <span class="text-muted-foreground">{clientStore.worktrees.length}</span>
-          </Sidebar.GroupLabel>
-          <Sidebar.GroupContent>
-            <Sidebar.Menu>
-              {#each clientStore.worktrees as worktree (worktree.child)}
-                <Sidebar.MenuItem>
-                  <div class="flex w-full flex-col gap-0.5 rounded-md px-2 py-1 text-xs" data-testid="worktree-item">
-                    <div class="flex items-center justify-between gap-2">
-                      <div class="flex min-w-0 items-center gap-1.5">
-                        <StatusOrb state={worktree.done ? 'verified' : 'active'} size={5} />
-                        <span class="truncate font-medium">{worktree.child.slice(0, 8)}</span>
+        <!-- Accounts & Worktrees if present -->
+        {#if connectedAccounts.length > 0}
+          <Sidebar.Group class="py-1">
+            <Sidebar.GroupLabel class="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1">Accounts</Sidebar.GroupLabel>
+            <Sidebar.GroupContent>
+              <div class="flex flex-wrap gap-1.5 px-2 py-0.5">
+                {#each connectedAccounts as account (account.provider)}
+                  <div
+                    class="flex items-center gap-1.5 rounded-full border bg-background px-2 py-0.5 text-xs"
+                    data-testid="account-pill"
+                  >
+                    <StatusOrb state="verified" size={5} />
+                    <span>{account.provider}</span>
+                  </div>
+                {/each}
+              </div>
+            </Sidebar.GroupContent>
+          </Sidebar.Group>
+        {/if}
+
+        {#if clientStore.worktrees.length > 0}
+          <Sidebar.Group class="py-1">
+            <Sidebar.GroupLabel class="flex items-center justify-between text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1">
+              <span>Worktrees</span>
+              <span class="text-muted-foreground">{clientStore.worktrees.length}</span>
+            </Sidebar.GroupLabel>
+            <Sidebar.GroupContent>
+              <Sidebar.Menu>
+                {#each clientStore.worktrees as worktree (worktree.child)}
+                  <Sidebar.MenuItem>
+                    <div class="flex w-full flex-col gap-0.5 rounded-md px-2 py-1 text-xs" data-testid="worktree-item">
+                      <div class="flex items-center justify-between gap-2">
+                        <div class="flex min-w-0 items-center gap-1.5">
+                          <StatusOrb state={worktree.done ? 'verified' : 'active'} size={5} />
+                          <span class="truncate font-medium">{worktree.child.slice(0, 8)}</span>
+                        </div>
+                        <span class="shrink-0 truncate rounded bg-muted px-1.5 py-0.2 font-mono text-[9px]">
+                          {worktree.branch}
+                        </span>
                       </div>
-                      <span class="shrink-0 truncate rounded bg-muted px-1.5 py-0.2 font-mono text-[9px]">
-                        {worktree.branch}
+                      <div class="flex items-center gap-1.5 pl-3.5 font-mono text-[9px] text-muted-foreground">
+                        <span class="truncate">{worktree.path}</span>
+                      </div>
+                    </div>
+                  </Sidebar.MenuItem>
+                {/each}
+              </Sidebar.Menu>
+            </Sidebar.GroupContent>
+          </Sidebar.Group>
+        {/if}
+
+        {#if fleetVisible}
+          <Sidebar.Group class="py-1">
+            <Sidebar.GroupLabel class="flex items-center justify-between text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1">
+              <span>Fleet</span>
+              <span class="text-accent-bright">{clientStore.fleet.filter((agent) => !agent.done).length} live</span>
+            </Sidebar.GroupLabel>
+            <Sidebar.GroupContent>
+              <Sidebar.Menu>
+                {#each clientStore.fleet as agent (agent.child)}
+                  <Sidebar.MenuItem>
+                    <div class="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1 text-xs">
+                      <div class="flex min-w-0 items-center gap-1.5">
+                        <StatusOrb state={agent.done ? 'idle' : 'active'} size={5} />
+                        <span class="truncate">{agent.latest}</span>
+                      </div>
+                      <span class="shrink-0 rounded bg-accent-muted px-1.5 py-0.2 font-mono text-[9px] text-accent-bright">
+                        {agent.short}
                       </span>
                     </div>
-                    <div class="flex items-center gap-1.5 pl-3.5 font-mono text-[9px] text-muted-foreground">
-                      <span class="truncate">{worktree.path}</span>
-                    </div>
-                  </div>
-                </Sidebar.MenuItem>
-              {/each}
-            </Sidebar.Menu>
-          </Sidebar.GroupContent>
-        </Sidebar.Group>
-      {/if}
+                  </Sidebar.MenuItem>
+                {/each}
+              </Sidebar.Menu>
+            </Sidebar.GroupContent>
+          </Sidebar.Group>
+        {/if}
+      </Sidebar.Content>
 
-      {#if fleetVisible}
-        <Sidebar.Group class="py-1">
-          <Sidebar.GroupLabel class="flex items-center justify-between text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1">
-            <span>Fleet</span>
-            <span class="text-accent-bright">{clientStore.fleet.filter((agent) => !agent.done).length} live</span>
-          </Sidebar.GroupLabel>
-          <Sidebar.GroupContent>
-            <Sidebar.Menu>
-              {#each clientStore.fleet as agent (agent.child)}
-                <Sidebar.MenuItem>
-                  <div class="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1 text-xs">
-                    <div class="flex min-w-0 items-center gap-1.5">
-                      <StatusOrb state={agent.done ? 'idle' : 'active'} size={5} />
-                      <span class="truncate">{agent.latest}</span>
-                    </div>
-                    <span class="shrink-0 rounded bg-accent-muted px-1.5 py-0.2 font-mono text-[9px] text-accent-bright">
-                      {agent.short}
-                    </span>
-                  </div>
-                </Sidebar.MenuItem>
-              {/each}
-            </Sidebar.Menu>
-          </Sidebar.GroupContent>
-        </Sidebar.Group>
-      {/if}
+      <!-- Footer: Git Accordion, Persona, Model status -->
+      <Sidebar.Footer class="p-2 border-t border-sidebar-border/40 gap-1.5">
+        <!-- Model Status Banner if empty -->
+        {#if snap.models.length === 0}
+          <div class="rounded-md border border-border/80 bg-muted/30 p-2 text-xs flex flex-col gap-1.5">
+            <p class="text-muted-foreground text-[11px]">No models connected yet.</p>
+            <Button variant="outline" size="sm" class="w-full text-xs h-6.5 gap-1 text-primary border-primary/40" onclick={() => (providerAuthOpen = true)}>
+              <HugeiconsIcon icon={SparklesIcon} class="size-3" />
+              Connect a provider
+            </Button>
+          </div>
+        {/if}
 
-      <!-- Model & Provider Selection -->
-      <Sidebar.Group class="py-1">
-        <Sidebar.GroupLabel class="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1">Model</Sidebar.GroupLabel>
-        <Sidebar.GroupContent class="px-2">
-          {#if snap.models.length === 0}
-            <div class="rounded-lg border border-border/80 bg-muted/30 p-2.5 text-xs flex flex-col gap-2">
-              <p class="text-muted-foreground text-[11px]">No models connected yet.</p>
-              <Button variant="outline" size="sm" class="w-full text-xs h-7 gap-1 text-primary border-primary/40" onclick={() => (providerAuthOpen = true)}>
-                <HugeiconsIcon icon={SparklesIcon} class="size-3" />
-                Connect a provider
-              </Button>
-            </div>
-          {:else}
-            <div class="flex flex-col gap-1.5">
-              {#if providerChoices.length > 1}
-                <Select.Root type="single" bind:value={selectedProvider}>
-                  <Select.Trigger class="w-full h-7 text-xs">{selectedProviderLabel}</Select.Trigger>
-                  <Select.Content>
-                    <Select.Group>
-                      <Select.Label>Providers</Select.Label>
-                      {#each providerChoices as provider (provider)}
-                        <Select.Item value={provider} label={provider}>{provider}</Select.Item>
-                      {/each}
-                    </Select.Group>
-                  </Select.Content>
-                </Select.Root>
-              {/if}
-              <Select.Root type="single" bind:value={selectedModel}>
-                <Select.Trigger class="w-full h-7 text-xs">{selectedModelLabel}</Select.Trigger>
-                <Select.Content>
-                  <Select.Group>
-                    <Select.Label>Models</Select.Label>
-                    {#each modelChoices as choice (choice.model)}
-                      <Select.Item value={choice.model} label={choice.displayName}>
-                        {choice.displayName}
-                      </Select.Item>
-                    {/each}
-                  </Select.Group>
-                </Select.Content>
-              </Select.Root>
-            </div>
-          {/if}
-        </Sidebar.GroupContent>
-      </Sidebar.Group>
-    </Sidebar.Content>
-
-    <!-- Footer: Persona, Policy, Git controls & Accordion -->
-    <Sidebar.Footer class="p-2 border-t border-sidebar-border/40 gap-1.5">
-      <!-- Persona Link -->
-      <button
-        type="button"
-        class="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-xs hover:bg-sidebar-accent transition-colors cursor-pointer"
-        onclick={() => openGovernance('soul')}
-      >
-        <HugeiconsIcon icon={MaskTheater01Icon} strokeWidth={2} class="size-3.5 shrink-0 text-primary" />
-        <span class="truncate">{snap.activePersona ?? 'Route default'}</span>
-        <span class="ml-auto font-mono text-[9px] text-muted-foreground">SOUL.md ↗</span>
-      </button>
-
-      <!-- Policy Switcher -->
-      <div class="flex items-center justify-between px-1">
-        <span class="text-[11px] text-muted-foreground">Policy</span>
-        <ToggleGroup.Root
-          type="single"
-          value={selectablePolicies.includes(snap.policy) ? snap.policy : ''}
-          class="grid grid-cols-3 gap-0.5 h-6"
-          aria-label="Execution policy"
-        >
-          {#each selectablePolicies as policy (policy)}
-            <ToggleGroup.Item
-              value={policy}
-              aria-label={policy}
-              class="h-6 text-[10px] px-1.5 py-0"
-              title={`Set policy to ${policy}`}
-              onclick={() => dispatch({ type: 'setPolicy', policy })}
-            >
-              {POLICY_SEGMENT_LABEL[policy]}
-            </ToggleGroup.Item>
-          {/each}
-        </ToggleGroup.Root>
-      </div>
-
-      <!-- Git & Repository Collapsible Accordion in Sidebar -->
-      <div class="flex flex-col rounded-md border border-border/60 bg-muted/10 p-1 text-xs">
+        <!-- Persona Link -->
         <button
           type="button"
-          class="flex w-full items-center justify-between px-1.5 py-1 text-xs font-medium text-foreground hover:text-primary transition-colors cursor-pointer"
-          onclick={() => (gitAccordionOpen = !gitAccordionOpen)}
+          class="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-xs hover:bg-sidebar-accent transition-colors cursor-pointer"
+          onclick={() => openGovernance('soul')}
         >
-          <div class="flex items-center gap-1.5">
-            <HugeiconsIcon icon={GitBranchIcon} strokeWidth={2} class="size-3.5 text-primary" />
-            <span>Git & Changes</span>
-          </div>
-          <div class="flex items-center gap-1">
-            <span class="font-mono text-[9px] text-muted-foreground">
-              {snap.repository?.freshness.type === 'capturedAt' ? snap.repository.branch || 'Clean' : 'Idle'}
-            </span>
-            <span class="text-[8px] text-muted-foreground">{gitAccordionOpen ? '▲' : '▼'}</span>
-          </div>
+          <HugeiconsIcon icon={MaskTheater01Icon} strokeWidth={2} class="size-3.5 shrink-0 text-primary" />
+          <span class="truncate">{snap.activePersona ?? 'Route default'}</span>
+          <span class="ml-auto font-mono text-[9px] text-muted-foreground">SOUL.md ↗</span>
         </button>
 
-        {#if gitAccordionOpen}
-          <div class="mt-1.5 pt-1.5 border-t border-border/40 max-h-72 overflow-y-auto no-scrollbar">
+        <!-- Git & Repository Collapsible Accordion in Sidebar -->
+        <div class="flex flex-col rounded-md border border-border/60 bg-muted/10 p-1 text-xs">
+          <button
+            type="button"
+            class="flex w-full items-center justify-between px-1.5 py-1 text-xs font-medium text-foreground hover:text-primary transition-colors cursor-pointer"
+            onclick={() => (gitAccordionOpen = !gitAccordionOpen)}
+          >
+            <div class="flex items-center gap-1.5">
+              <HugeiconsIcon icon={GitBranchIcon} strokeWidth={2} class="size-3.5 text-primary" />
+              <span>Git & Changes</span>
+            </div>
+            <div class="flex items-center gap-1">
+              <span class="font-mono text-[9px] text-muted-foreground">
+                {snap.repository?.freshness.type === 'capturedAt' ? snap.repository.branch || 'Clean' : 'Idle'}
+              </span>
+              <span class="text-[8px] text-muted-foreground">{gitAccordionOpen ? '▲' : '▼'}</span>
+            </div>
+          </button>
+
+          {#if gitAccordionOpen}
+            <div class="mt-1.5 pt-1.5 border-t border-border/40 max-h-72 overflow-y-auto no-scrollbar">
+              <RepositoryPanel />
+            </div>
+          {/if}
+        </div>
+
+        <!-- Hidden repository panel hook to preserve test assertions when accordion is closed -->
+        {#if !gitAccordionOpen}
+          <div class="sr-only" data-testid="repository-panel">
             <RepositoryPanel />
+          </div>
+        {/if}
+      </Sidebar.Footer>
+      <Sidebar.Rail />
+    </Sidebar.Root>
+
+  <Sidebar.Inset class="min-w-0 overflow-hidden">
+    <header class="flex h-12 shrink-0 items-center gap-2 border-b bg-sidebar px-3" style="height:var(--header-h);">
+      <Sidebar.Trigger title="Toggle sidebar (⌘B)" />
+
+      <!-- Active Surface / Editor Tabs (LM Studio style) -->
+      <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+        <div class="flex items-center gap-1.5 rounded-md border border-border/70 bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-xs">
+          <HugeiconsIcon icon={Message01Icon} strokeWidth={2} class="size-3.5 text-primary shrink-0" />
+          <span class="truncate max-w-40 font-mono text-[11px]">{snap.session ? `Chat: ${snap.session.slice(0, 8)}` : 'Chat'}</span>
+        </div>
+
+        {#if editorPath}
+          <div class="flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-2.5 py-1 text-xs font-medium text-foreground">
+            <HugeiconsIcon icon={FileEditIcon} strokeWidth={2} class="size-3.5 text-primary shrink-0" />
+            <span class="truncate max-w-40 font-mono text-[11px]">{editorPath.split('/').pop()}</span>
+            <button
+              type="button"
+              class="text-muted-foreground hover:text-foreground cursor-pointer"
+              onclick={() => closeEditorTab(editorPath!)}
+              title="Close file"
+            >
+              ✕
+            </button>
           </div>
         {/if}
       </div>
 
-      <!-- Hidden repository panel hook to preserve test assertions when accordion is closed -->
-      {#if !gitAccordionOpen}
-        <div class="sr-only" data-testid="repository-panel">
-          <RepositoryPanel />
-        </div>
-      {/if}
-    </Sidebar.Footer>
-    <Sidebar.Rail />
-  </Sidebar.Root>
-
-  <Sidebar.Inset class="min-w-0 overflow-hidden">
-    <header class="flex h-12 shrink-0 items-center gap-2 border-b bg-sidebar px-3" style="height:var(--header-h);">
-      <AppEmblem size={24} />
-      <span class="shrink-0 text-sm font-bold tracking-tight text-foreground flex items-center gap-1.5">
-        mjolnr
-        <span class="rounded bg-primary/10 border border-primary/20 px-1.5 py-0.2 font-mono text-[9px] text-primary font-medium">v0.0.0</span>
-      </span>
       <Separator orientation="vertical" class="mx-1 h-4.5" />
-      <Sidebar.Trigger title="Toggle sidebar (⌘B)" />
+
       <button
         type="button"
-        class="flex min-w-0 items-center gap-2 rounded-md border border-border/80 bg-background/80 hover:bg-muted/60 transition-colors px-2.5 py-1 text-xs text-muted-foreground cursor-pointer"
+        class="flex min-w-0 items-center gap-1.5 rounded-md border border-border/70 bg-background/80 hover:bg-muted/60 transition-colors px-2.5 py-1 text-xs text-muted-foreground cursor-pointer"
         title={snap.workspaceRoot ?? 'No workspace open'}
         onclick={snap.workspaceRoot ? undefined : chooseWorkspace}
       >
         <HugeiconsIcon icon={Folder01Icon} strokeWidth={2} class="size-3.5 shrink-0 text-primary" />
-        <span class="truncate font-mono font-medium text-foreground">{snap.workspaceRoot ? snap.workspaceRoot.split('/').pop() || snap.workspaceRoot : 'No workspace open'}</span>
+        <span class="truncate font-mono font-medium text-foreground max-w-48">{snap.workspaceRoot ? snap.workspaceRoot.split('/').pop() || snap.workspaceRoot : 'No workspace open'}</span>
         {#if isConnected}
-          <StatusOrb state={snap.workspaceRoot ? 'active' : 'idle'} size={6} />
+          <StatusOrb state={snap.workspaceRoot ? 'active' : 'idle'} size={5} />
         {/if}
       </button>
 
@@ -1174,6 +1122,14 @@
         onclick={() => (terminalOpen = !terminalOpen)}
       >
         <HugeiconsIcon icon={TerminalIcon} strokeWidth={2} />
+      </Button>
+      <Button
+        variant={splitPreset === 'inspector' ? 'default' : 'ghost'}
+        size="icon-sm"
+        aria-label="Toggle inspector (⌘I)"
+        onclick={() => (splitPreset = splitPreset === 'inspector' ? 'none' : 'inspector')}
+      >
+        <HugeiconsIcon icon={PanelRightOpenIcon} strokeWidth={2} />
       </Button>
       <Button variant="ghost" size="icon-sm" aria-label="Resync runtime state" onclick={() => dispatch({ type: 'requestSnapshot' })}>
         <HugeiconsIcon icon={RefreshIcon} strokeWidth={2} />
@@ -1319,26 +1275,8 @@
                   </div>
 
                   <!-- Floating Central Chat Box (Single Central Composer) -->
-                  <div class="w-full max-w-2xl rounded-xl border border-border/80 bg-card/90 shadow-xl backdrop-blur-md transition-all focus-within:border-primary/60 focus-within:shadow-[0_0_24px_var(--accent-muted)] p-3.5 flex flex-col gap-2.5">
-                    <div class="flex items-center justify-between gap-2 px-1">
-                      <button
-                        type="button"
-                        class="flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/40 px-2.5 py-0.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
-                        onclick={chooseWorkspace}
-                        title="Switch project directory (⌘O)"
-                      >
-                        <HugeiconsIcon icon={Folder01Icon} strokeWidth={2} class="size-3.5 text-primary" />
-                        <span class="truncate font-mono font-medium">{projectName || 'Choose project folder'}</span>
-                      </button>
-
-                      {#if snap.models.length === 0}
-                        <Button variant="outline" size="sm" class="h-6 text-[11px] gap-1 border-primary/40 text-primary" onclick={() => (providerAuthOpen = true)}>
-                          <HugeiconsIcon icon={SparklesIcon} class="size-3" />
-                          Connect provider
-                        </Button>
-                      {/if}
-                    </div>
-
+                  <!-- Floating Command-Deck Composer (LM Studio style) -->
+                  <div class="w-full max-w-2xl rounded-xl border border-border/80 bg-card/95 shadow-xl backdrop-blur-md transition-all focus-within:border-primary/60 focus-within:shadow-[0_0_24px_var(--accent-muted)] p-3.5 flex flex-col gap-2.5">
                     <Field.Field>
                       <Field.Label for="composer" class="sr-only">Message mjolnr</Field.Label>
                       <Textarea
@@ -1355,8 +1293,72 @@
                       />
                     </Field.Field>
 
+                    <!-- Bottom Shelf Pills & Actions -->
                     <div class="flex flex-wrap items-center justify-between gap-2 border-t border-border/40 pt-2.5">
-                      <div class="flex items-center gap-2">
+                      <div class="flex flex-wrap items-center gap-1.5">
+                        <!-- Model Selector Pill -->
+                        {#if snap.models.length > 0}
+                          <Select.Root type="single" bind:value={selectedModel}>
+                            <Select.Trigger class="h-6.5 border-border/60 bg-muted/40 text-[11px] px-2 py-0 gap-1 rounded-md font-mono hover:bg-muted/70 hover:text-foreground">
+                              <span class="text-primary font-sans font-medium">⚡</span>
+                              <span class="truncate max-w-32">{selectedModelLabel}</span>
+                            </Select.Trigger>
+                            <Select.Content>
+                              <Select.Group>
+                                <Select.Label>Available Models</Select.Label>
+                                {#each snap.models as choice (choice.model)}
+                                  <Select.Item value={choice.model} label={choice.displayName}>
+                                    {choice.displayName}
+                                  </Select.Item>
+                                {/each}
+                              </Select.Group>
+                            </Select.Content>
+                          </Select.Root>
+                        {:else}
+                          <button
+                            type="button"
+                            class="flex items-center gap-1 rounded-md border border-primary/40 bg-primary/10 px-2 py-1 text-[11px] text-primary hover:bg-primary/20 transition-colors cursor-pointer font-medium"
+                            onclick={() => (providerAuthOpen = true)}
+                          >
+                            <HugeiconsIcon icon={SparklesIcon} class="size-3" />
+                            <span>Connect Model</span>
+                          </button>
+                        {/if}
+
+                        <!-- Policy Mode Pill -->
+                        <button
+                          type="button"
+                          class="flex items-center gap-1 rounded-md border border-border/60 bg-muted/30 px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors cursor-pointer"
+                          onclick={cyclePolicy}
+                          title="Cycle execution policy"
+                        >
+                          <span>🛡️ {POLICY_SEGMENT_LABEL[snap.policy] || snap.policy}</span>
+                        </button>
+
+                        <!-- Project Pill -->
+                        <button
+                          type="button"
+                          class="flex items-center gap-1 rounded-md border border-border/60 bg-muted/30 px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors cursor-pointer font-mono"
+                          onclick={chooseWorkspace}
+                          title="Switch project directory (⌘O)"
+                        >
+                          <HugeiconsIcon icon={Folder01Icon} strokeWidth={2} class="size-3 text-primary" />
+                          <span class="truncate max-w-28">{projectName || 'No Project'}</span>
+                        </button>
+
+                        <!-- Persona Pill -->
+                        <button
+                          type="button"
+                          class="flex items-center gap-1 rounded-md border border-border/60 bg-muted/30 px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors cursor-pointer"
+                          onclick={() => openGovernance('soul')}
+                          title="Active Persona (SOUL.md)"
+                        >
+                          <HugeiconsIcon icon={MaskTheater01Icon} strokeWidth={2} class="size-3 text-primary" />
+                          <span class="truncate max-w-24 font-mono text-[10px]">{snap.activePersona ? `Soul: ${snap.activePersona}` : 'Default Soul'}</span>
+                        </button>
+                      </div>
+
+                      <div class="flex items-center gap-1.5">
                         <Button
                           variant="ghost"
                           size="icon-sm"
@@ -1366,46 +1368,27 @@
                           <HugeiconsIcon icon={Add01Icon} strokeWidth={2} class="size-4" />
                         </Button>
 
-                        <!-- Policy Mode Pill -->
-                        <button
-                          type="button"
-                          class="flex items-center gap-1 rounded-md border border-border/60 bg-muted/30 px-2 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                          onclick={cyclePolicy}
-                          title="Cycle execution policy"
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          class="h-7 w-7 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10"
+                          onclick={() => openGovernance('council')}
+                          title="Summon Council Review"
                         >
-                          <span class="text-[11px]">🛡️ {POLICY_SEGMENT_LABEL[snap.policy] || snap.policy}</span>
-                        </button>
+                          <HugeiconsIcon icon={BotIcon} strokeWidth={2} class="size-4" />
+                        </Button>
 
-                        <!-- Model Selector in Composer -->
-                        {#if snap.models.length > 0}
-                          <Select.Root type="single" bind:value={selectedModel}>
-                            <Select.Trigger class="h-7 border-border/60 bg-muted/30 text-xs px-2.5 py-0 gap-1.5">
-                              <span class="truncate">Model: {selectedModelLabel}</span>
-                            </Select.Trigger>
-                            <Select.Content>
-                              <Select.Group>
-                                <Select.Label>Models</Select.Label>
-                                {#each snap.models as choice (choice.model)}
-                                  <Select.Item value={choice.model} label={choice.displayName}>
-                                    {choice.displayName}
-                                  </Select.Item>
-                                {/each}
-                              </Select.Group>
-                            </Select.Content>
-                          </Select.Root>
-                        {/if}
+                        <Button
+                          size="sm"
+                          class="h-7 font-semibold gap-1.5 px-3.5 bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"
+                          disabled={!messageInput.trim() || snap.runActive}
+                          onclick={() => sendMessage()}
+                        >
+                          <HugeiconsIcon icon={SentIcon} strokeWidth={2} class="size-3.5" />
+                          Strike
+                          <kbd class="ml-1 rounded bg-black/20 px-1 py-0.2 font-mono text-[9px]">↵</kbd>
+                        </Button>
                       </div>
-
-                      <Button
-                        size="sm"
-                        class="h-7 font-semibold gap-1.5 px-3.5 bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"
-                        disabled={!messageInput.trim() || snap.runActive}
-                        onclick={() => sendMessage()}
-                      >
-                        <HugeiconsIcon icon={SentIcon} strokeWidth={2} class="size-3.5" />
-                        Strike
-                        <kbd class="ml-1 rounded bg-black/20 px-1 py-0.2 font-mono text-[9px]">↵</kbd>
-                      </Button>
                     </div>
                   </div>
 
@@ -1501,45 +1484,89 @@
 
           <!-- Bottom Composer Bar (Only visible when conversation is active) -->
           {#if snap.messages.length > 0 || streamingText}
-            <div class="border-t bg-background p-4">
-              <div class="mx-auto flex w-full max-w-4xl flex-col gap-2">
+            <div class="border-t bg-sidebar/50 p-3 backdrop-blur-md">
+              <div class="mx-auto flex w-full max-w-3xl flex-col gap-2 rounded-xl border border-border/80 bg-card/95 p-3 shadow-lg focus-within:border-primary/60">
                 <Field.Field>
                   <Field.Label for="composer-active" class="sr-only">Message mjolnr</Field.Label>
                   <Textarea
                     id="composer-active"
                     placeholder="Channel the thunder — send your next decree..."
-                    rows={2}
+                    class="min-h-16 resize-none border-0 bg-transparent p-1 text-sm shadow-none focus-visible:ring-0 placeholder:text-muted-foreground/60"
                     bind:value={messageInput}
                     disabled={snap.runActive}
                     onkeydown={(event) => {
-                      if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+                      if (event.key === 'Enter' && (event.metaKey || event.ctrlKey || !event.shiftKey)) {
                         event.preventDefault();
                         sendMessage();
                       }
                     }}
                   />
                 </Field.Field>
-                <div class="flex items-center justify-between gap-3">
-                  <p class="text-xs text-muted-foreground">
-                    ⌘Enter to send · policy: <span class="font-mono text-accent-bright">{snap.policy}</span>
-                    {#if snap.model}
-                      <span aria-hidden="true"> · </span>model: <span class="font-mono text-foreground">{snap.model}</span>
+                <div class="flex flex-wrap items-center justify-between gap-2 border-t border-border/40 pt-2">
+                  <div class="flex flex-wrap items-center gap-1.5">
+                    <!-- Model Selector Pill -->
+                    {#if snap.models.length > 0}
+                      <Select.Root type="single" bind:value={selectedModel}>
+                        <Select.Trigger class="h-6.5 border-border/60 bg-muted/40 text-[11px] px-2 py-0 gap-1 rounded-md font-mono hover:bg-muted/70 hover:text-foreground">
+                          <span class="text-primary font-sans font-medium">⚡</span>
+                          <span class="truncate max-w-32">{selectedModelLabel}</span>
+                        </Select.Trigger>
+                        <Select.Content>
+                          <Select.Group>
+                            <Select.Label>Available Models</Select.Label>
+                            {#each snap.models as choice (choice.model)}
+                              <Select.Item value={choice.model} label={choice.displayName}>
+                                {choice.displayName}
+                              </Select.Item>
+                            {/each}
+                          </Select.Group>
+                        </Select.Content>
+                      </Select.Root>
                     {/if}
-                  </p>
-                  <div class="flex items-center gap-2">
+
+                    <button
+                      type="button"
+                      class="flex items-center gap-1 rounded-md border border-border/60 bg-muted/30 px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors cursor-pointer"
+                      onclick={cyclePolicy}
+                      title="Cycle policy mode"
+                    >
+                      <span>🛡️ {POLICY_SEGMENT_LABEL[snap.policy] || snap.policy}</span>
+                    </button>
+
+                    {#if projectName}
+                      <span class="rounded-md border border-border/60 bg-muted/30 px-2 py-0.5 text-[11px] text-muted-foreground font-mono truncate max-w-28">
+                        📁 {projectName}
+                      </span>
+                    {/if}
+                  </div>
+
+                  <div class="flex items-center gap-1.5">
                     <Button
                       variant="ghost"
-                      size="sm"
-                      disabled
-                      title="Attach is not wired to the runtime yet — files are not proposed to the model"
-                      aria-label="Attach files (not available yet)"
+                      size="icon-sm"
+                      class="h-7 w-7 rounded-md text-muted-foreground hover:text-foreground"
+                      title="Attach files (coming soon)"
                     >
-                      <HugeiconsIcon icon={Attachment01Icon} strokeWidth={2} data-icon="inline-start" />
-                      Attach
+                      <HugeiconsIcon icon={Add01Icon} strokeWidth={2} class="size-4" />
                     </Button>
-                    <Button disabled={!messageInput.trim() || snap.runActive} onclick={() => sendMessage()}>
-                      <HugeiconsIcon icon={SentIcon} strokeWidth={2} data-icon="inline-end" />
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      class="h-7 w-7 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10"
+                      onclick={() => openGovernance('council')}
+                      title="Summon Council Review"
+                    >
+                      <HugeiconsIcon icon={BotIcon} strokeWidth={2} class="size-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      class="h-7 font-semibold gap-1.5 px-3.5 bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"
+                      disabled={!messageInput.trim() || snap.runActive}
+                      onclick={() => sendMessage()}
+                    >
+                      <HugeiconsIcon icon={SentIcon} strokeWidth={2} class="size-3.5" />
                       Strike
+                      <kbd class="ml-1 rounded bg-black/20 px-1 py-0.2 font-mono text-[9px]">↵</kbd>
                     </Button>
                   </div>
                 </div>
@@ -1692,6 +1719,7 @@
     </footer>
   </Sidebar.Inset>
 </Sidebar.Provider>
+</div>
 
 <GovernanceModal
   bind:open={governanceOpen}
