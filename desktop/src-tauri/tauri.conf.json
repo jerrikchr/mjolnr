@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "mjolnr — Governed Execution Workspace",
+        "title": "mjolnr — AI Workspace",
         "width": 1280,
         "height": 840,
         "resizable": true,
@@ -27,6 +27,6 @@
     "active": true,
     "targets": ["app"],
     "category": "DeveloperTool",
-    "shortDescription": "Governed execution workspace"
+    "shortDescription": "AI Coding Workspace"
   }
 }

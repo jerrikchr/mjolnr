@@ -94,7 +94,7 @@
         id: 'resume-session',
         state: 'idle',
         title: 'No active session selected',
-        detail: 'Resume an existing session or create a new one to continue governed work.',
+        detail: 'Resume an existing session or create a new one to continue work.',
         priority: 7
       });
     }

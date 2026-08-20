@@ -150,7 +150,7 @@
         <Empty.Media variant="icon">
           <HugeiconsIcon icon={FileDiffIcon} strokeWidth={2} />
         </Empty.Media>
-        <Empty.Title>No governed change records yet</Empty.Title>
+        <Empty.Title>No change records yet</Empty.Title>
         <Empty.Description>
           No explicit file changes are present in the active snapshot.
         </Empty.Description>

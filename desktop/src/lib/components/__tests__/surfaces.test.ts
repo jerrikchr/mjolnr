@@ -231,7 +231,7 @@ describe('Desktop surfaces stay inside explicit snapshot authority', () => {
 
     const { getByText, queryByText } = render(ChangesSurface);
 
-    expect(getByText('No governed change records yet')).toBeDefined();
+    expect(getByText('No change records yet')).toBeDefined();
     expect(getByText('No explicit file changes are present in the active snapshot.')).toBeDefined();
     expect(queryByText('@@ -1,5 +1,6 @@')).toBeNull();
   });

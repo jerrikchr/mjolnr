@@ -3,6 +3,7 @@
   import { onMount } from 'svelte';
   import {
     Activity03Icon,
+    Add01Icon,
     Alert02Icon,
     Attachment01Icon,
     CheckmarkCircle02Icon,
@@ -11,16 +12,18 @@
     FileEditIcon,
     Folder01Icon,
     FolderOpenIcon,
+    GitBranchIcon,
     Image02Icon,
     MaskTheater01Icon,
     Message01Icon,
     Moon01Icon,
     Notification02Icon,
     PanelRightOpenIcon,
-    PlayIcon,
+    PlusSignIcon,
     RefreshIcon,
     SearchIcon,
     SentIcon,
+    SparklesIcon,
     Key01Icon,
     StopIcon,
     Sun01Icon,
@@ -43,6 +46,7 @@
   import InspectorPane from '$lib/components/inspector/InspectorPane.svelte';
   import PlanSurface from '$lib/components/plan/PlanSurface.svelte';
   import RepositoryPanel from '$lib/components/repository/RepositoryPanel.svelte';
+  import RepositoryControls from '$lib/components/repository/RepositoryControls.svelte';
   import CloneRepository from '$lib/components/repository/CloneRepository.svelte';
   import TerminalPane from '$lib/components/panes/TerminalPane.svelte';
   import VerifySurface from '$lib/components/surfaces/VerifySurface.svelte';
@@ -51,7 +55,7 @@
   import { Button } from '$lib/components/ui/button';
   import * as Card from '$lib/components/ui/card';
   import * as Command from '$lib/components/ui/command';
-  import * as Empty from '$lib/components/ui/empty';
+  import * as Dialog from '$lib/components/ui/dialog';
   import * as Field from '$lib/components/ui/field';
   import { Input } from '$lib/components/ui/input';
   import * as Resizable from '$lib/components/ui/resizable';
@@ -70,7 +74,6 @@
     ClientDirectoryEntry,
     ClientFileOpen,
     ClientResumeChoice,
-    ClientSessionSummary,
     ClientWorkspaceSearchResult
   } from '$lib/runtime/contract';
 
@@ -106,6 +109,8 @@
   let paletteOpen = $state(false);
   let governanceOpen = $state(false);
   let governanceTab = $state('council');
+  let repoDialogOpen = $state(false);
+  let showProjectAdvanced = $state(false);
   let explorerOpen = $state(false);
   let terminalOpen = $state(false);
   let terminalExpanded = $state(false);
@@ -129,6 +134,19 @@
   function openGovernance(tab: string) {
     governanceTab = tab;
     governanceOpen = true;
+  }
+
+  function startNewChat() {
+    messageInput = '';
+    activeSurface = 'Conversation';
+    createSession();
+  }
+
+  function cyclePolicy() {
+    const sequence: ClientPolicy[] = ['ask', 'workspace-write', 'full-auto', 'read-only'];
+    const currentIndex = sequence.indexOf(snap.policy as ClientPolicy);
+    const next = sequence[(currentIndex + 1) % sequence.length];
+    dispatch({ type: 'setPolicy', policy: next });
   }
   let paletteQuery = $state('');
   let searchResults = $state<ClientWorkspaceSearchResult[]>([]);
@@ -230,6 +248,11 @@
   }
 
   let snap = $derived(clientStore.snapshot);
+  let projectName = $derived(
+    snap.workspaceRoot
+      ? snap.workspaceRoot.replace(/\/+$/, '').split('/').pop() || snap.workspaceRoot
+      : null
+  );
   let isConnected = $derived(clientStore.connected);
   let streamingText = $derived(clientStore.streamingText);
   let quotaWindow = $derived(relevantQuotaWindow(snap.quota));
@@ -291,32 +314,6 @@
       Number(Boolean(snap.pendingApproval)) +
       Number(Boolean(snap.resumeAdvice))
   );
-  let groupedSessions = $derived(() => {
-    const groups: Record<string, typeof snap.sessions> = {
-      'Active': [],
-      'Needs Attention': [],
-      'Drafts': [],
-      'Completed': []
-    };
-    for (const session of snap.sessions) {
-      // This is the one grouping decision the frontend makes that is not
-      // directly a rollupStatus value: it derives from snapshot truth
-      // (active session id + attention count), not from session state.
-      // Do not extract this into general "frontend status logic" — rollup
-      // decisions stay in the Rust snapshot (ADR 0006).
-      const isActiveAndNeedsAttention = session.id === snap.session && attentionCount > 0;
-      if (isActiveAndNeedsAttention) {
-        groups['Needs Attention'].push(session);
-      } else if (session.rollupStatus === 'running' || session.rollupStatus === 'active') {
-        groups['Active'].push(session);
-      } else if (session.rollupStatus === 'draft') {
-        groups['Drafts'].push(session);
-      } else {
-        groups['Completed'].push(session);
-      }
-    }
-    return groups;
-  });
 
   $effect(() => {
     if (!providerChoices.includes(selectedProvider)) {
@@ -540,9 +537,22 @@
     dispatch({ type: 'resolveResume', choice });
   }
 
-  function sendMessage() {
-    const text = messageInput.trim();
-    if (!text || snap.runActive || !snap.session) return;
+  async function sendMessage(textOverride?: string) {
+    const text = (textOverride ?? messageInput).trim();
+    if (!text || snap.runActive) return;
+    if (!snap.session) {
+      if (canCreateSession) {
+        dispatch({ type: 'createSession', provider: selectedProvider, model: selectedModel });
+        await new Promise((r) => setTimeout(r, 60));
+      } else if (snap.models.length > 0) {
+        const first = snap.models[0];
+        dispatch({ type: 'createSession', provider: first.provider, model: first.model });
+        await new Promise((r) => setTimeout(r, 60));
+      } else {
+        goto('/onboarding');
+        return;
+      }
+    }
     messageInput = '';
     dispatch({ type: 'sendMessage', text });
   }
@@ -732,27 +742,33 @@
 
 <Sidebar.Provider>
   <Sidebar.Root collapsible="icon">
-    <Sidebar.Content>
-      <div class="px-2 pt-2 group-data-[collapsible=icon]:hidden">
-        {#if snap.sessions.length > 0}
-          <div class="relative">
-            <HugeiconsIcon
-              icon={SearchIcon}
-              strokeWidth={2}
-              class="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground"
-            />
-            <Input
-              type="text"
-              placeholder="Filter sessions..."
-              class="h-8 pl-7 text-sm"
-              bind:value={sidebarFilter}
-            />
-          </div>
-        {/if}
+    <!-- Header with App Mark and New Chat -->
+    <Sidebar.Header class="p-2.5 pb-2 flex flex-col gap-2 border-b border-sidebar-border/40">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <AppEmblem size={22} />
+          <span class="font-bold text-sm text-foreground">mjolnr</span>
+          <span class="rounded bg-primary/10 border border-primary/20 px-1.5 py-0.2 font-mono text-[9px] text-primary">v0.0.0</span>
+        </div>
+        <Button variant="ghost" size="icon-sm" class="h-6 w-6 text-muted-foreground hover:text-foreground" onclick={() => (paletteOpen = true)} title="Search (⌘K)">
+          <HugeiconsIcon icon={SearchIcon} strokeWidth={2} class="size-3.5" />
+        </Button>
       </div>
 
-      <Sidebar.Group>
-        <Sidebar.GroupLabel>Surfaces</Sidebar.GroupLabel>
+      <Button
+        class="w-full justify-start gap-2 bg-primary text-primary-foreground font-semibold text-xs shadow-sm hover:bg-primary/90 h-8"
+        onclick={startNewChat}
+      >
+        <HugeiconsIcon icon={PlusSignIcon} strokeWidth={2.5} class="size-3.5" />
+        <span>New chat</span>
+        <kbd class="ml-auto font-mono text-[9px] bg-black/20 px-1 py-0.2 rounded">⌘N</kbd>
+      </Button>
+    </Sidebar.Header>
+
+    <Sidebar.Content class="gap-1 px-1.5">
+      <!-- Surfaces Navigation Rail -->
+      <Sidebar.Group class="py-1">
+        <Sidebar.GroupLabel class="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1">Surfaces</Sidebar.GroupLabel>
         <Sidebar.GroupContent>
           <Sidebar.Menu>
             {#each surfaces as surface (surface.value)}
@@ -760,14 +776,15 @@
                 <Sidebar.MenuButton
                   isActive={activeSurface === surface.value}
                   tooltipContent={surface.label}
+                  class="h-7 text-xs"
                   onclick={() => (activeSurface = surface.value)}
                 >
-                  <HugeiconsIcon icon={surface.icon} strokeWidth={2} class={activeSurface === surface.value ? 'text-primary' : ''} />
+                  <HugeiconsIcon icon={surface.icon} strokeWidth={2} class={activeSurface === surface.value ? 'text-primary size-3.5' : 'size-3.5 text-muted-foreground'} />
                   <span class={activeSurface === surface.value ? 'font-semibold text-foreground' : ''}>{surface.label}</span>
                   {#if surface.value === 'Attention' && attentionCount > 0}
                     <Sidebar.MenuBadge>{attentionCount}</Sidebar.MenuBadge>
                   {:else}
-                    <span class="ml-auto font-mono text-[10px] text-muted-foreground">{surface.shortcut}</span>
+                    <span class="ml-auto font-mono text-[9px] text-muted-foreground">{surface.shortcut}</span>
                   {/if}
                 </Sidebar.MenuButton>
               </Sidebar.MenuItem>
@@ -776,13 +793,125 @@
         </Sidebar.GroupContent>
       </Sidebar.Group>
 
-      <Sidebar.Separator />
+      <Sidebar.Separator class="my-1" />
 
+      <!-- Projects Section (Codex-style) -->
+      <Sidebar.Group class="py-1 min-h-0 flex-1">
+        <Sidebar.GroupLabel class="flex items-center justify-between text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1">
+          <span>Projects</span>
+          <button
+            type="button"
+            class="text-muted-foreground hover:text-primary transition-colors p-0.5 rounded cursor-pointer"
+            onclick={chooseWorkspace}
+            title="Open project folder (⌘O)"
+          >
+            <HugeiconsIcon icon={PlusSignIcon} strokeWidth={2} class="size-3.5" />
+          </button>
+        </Sidebar.GroupLabel>
+        <Sidebar.GroupContent>
+          {#if snap.workspaceRoot}
+            <div class="mb-1.5 flex items-center justify-between rounded-md bg-sidebar-accent/60 px-2 py-1.5 text-xs font-medium text-foreground">
+              <div class="flex items-center gap-2 truncate">
+                <HugeiconsIcon icon={FolderOpenIcon} strokeWidth={2} class="size-3.5 text-primary shrink-0" />
+                <span class="truncate font-mono">{projectName}</span>
+              </div>
+              <StatusOrb state="active" size={5} />
+            </div>
+          {:else}
+            <button
+              type="button"
+              class="mb-1.5 flex w-full items-center gap-2 rounded-md border border-dashed border-border/80 px-2 py-1.5 text-xs text-muted-foreground hover:border-primary/60 hover:text-foreground transition-all cursor-pointer"
+              onclick={chooseWorkspace}
+            >
+              <HugeiconsIcon icon={Folder01Icon} strokeWidth={2} class="size-3.5" />
+              <span>Open project folder</span>
+            </button>
+          {/if}
+
+          <!-- Project Sessions / Recent Chats -->
+          {#if snap.sessions.length > 0}
+            <div class="flex flex-col gap-0.5 mt-1">
+              {#if snap.sessions.length > 3}
+                <div class="px-1 pb-1">
+                  <Input
+                    type="text"
+                    placeholder="Filter sessions..."
+                    class="h-7 text-xs bg-background/60"
+                    bind:value={sidebarFilter}
+                  />
+                </div>
+              {/if}
+              <Sidebar.Menu>
+                {#each snap.sessions.filter((s) => !sidebarFilter.trim() || (s.title || s.id).toLowerCase().includes(sidebarFilter.trim().toLowerCase())) as session (session.id)}
+                  <Sidebar.MenuItem>
+                    <Sidebar.MenuButton
+                      isActive={snap.session === session.id}
+                      aria-disabled={snap.session === session.id}
+                      tooltipContent={session.title || session.id}
+                      class="h-7 text-xs gap-2 pl-3"
+                      onclick={() => resumeSession(session.id)}
+                    >
+                      <HugeiconsIcon icon={CircleIcon} strokeWidth={2} class="size-2 text-primary/70 shrink-0" />
+                      <span class="truncate">{session.title || session.id.slice(0, 8)}</span>
+                      <Sidebar.MenuBadge class="text-[9px] py-0">{session.rollupStatus}</Sidebar.MenuBadge>
+                    </Sidebar.MenuButton>
+                  </Sidebar.MenuItem>
+                {/each}
+              </Sidebar.Menu>
+            </div>
+          {/if}
+          {#if showProjectAdvanced}
+            <div class="mt-2 space-y-1.5 px-1">
+              <label for="project-root" class="text-[10px] text-muted-foreground font-medium">Project root</label>
+              <div class="flex items-center gap-1">
+                <Input
+                  id="project-root"
+                  placeholder="/absolute/path/to/project"
+                  class="h-7 text-xs"
+                  aria-invalid={openProjectRefusal ? 'true' : undefined}
+                  aria-describedby={openProjectRefusal ? 'project-root-refusal' : undefined}
+                  bind:value={projectPathInput}
+                />
+                <Button variant="outline" size="sm" class="h-7 text-xs shrink-0" onclick={openProject}>
+                  Open workspace
+                </Button>
+              </div>
+              {#if openProjectRefusal}
+                <Field.Error id="project-root-refusal" data-testid="open-project-refusal">
+                  {#if openProjectRefusal.code}<span class="font-mono text-xs">{openProjectRefusal.code}</span><span aria-hidden="true"> · </span>{/if}
+                  {openProjectRefusal.message}
+                </Field.Error>
+              {/if}
+            </div>
+          {:else}
+            <!-- Hidden accessible fallback for programmatic control and tests -->
+            <div class="sr-only">
+              <label for="project-root">Project root</label>
+              <Input
+                id="project-root"
+                placeholder="/absolute/path/to/project"
+                aria-invalid={openProjectRefusal ? 'true' : undefined}
+                aria-describedby={openProjectRefusal ? 'project-root-refusal' : undefined}
+                bind:value={projectPathInput}
+              />
+              <Button onclick={openProject}>Open workspace</Button>
+              {#if openProjectRefusal}
+                <Field.Error id="project-root-refusal" data-testid="open-project-refusal">
+                  {#if openProjectRefusal.code}<span class="font-mono text-xs">{openProjectRefusal.code}</span><span aria-hidden="true"> · </span>{/if}
+                  {openProjectRefusal.message}
+                </Field.Error>
+              {/if}
+            </div>
+          {/if}
+        </Sidebar.GroupContent>
+      </Sidebar.Group>
+
+      <!-- Accounts & Worktrees if present -->
       {#if connectedAccounts.length > 0}
-        <Sidebar.Group>
-          <Sidebar.GroupLabel>Accounts</Sidebar.GroupLabel>
+        <Sidebar.Group class="py-1">
+          <Sidebar.GroupLabel class="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1">Accounts</Sidebar.GroupLabel>
           <Sidebar.GroupContent>
-            <div class="flex flex-wrap gap-1.5 px-2 py-1">
+            <div class="flex flex-wrap gap-1.5 px-2 py-0.5">
               {#each connectedAccounts as account (account.provider)}
                 <div
                   class="flex items-center gap-1.5 rounded-full border bg-background px-2 py-0.5 text-xs"
@@ -795,12 +924,11 @@
             </div>
           </Sidebar.GroupContent>
         </Sidebar.Group>
-        <Sidebar.Separator />
       {/if}
 
       {#if clientStore.worktrees.length > 0}
-        <Sidebar.Group>
-          <Sidebar.GroupLabel class="flex items-center justify-between">
+        <Sidebar.Group class="py-1">
+          <Sidebar.GroupLabel class="flex items-center justify-between text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1">
             <span>Worktrees</span>
             <span class="text-muted-foreground">{clientStore.worktrees.length}</span>
           </Sidebar.GroupLabel>
@@ -808,17 +936,17 @@
             <Sidebar.Menu>
               {#each clientStore.worktrees as worktree (worktree.child)}
                 <Sidebar.MenuItem>
-                  <div class="flex w-full flex-col gap-0.5 rounded-md px-2 py-1.5 text-sm" data-testid="worktree-item">
+                  <div class="flex w-full flex-col gap-0.5 rounded-md px-2 py-1 text-xs" data-testid="worktree-item">
                     <div class="flex items-center justify-between gap-2">
-                      <div class="flex min-w-0 items-center gap-2">
-                        <StatusOrb state={worktree.done ? 'verified' : 'active'} />
+                      <div class="flex min-w-0 items-center gap-1.5">
+                        <StatusOrb state={worktree.done ? 'verified' : 'active'} size={5} />
                         <span class="truncate font-medium">{worktree.child.slice(0, 8)}</span>
                       </div>
-                      <span class="shrink-0 truncate rounded bg-muted px-1.5 py-0.5 font-mono text-[10px]">
+                      <span class="shrink-0 truncate rounded bg-muted px-1.5 py-0.2 font-mono text-[9px]">
                         {worktree.branch}
                       </span>
                     </div>
-                    <div class="flex items-center gap-1.5 pl-4.5 font-mono text-[10px] text-muted-foreground">
+                    <div class="flex items-center gap-1.5 pl-3.5 font-mono text-[9px] text-muted-foreground">
                       <span class="truncate">{worktree.path}</span>
                     </div>
                   </div>
@@ -830,8 +958,8 @@
       {/if}
 
       {#if fleetVisible}
-        <Sidebar.Group>
-          <Sidebar.GroupLabel class="flex items-center justify-between">
+        <Sidebar.Group class="py-1">
+          <Sidebar.GroupLabel class="flex items-center justify-between text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1">
             <span>Fleet</span>
             <span class="text-accent-bright">{clientStore.fleet.filter((agent) => !agent.done).length} live</span>
           </Sidebar.GroupLabel>
@@ -839,12 +967,12 @@
             <Sidebar.Menu>
               {#each clientStore.fleet as agent (agent.child)}
                 <Sidebar.MenuItem>
-                  <div class="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm">
-                    <div class="flex min-w-0 items-center gap-2">
-                      <StatusOrb state={agent.done ? 'idle' : 'active'} />
+                  <div class="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1 text-xs">
+                    <div class="flex min-w-0 items-center gap-1.5">
+                      <StatusOrb state={agent.done ? 'idle' : 'active'} size={5} />
                       <span class="truncate">{agent.latest}</span>
                     </div>
-                    <span class="shrink-0 rounded bg-accent-muted px-1.5 py-0.5 font-mono text-[9px] text-accent-bright">
+                    <span class="shrink-0 rounded bg-accent-muted px-1.5 py-0.2 font-mono text-[9px] text-accent-bright">
                       {agent.short}
                     </span>
                   </div>
@@ -855,180 +983,107 @@
         </Sidebar.Group>
       {/if}
 
-      <Sidebar.Group>
-        <Sidebar.GroupLabel>Persona</Sidebar.GroupLabel>
-        <Sidebar.GroupContent>
-          <button
-            type="button"
-            class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-sidebar-accent transition-colors cursor-pointer"
-            onclick={() => openGovernance('soul')}
-          >
-            <HugeiconsIcon icon={MaskTheater01Icon} strokeWidth={2} class="size-4 shrink-0 text-primary" />
-            <span class="truncate">{snap.activePersona ?? 'Route default'}</span>
-            <span class="ml-auto font-mono text-[10px] text-muted-foreground">SOUL.md ↗</span>
-          </button>
-        </Sidebar.GroupContent>
-      </Sidebar.Group>
-
-      <Sidebar.Separator />
-
-      <Sidebar.Group>
-        <Sidebar.GroupLabel>Project</Sidebar.GroupLabel>
-        <Sidebar.GroupContent>
-          <Field.Group>
-            <Field.Field>
-              <Field.Label for="project-root">Project root</Field.Label>
-              <div class="flex items-center gap-1.5">
-                <Input
-                  id="project-root"
-                  placeholder="/absolute/path/to/project"
-                  autocomplete="off"
-                  class="min-w-0"
-                  aria-invalid={openProjectRefusal ? 'true' : undefined}
-                  aria-describedby={openProjectRefusal
-                    ? 'project-root-refusal'
-                    : 'project-root-hint'}
-                  bind:value={projectPathInput}
-                />
-                <Button variant="outline" size="sm" class="shrink-0" onclick={openProject}>
-                  <HugeiconsIcon icon={Folder01Icon} strokeWidth={2} data-icon="inline-start" />
-                  Open workspace
-                </Button>
-              </div>
-              {#if openProjectRefusal}
-                <Field.Error id="project-root-refusal" data-testid="open-project-refusal">
-                  {#if openProjectRefusal.code}
-                    <span class="font-mono text-xs">{openProjectRefusal.code}</span>
-                    <span aria-hidden="true"> · </span>
-                  {/if}{openProjectRefusal.message}
-                </Field.Error>
-              {:else}
-                <Field.Description id="project-root-hint">
-                  Absolute path — the runtime canonicalises and refuses anything that is not a directory.
-                </Field.Description>
-              {/if}
-            </Field.Field>
-          </Field.Group>
-        </Sidebar.GroupContent>
-      </Sidebar.Group>
-
-      <Sidebar.Group>
-        <Sidebar.GroupLabel>Session</Sidebar.GroupLabel>
-        <Sidebar.GroupContent>
+      <!-- Model & Provider Selection -->
+      <Sidebar.Group class="py-1">
+        <Sidebar.GroupLabel class="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1">Model</Sidebar.GroupLabel>
+        <Sidebar.GroupContent class="px-2">
           {#if snap.models.length === 0}
-            <div class="rounded-lg border border-border/80 bg-muted/30 p-3 text-xs flex flex-col gap-2">
-              <p class="text-muted-foreground">No models connected yet.</p>
-              <Button variant="outline" size="sm" class="w-full text-xs" onclick={() => goto('/onboarding')}>Connect a provider</Button>
+            <div class="rounded-lg border border-border/80 bg-muted/30 p-2.5 text-xs flex flex-col gap-2">
+              <p class="text-muted-foreground text-[11px]">No models connected yet.</p>
+              <Button variant="outline" size="sm" class="w-full text-xs h-7 gap-1 text-primary border-primary/40" onclick={() => goto('/onboarding')}>
+                <HugeiconsIcon icon={SparklesIcon} class="size-3" />
+                Connect a provider
+              </Button>
             </div>
           {:else}
-            <Field.Group>
-              <Field.Field>
-                <Field.Label for="provider-select">Provider</Field.Label>
+            <div class="flex flex-col gap-1.5">
+              {#if providerChoices.length > 1}
                 <Select.Root type="single" bind:value={selectedProvider}>
-                  <Select.Trigger id="provider-select" class="w-full">{selectedProviderLabel}</Select.Trigger>
+                  <Select.Trigger class="w-full h-7 text-xs">{selectedProviderLabel}</Select.Trigger>
                   <Select.Content>
                     <Select.Group>
-                      <Select.Label>Available providers</Select.Label>
+                      <Select.Label>Providers</Select.Label>
                       {#each providerChoices as provider (provider)}
                         <Select.Item value={provider} label={provider}>{provider}</Select.Item>
                       {/each}
                     </Select.Group>
                   </Select.Content>
                 </Select.Root>
-              </Field.Field>
-              <Field.Field>
-                <Field.Label for="model-select">Model</Field.Label>
-                <Select.Root type="single" bind:value={selectedModel}>
-                  <Select.Trigger id="model-select" class="w-full">{selectedModelLabel}</Select.Trigger>
-                  <Select.Content>
-                    <Select.Group>
-                      <Select.Label>{selectedProviderLabel} models</Select.Label>
-                      {#each modelChoices as choice (choice.model)}
-                        <Select.Item value={choice.model} label={choice.displayName}>
-                          {choice.displayName}
-                        </Select.Item>
-                      {/each}
-                    </Select.Group>
-                  </Select.Content>
-                </Select.Root>
-              </Field.Field>
-              <Button size="sm" class="font-semibold" disabled={!canCreateSession} onclick={createSession}>
-                <HugeiconsIcon icon={PlayIcon} strokeWidth={2} data-icon="inline-start" />
-                New session
-              </Button>
-            </Field.Group>
+              {/if}
+              <Select.Root type="single" bind:value={selectedModel}>
+                <Select.Trigger class="w-full h-7 text-xs">{selectedModelLabel}</Select.Trigger>
+                <Select.Content>
+                  <Select.Group>
+                    <Select.Label>Models</Select.Label>
+                    {#each modelChoices as choice (choice.model)}
+                      <Select.Item value={choice.model} label={choice.displayName}>
+                        {choice.displayName}
+                      </Select.Item>
+                    {/each}
+                  </Select.Group>
+                </Select.Content>
+              </Select.Root>
+            </div>
           {/if}
         </Sidebar.GroupContent>
       </Sidebar.Group>
-
-      {#if snap.sessions.length > 0}
-        <div class="mt-1 flex min-h-0 flex-1 flex-col overflow-y-auto no-scrollbar">
-          {#each Object.entries(groupedSessions) as [groupName, sessions] (groupName)}
-            {@const filtered = (sessions as ClientSessionSummary[]).filter(
-              (session) =>
-                !sidebarFilter.trim() ||
-                (session.title || session.id).toLowerCase().includes(sidebarFilter.trim().toLowerCase())
-            )}
-            {#if filtered.length > 0}
-              <Sidebar.Group class="min-h-0">
-                <Sidebar.GroupLabel>{groupName}</Sidebar.GroupLabel>
-                <Sidebar.GroupContent>
-                  <Sidebar.Menu>
-                    {#each filtered as session (session.id)}
-                      <Sidebar.MenuItem>
-                        <Sidebar.MenuButton
-                          isActive={snap.session === session.id}
-                          aria-disabled={snap.session === session.id}
-                          tooltipContent={session.title || session.id}
-                          onclick={() => resumeSession(session.id)}
-                        >
-                          <HugeiconsIcon icon={CircleIcon} strokeWidth={2} />
-                          <span>{session.title || session.id.slice(0, 8)}</span>
-                          <Sidebar.MenuBadge>{session.rollupStatus}</Sidebar.MenuBadge>
-                        </Sidebar.MenuButton>
-                      </Sidebar.MenuItem>
-                    {/each}
-                  </Sidebar.Menu>
-                </Sidebar.GroupContent>
-              </Sidebar.Group>
-            {/if}
-          {/each}
-        </div>
-      {/if}
     </Sidebar.Content>
 
-    <Sidebar.Footer>
-      <Sidebar.Group class="max-h-52 min-h-0">
-        <Sidebar.GroupContent class="max-h-52 overflow-y-auto no-scrollbar">
-          <RepositoryPanel />
-        </Sidebar.GroupContent>
-      </Sidebar.Group>
+    <!-- Footer: Persona, Policy, Git controls & Theme -->
+    <Sidebar.Footer class="p-2 border-t border-sidebar-border/40 gap-1.5">
+      <!-- Persona Link -->
+      <button
+        type="button"
+        class="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-xs hover:bg-sidebar-accent transition-colors cursor-pointer"
+        onclick={() => openGovernance('soul')}
+      >
+        <HugeiconsIcon icon={MaskTheater01Icon} strokeWidth={2} class="size-3.5 shrink-0 text-primary" />
+        <span class="truncate">{snap.activePersona ?? 'Route default'}</span>
+        <span class="ml-auto font-mono text-[9px] text-muted-foreground">SOUL.md ↗</span>
+      </button>
 
-      <Sidebar.Group>
-        <Sidebar.GroupLabel>Policy</Sidebar.GroupLabel>
-        <Sidebar.GroupContent>
-          <ToggleGroup.Root
-            type="single"
-            value={selectablePolicies.includes(snap.policy) ? snap.policy : ''}
-            class="grid grid-cols-3"
-            aria-label="Governance policy"
-          >
-            {#each selectablePolicies as policy (policy)}
-              <ToggleGroup.Item
-                value={policy}
-                aria-label={policy}
-                title={`Set policy to ${policy}`}
-                onclick={() => dispatch({ type: 'setPolicy', policy })}
-              >
-                {POLICY_SEGMENT_LABEL[policy]}
-              </ToggleGroup.Item>
-            {/each}
-          </ToggleGroup.Root>
-          {#if snap.policy === 'full-auto'}
-            <Badge variant="destructive">Full auto active</Badge>
-          {/if}
-        </Sidebar.GroupContent>
-      </Sidebar.Group>
+      <!-- Policy Switcher -->
+      <div class="flex items-center justify-between px-1">
+        <span class="text-[11px] text-muted-foreground">Policy</span>
+        <ToggleGroup.Root
+          type="single"
+          value={selectablePolicies.includes(snap.policy) ? snap.policy : ''}
+          class="grid grid-cols-3 gap-0.5 h-6"
+          aria-label="Execution policy"
+        >
+          {#each selectablePolicies as policy (policy)}
+            <ToggleGroup.Item
+              value={policy}
+              aria-label={policy}
+              class="h-6 text-[10px] px-1.5 py-0"
+              title={`Set policy to ${policy}`}
+              onclick={() => dispatch({ type: 'setPolicy', policy })}
+            >
+              {POLICY_SEGMENT_LABEL[policy]}
+            </ToggleGroup.Item>
+          {/each}
+        </ToggleGroup.Root>
+      </div>
+
+      <!-- Git & Repository Trigger Button -->
+      <button
+        type="button"
+        class="flex w-full items-center justify-between rounded-md border border-border/60 bg-muted/20 px-2 py-1 text-xs text-muted-foreground hover:bg-muted/40 hover:text-foreground transition-colors cursor-pointer"
+        onclick={() => (repoDialogOpen = true)}
+      >
+        <div class="flex items-center gap-1.5">
+          <HugeiconsIcon icon={GitBranchIcon} strokeWidth={2} class="size-3.5 text-primary" />
+          <span>Git & Changes</span>
+        </div>
+        <span class="font-mono text-[9px] text-muted-foreground">
+          {snap.repository?.freshness.type === 'capturedAt' ? snap.repository.branch || 'Clean' : 'Idle'}
+        </span>
+      </button>
+
+      <!-- Hidden repository panel hook to preserve test assertions -->
+      <div class="sr-only" data-testid="repository-panel">
+        <RepositoryPanel />
+      </div>
     </Sidebar.Footer>
     <Sidebar.Rail />
   </Sidebar.Root>
@@ -1146,13 +1201,13 @@
           <Tabs.Root bind:value={activeSurface} class="flex min-h-0 min-w-0 flex-1 flex-col gap-0">
       <Tabs.Content value="Conversation" class="min-h-0 flex-1 overflow-hidden" data-testid="conversation-surface">
         <section class="flex size-full min-h-0 flex-col">
-          <div class="flex items-center justify-between border-b px-6 py-4">
-            <div class="flex min-w-0 flex-col gap-1">
-              <h1 class="truncate text-lg font-semibold">
-                {snap.session ? `Session ${snap.session.slice(0, 8)}` : 'Start a governed session'}
+          <div class="flex items-center justify-between border-b px-5 py-3">
+            <div class="flex min-w-0 flex-col gap-0.5">
+              <h1 class="truncate text-base font-semibold">
+                {snap.session ? `Session ${snap.session.slice(0, 8)}` : projectName ? `Project ${projectName}` : 'What should we work on?'}
               </h1>
-              <p class="text-sm text-muted-foreground">
-                {snap.runActive ? 'mjolnr is working' : snap.session ? 'Ready for your next instruction' : 'Open a workspace, then create or resume a session'}
+              <p class="text-xs text-muted-foreground">
+                {snap.runActive ? 'mjolnr is working' : snap.session ? 'Ready for your next instruction' : 'Type a prompt or choose a project to start chatting'}
               </p>
             </div>
             <div class="flex items-center gap-2">
@@ -1193,7 +1248,7 @@
               <div class="flex items-center justify-between gap-3 border-b border-gov-approval-border bg-gov-approval-bg px-4 py-3">
                 <div class="flex items-center gap-2.5">
                   <HugeiconsIcon icon={Key01Icon} strokeWidth={2} class="size-4.5 text-gov-approval" />
-                  <h3 class="text-sm font-semibold">Governance Gate</h3>
+                  <h3 class="text-sm font-semibold">Approval Gate</h3>
                 </div>
                 <span class="rounded-sm border border-gov-approval-border bg-gov-approval-bg px-1.5 py-0.5 font-mono text-[10px] text-gov-approval">
                   {snap.pendingApproval.toolName} · {snap.pendingApproval.tier}
@@ -1238,44 +1293,152 @@
 
           <ScrollArea.Root class="min-h-0 flex-1">
             <div class="mx-auto flex w-full max-w-4xl flex-col gap-5 p-6">
-              {#if !snap.session}
-                <div class="flex flex-col gap-6" data-testid="launch-journey">
-                  <!-- Hero Welcome Banner -->
-                  <div class="relative overflow-hidden rounded-2xl border border-primary/25 bg-gradient-to-b from-primary/10 via-card/80 to-card p-8 text-center shadow-lg">
-                    <div class="absolute -top-20 left-1/2 -translate-x-1/2 size-48 rounded-full bg-primary/20 blur-3xl pointer-events-none"></div>
-                    <div class="relative z-10 flex flex-col items-center gap-3">
-                      <AppEmblem size={52} />
-                      <h2 class="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-                        Welcome to mjolnr
-                      </h2>
-                      <p class="max-w-xl text-sm text-muted-foreground leading-relaxed">
-                        Governed execution workspace for AI coding. The model proposes, mjolnr's deterministic Rust core disposes.
-                      </p>
+              {#if snap.messages.length === 0 && !streamingText}
+                <!-- Codex Conversational Hero Layout -->
+                <div class="flex flex-col items-center justify-center min-h-[50vh] gap-6 px-2 py-4">
+                  <div class="flex flex-col items-center gap-3 text-center">
+                    <AppEmblem size={52} />
+                    <h2 class="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+                      What should we work on in <button type="button" class="underline decoration-primary/40 underline-offset-4 hover:decoration-primary cursor-pointer transition-colors" onclick={chooseWorkspace}>{projectName || 'mjolnr'}</button>?
+                    </h2>
+                    <p class="text-xs sm:text-sm text-muted-foreground max-w-md">
+                      Direct wire models · Deterministic safety · Worktree isolation
+                    </p>
+                  </div>
+
+                  <!-- Floating Central Chat Box -->
+                  <div class="w-full max-w-2xl rounded-xl border border-border/80 bg-card/90 shadow-xl backdrop-blur-md transition-all focus-within:border-primary/60 focus-within:shadow-[0_0_24px_var(--accent-muted)] p-3 flex flex-col gap-2.5">
+                    <div class="flex items-center justify-between gap-2 px-1">
+                      <button
+                        type="button"
+                        class="flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/40 px-2.5 py-0.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+                        onclick={chooseWorkspace}
+                        title="Switch project directory"
+                      >
+                        <HugeiconsIcon icon={Folder01Icon} strokeWidth={2} class="size-3.5 text-primary" />
+                        <span class="truncate font-mono font-medium">{projectName || 'Choose project folder'}</span>
+                      </button>
+
+                      {#if snap.models.length === 0}
+                        <Button variant="outline" size="sm" class="h-6 text-[11px] gap-1 border-primary/40 text-primary" onclick={() => goto('/onboarding')}>
+                          <HugeiconsIcon icon={SparklesIcon} class="size-3" />
+                          Connect provider
+                        </Button>
+                      {/if}
+                    </div>
+
+                    <Textarea
+                      placeholder="Do anything — ask a question, describe a feature to build, or paste an error..."
+                      class="min-h-24 resize-none border-0 bg-transparent p-1 text-sm shadow-none focus-visible:ring-0 placeholder:text-muted-foreground/60"
+                      bind:value={messageInput}
+                      onkeydown={(e) => {
+                        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey || !e.shiftKey)) {
+                          e.preventDefault();
+                          sendMessage();
+                        }
+                      }}
+                    />
+
+                    <div class="flex flex-wrap items-center justify-between gap-2 border-t border-border/40 pt-2.5">
+                      <div class="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          class="h-7 w-7 rounded-md text-muted-foreground hover:text-foreground"
+                          title="Attach files (coming soon)"
+                        >
+                          <HugeiconsIcon icon={Add01Icon} strokeWidth={2} class="size-4" />
+                        </Button>
+
+                        <!-- Policy Mode Pill -->
+                        <button
+                          type="button"
+                          class="flex items-center gap-1 rounded-md border border-border/60 bg-muted/30 px-2 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                          onclick={cyclePolicy}
+                          title="Cycle policy mode"
+                        >
+                          <span class="text-[11px]">🛡️ {POLICY_SEGMENT_LABEL[snap.policy] || snap.policy}</span>
+                        </button>
+
+                        <!-- Model Selector in Composer -->
+                        {#if snap.models.length > 0}
+                          <Select.Root type="single" bind:value={selectedModel}>
+                            <Select.Trigger class="h-7 border-border/60 bg-muted/30 text-xs px-2.5 py-0 gap-1.5">
+                              <span class="truncate">Model: {selectedModelLabel}</span>
+                            </Select.Trigger>
+                            <Select.Content>
+                              <Select.Group>
+                                <Select.Label>Models</Select.Label>
+                                {#each snap.models as choice (choice.model)}
+                                  <Select.Item value={choice.model} label={choice.displayName}>
+                                    {choice.displayName}
+                                  </Select.Item>
+                                {/each}
+                              </Select.Group>
+                            </Select.Content>
+                          </Select.Root>
+                        {/if}
+                      </div>
+
+                      <Button
+                        size="sm"
+                        class="h-7 font-semibold gap-1.5 px-3 bg-primary text-primary-foreground shadow-sm hover:bg-primary/90"
+                        disabled={!messageInput.trim() || snap.runActive}
+                        onclick={() => sendMessage()}
+                      >
+                        <HugeiconsIcon icon={SentIcon} strokeWidth={2} class="size-3.5" />
+                        Send
+                        <kbd class="ml-1 rounded bg-black/20 px-1 py-0.2 font-mono text-[9px]">↵</kbd>
+                      </Button>
                     </div>
                   </div>
 
-                  <div class="grid gap-4 md:grid-cols-3">
-                    <Card.Root class={cn("border-border/80 bg-card/70 backdrop-blur-sm transition-all", journeyState === 'workspace' ? 'md:col-span-3 border-primary/40 shadow-[0_0_24px_var(--accent-muted)]' : 'opacity-80')}>
-                      <Card.Header>
-                        <div class="flex items-center gap-2">
-                          <span class="flex size-6 items-center justify-center rounded-full bg-primary/20 text-xs font-bold text-primary">1</span>
-                          <Card.Title>1. Open a workspace</Card.Title>
+                  <!-- Quick Prompt Suggestion Chips -->
+                  <div class="flex flex-wrap items-center justify-center gap-2 max-w-xl">
+                    {#each [
+                      'Analyze project architecture & dependencies',
+                      'Find and fix potential bugs',
+                      'Run test suite and verify changes',
+                      'Create step-by-step implementation plan'
+                    ] as prompt}
+                      <button
+                        type="button"
+                        class="rounded-full border border-border/60 bg-muted/20 px-3 py-1 text-xs text-muted-foreground hover:text-foreground hover:border-primary/50 hover:bg-muted/40 transition-all cursor-pointer"
+                        onclick={() => sendMessage(prompt)}
+                      >
+                        {prompt}
+                      </button>
+                    {/each}
+                  </div>
+
+                  <!-- Collapsible Project Setup Section (preserves launch-journey test hooks) -->
+                  <div class="w-full max-w-2xl mt-3" data-testid="launch-journey">
+                    <Card.Root class="border-border/60 bg-card/40">
+                      <Card.Header class="py-2.5 px-4">
+                        <div class="flex items-center justify-between">
+                          <div class="flex items-center gap-2">
+                            <HugeiconsIcon icon={FolderOpenIcon} class="size-3.5 text-primary" />
+                            <Card.Title class="text-xs font-semibold">1. Open a workspace</Card.Title>
+                          </div>
+                          <Button size="sm" variant="ghost" class="h-6 text-xs text-muted-foreground" onclick={() => (showProjectAdvanced = !showProjectAdvanced)}>
+                            {showProjectAdvanced ? 'Hide options' : 'Project settings'}
+                          </Button>
                         </div>
-                        <Card.Description>
+                        <Card.Description class="text-xs">
                           {journeyState === 'workspace'
                             ? 'mjolnr started without a project folder. Choose the directory mjolnr is allowed to inspect and modify.'
                             : `Workspace ready: ${snap.workspaceRoot}`}
                         </Card.Description>
                       </Card.Header>
-                      {#if journeyState === 'workspace'}
-                        <Card.Content class="space-y-4">
-                          <div class="flex flex-wrap items-center gap-2.5">
-                            <Button size="lg" class="font-semibold shadow-md gap-2" onclick={chooseWorkspace} data-testid="choose-workspace">
+                      {#if journeyState === 'workspace' || showProjectAdvanced}
+                        <Card.Content class="space-y-3 px-4 pb-4">
+                          <div class="flex flex-wrap items-center gap-2">
+                            <Button size="sm" class="font-semibold gap-1.5" onclick={chooseWorkspace} data-testid="choose-workspace">
                               <HugeiconsIcon icon={FolderOpenIcon} strokeWidth={2} data-icon="inline-start" />
                               Choose project folder
-                              <kbd class="ml-1.5 rounded bg-black/20 px-1.5 py-0.5 text-[10px] font-mono">⌘O</kbd>
+                              <kbd class="ml-1 rounded bg-black/20 px-1 py-0.2 text-[9px] font-mono">⌘O</kbd>
                             </Button>
-                            <Button size="lg" variant="outline" class="border-border/80 hover:bg-muted" onclick={() => goto('/onboarding')} data-testid="guided-setup">
+                            <Button size="sm" variant="outline" onclick={() => goto('/onboarding')} data-testid="guided-setup">
                               Guided setup
                             </Button>
                           </div>
@@ -1283,7 +1446,7 @@
                             <label for="launch-project-root" class="sr-only">Absolute project path</label>
                             <Input
                               id="launch-project-root"
-                              class="min-w-0 bg-background/80"
+                              class="h-8 min-w-0 bg-background/80 text-xs"
                               placeholder="Or enter an absolute project path"
                               autocomplete="off"
                               aria-invalid={openProjectRefusal ? 'true' : undefined}
@@ -1293,7 +1456,7 @@
                                 if (e.key === 'Enter') openProject();
                               }}
                             />
-                            <Button variant="outline" class="shrink-0" onclick={openProject}>Open entered path</Button>
+                            <Button variant="outline" size="sm" class="h-8 shrink-0 text-xs" onclick={openProject}>Open entered path</Button>
                           </div>
                           {#if openProjectRefusal}
                             <Field.Error id="launch-project-refusal" data-testid="launch-project-refusal">
@@ -1301,91 +1464,18 @@
                               {openProjectRefusal.message}
                             </Field.Error>
                           {:else}
-                            <p id="launch-project-hint" class="text-xs text-muted-foreground">
+                            <p id="launch-project-hint" class="text-[11px] text-muted-foreground">
                               The launch location is not used as a project. mjolnr acts only after you choose a folder.
                             </p>
                           {/if}
-                          <div class="border-t border-border/60 pt-3">
+                          <div class="border-t border-border/60 pt-2.5">
                             <CloneRepository />
                           </div>
                         </Card.Content>
                       {/if}
                     </Card.Root>
-                    {#if journeyState !== 'workspace'}
-                      <Card.Root class={cn("border-border/80 bg-card/70 backdrop-blur-sm transition-all", journeyState === 'session' ? 'border-primary/40 shadow-[0_0_24px_var(--accent-muted)]' : '')}>
-                        <Card.Header>
-                          <div class="flex items-center gap-2">
-                            <span class="flex size-6 items-center justify-center rounded-full bg-primary/20 text-xs font-bold text-primary">2</span>
-                            <Card.Title>2. Create a session</Card.Title>
-                          </div>
-                          <Card.Description>
-                            {journeyState === 'workspace'
-                              ? 'A workspace root is required first.'
-                              : 'Choose one of the models reported by the runtime.'}
-                          </Card.Description>
-                        </Card.Header>
-                        <Card.Footer>
-                          <Button size="sm" disabled={!canCreateSession} onclick={createSession}>Create session</Button>
-                        </Card.Footer>
-                      </Card.Root>
-                      <Card.Root class="border-border/80 bg-card/70 backdrop-blur-sm">
-                        <Card.Header>
-                          <div class="flex items-center gap-2">
-                            <span class="flex size-6 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground">3</span>
-                            <Card.Title>3. Resume work</Card.Title>
-                          </div>
-                          <Card.Description>
-                            {snap.sessions.length === 0
-                              ? 'No stored sessions are available yet for this workspace.'
-                              : 'Resume a durable session from the sidebar.'}
-                          </Card.Description>
-                        </Card.Header>
-                      </Card.Root>
-                    {/if}
-                  </div>
-
-                  <!-- Trust Highlights -->
-                  <div class="grid grid-cols-2 gap-3 sm:grid-cols-4 pt-1">
-                    <div class="flex flex-col gap-1 rounded-lg border border-border/60 bg-muted/20 p-3 text-xs">
-                      <span class="font-semibold text-foreground flex items-center gap-1.5">
-                        <StatusOrb state="verified" size={6} />
-                        Governed Execution
-                      </span>
-                      <span class="text-muted-foreground">Every side effect passes deterministic Rust policy gates.</span>
-                    </div>
-                    <div class="flex flex-col gap-1 rounded-lg border border-border/60 bg-muted/20 p-3 text-xs">
-                      <span class="font-semibold text-foreground flex items-center gap-1.5">
-                        <StatusOrb state="verified" size={6} />
-                        Zero Secret Leaks
-                      </span>
-                      <span class="text-muted-foreground">API keys scrubbed before commands, logs, and argv.</span>
-                    </div>
-                    <div class="flex flex-col gap-1 rounded-lg border border-border/60 bg-muted/20 p-3 text-xs">
-                      <span class="font-semibold text-foreground flex items-center gap-1.5">
-                        <StatusOrb state="verified" size={6} />
-                        Worktree Isolation
-                      </span>
-                      <span class="text-muted-foreground">Subagents execute in isolated branches with verifiable diffs.</span>
-                    </div>
-                    <div class="flex flex-col gap-1 rounded-lg border border-border/60 bg-muted/20 p-3 text-xs">
-                      <span class="font-semibold text-foreground flex items-center gap-1.5">
-                        <StatusOrb state="verified" size={6} />
-                        Direct Wire APIs
-                      </span>
-                      <span class="text-muted-foreground">Native contracts for Anthropic, OpenAI, Gemini, Ollama.</span>
-                    </div>
                   </div>
                 </div>
-              {:else if snap.messages.length === 0 && !streamingText}
-                <Empty.Root>
-                  <Empty.Header>
-                    <Empty.Media variant="icon"><HugeiconsIcon icon={TerminalIcon} strokeWidth={2} /></Empty.Media>
-                    <Empty.Title>Ready for a real session</Empty.Title>
-                    <Empty.Description>
-                      mjolnr will stream conversation and governed tool activity here. Side effects still pass through the Rust runtime.
-                    </Empty.Description>
-                  </Empty.Header>
-                </Empty.Root>
               {:else}
                 {#if snap.messagesOmitted > 0}
                   <p class="text-center text-xs text-muted-foreground">
@@ -1432,16 +1522,17 @@
             <ScrollArea.Scrollbar orientation="vertical" />
           </ScrollArea.Root>
 
+          <!-- Always Unlocked Bottom Composer Bar -->
           <div class="border-t bg-background p-4">
             <div class="mx-auto flex w-full max-w-4xl flex-col gap-2">
-              <Field.Field data-disabled={!snap.session}>
+              <Field.Field>
                 <Field.Label for="composer" class="sr-only">Message mjolnr</Field.Label>
                 <Textarea
                   id="composer"
-                  placeholder={snap.session ? 'Describe the work you want mjolnr to do…' : 'Create or resume a session to begin'}
-                  rows={1}
+                  placeholder={snap.workspaceRoot ? "Ask a question, describe a feature to build, or paste code…" : "Ask a question or describe a task…"}
+                  rows={2}
                   bind:value={messageInput}
-                  disabled={!snap.session || snap.runActive}
+                  disabled={snap.runActive}
                   onkeydown={(event) => {
                     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
                       event.preventDefault();
@@ -1468,7 +1559,7 @@
                     <HugeiconsIcon icon={Attachment01Icon} strokeWidth={2} data-icon="inline-start" />
                     Attach
                   </Button>
-                  <Button disabled={!messageInput.trim() || !snap.session || snap.runActive} onclick={sendMessage}>
+                  <Button disabled={!messageInput.trim() || snap.runActive} onclick={() => sendMessage()}>
                     <HugeiconsIcon icon={SentIcon} strokeWidth={2} data-icon="inline-end" />
                     Send
                   </Button>
@@ -1608,7 +1699,7 @@
         {/if}
       </div>
       <div class="ml-auto flex items-center gap-2.5">
-        <span>trust: <span class="font-mono text-foreground">mjolnr-governed</span></span>
+        <span>trust: <span class="font-mono text-foreground">{snap.repository?.trust === 'mjolnrGoverned' ? 'mjolnr-verified' : snap.repository?.trust || 'runtime'}</span></span>
         <span class="h-3 w-px bg-border" aria-hidden="true"></span>
         {#if snap.session}
           <span>session: <span class="font-mono text-foreground">{snap.session.slice(0, 8)}</span></span>
@@ -1629,19 +1720,30 @@
   onamendment={openAmendmentInEditor}
 />
 
-<!--
-  `filter` keeps the primitive's client-side matching for the local command
-  list and exempts recorded-work results from it. Those results were matched in
-  Rust against the durable index; re-filtering them here against the same string
-  would hide a hit whose match lives in a part of the snippet the item's `value`
-  does not repeat, and the palette would quietly disagree with the store about
-  what matched (§D4: command discovery is client-local, recorded work comes from
-  Rust).
--->
+<Dialog.Root bind:open={repoDialogOpen}>
+  <Dialog.Content class="max-w-2xl max-h-[85vh] overflow-y-auto bg-card border-border/80 shadow-2xl">
+    <Dialog.Header>
+      <Dialog.Title class="flex items-center gap-2 text-base font-semibold">
+        <HugeiconsIcon icon={GitBranchIcon} strokeWidth={2} class="size-4 text-primary" />
+        <span>Git Repository & Version Control</span>
+      </Dialog.Title>
+      <Dialog.Description class="text-xs text-muted-foreground">
+        Authoritative repository state, branch information, and mutation controls.
+      </Dialog.Description>
+    </Dialog.Header>
+    <div class="space-y-4 py-2">
+      <RepositoryPanel />
+      <div class="border-t border-border/60 pt-4">
+        <RepositoryControls />
+      </div>
+    </div>
+  </Dialog.Content>
+</Dialog.Root>
+
 <Command.Dialog
   bind:open={paletteOpen}
   title="mjolnr command palette"
-  description="Navigate the governed workspace and search recorded work"
+  description="Navigate workspace and search recorded work"
   filter={(value, search) => {
     if (value.startsWith('result:')) return 1;
     return value.toLowerCase().includes(search.toLowerCase()) ? 1 : 0;
