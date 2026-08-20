@@ -464,64 +464,66 @@
     </p>
   {/if}
 
-  <div class="grid grid-cols-2 gap-1.5">
-    <Button size="sm" variant="outline" disabled={!canStage()} onclick={beginStage}>
-      Stage paths
-    </Button>
-    <Button size="sm" variant="outline" disabled={!canUnstage()} onclick={beginUnstage}>
-      Unstage
-    </Button>
-    <Button size="sm" variant="outline" disabled={!canCreateBranch()} onclick={beginCreateBranch}>
-      Create branch
-    </Button>
-    <Button size="sm" variant="outline" disabled={!canCommit()} onclick={beginCommit}>
-      Commit
-    </Button>
-    <Button size="sm" variant="outline" disabled={!canFetch()} onclick={beginFetch}>
-      Fetch
-    </Button>
-    <Button size="sm" variant="outline" disabled={!canPush()} onclick={beginPush}>
-      Push
-    </Button>
-    <Button
-      class="col-span-2"
-      size="sm"
-      variant="outline"
-      disabled={!canIntegrateUpstream()}
-      onclick={beginIntegrateUpstream}
-    >
-      Integrate upstream
-    </Button>
-    <Button
-      class="col-span-2"
-      size="sm"
-      variant="outline"
-      disabled={!canIntegrate()}
-      onclick={beginIntegrate}
-    >
-      Integrate settled child branch
-    </Button>
-    <Button
-      class="col-span-2"
-      size="sm"
-      variant="outline"
-      disabled={!canRebase()}
-      onclick={beginRebase}
-    >
-      Rebase current branch
-    </Button>
-    {#if repository.rebaseInProgress}
-      <Button
-        class="col-span-2"
-        size="sm"
-        variant="destructive"
-        disabled={!canAbortRebase()}
-        onclick={beginAbortRebase}
-      >
-        Abort in-progress rebase
+  {#if repository.freshness.type === 'capturedAt'}
+    <div class="grid grid-cols-2 gap-1.5 pt-1">
+      <Button size="sm" variant="outline" class="text-xs" disabled={!canStage()} onclick={beginStage}>
+        Stage paths
       </Button>
-    {/if}
-  </div>
+      <Button size="sm" variant="outline" class="text-xs" disabled={!canUnstage()} onclick={beginUnstage}>
+        Unstage
+      </Button>
+      <Button size="sm" variant="outline" class="text-xs" disabled={!canCreateBranch()} onclick={beginCreateBranch}>
+        Create branch
+      </Button>
+      <Button size="sm" variant="outline" class="text-xs" disabled={!canCommit()} onclick={beginCommit}>
+        Commit
+      </Button>
+      <Button size="sm" variant="outline" class="text-xs" disabled={!canFetch()} onclick={beginFetch}>
+        Fetch
+      </Button>
+      <Button size="sm" variant="outline" class="text-xs" disabled={!canPush()} onclick={beginPush}>
+        Push
+      </Button>
+      <Button
+        class="col-span-2 text-xs"
+        size="sm"
+        variant="outline"
+        disabled={!canIntegrateUpstream()}
+        onclick={beginIntegrateUpstream}
+      >
+        Integrate upstream
+      </Button>
+      <Button
+        class="col-span-2 text-xs"
+        size="sm"
+        variant="outline"
+        disabled={!canIntegrate()}
+        onclick={beginIntegrate}
+      >
+        Integrate settled child branch
+      </Button>
+      <Button
+        class="col-span-2 text-xs"
+        size="sm"
+        variant="outline"
+        disabled={!canRebase()}
+        onclick={beginRebase}
+      >
+        Rebase current branch
+      </Button>
+      {#if repository.rebaseInProgress}
+        <Button
+          class="col-span-2 text-xs"
+          size="sm"
+          variant="destructive"
+          disabled={!canAbortRebase()}
+          onclick={beginAbortRebase}
+        >
+          Abort in-progress rebase
+        </Button>
+      {/if}
+    </div>
+  {/if}
 
   {#if childBranches.length === 0 && capturedRepository()}
     <p class="text-[0.7rem] text-muted-foreground">

@@ -39,60 +39,60 @@ html, body {
  * concept, despite the shared name.
  */
 :root {
-  /* --- Paper Cyan (light) --- */
-  --bg-void: #f3f4f7;
-  --bg-deep: #e9ebf0;
+  /* --- Paper (light) --- */
+  --bg-void: #f8fafc;
+  --bg-deep: #f1f5f9;
   --bg-surface: #ffffff;
   --bg-card: #ffffff;
   --bg-elevated: #ffffff;
-  --bg-hover: rgba(0, 0, 0, 0.03);
-  --bg-active: rgba(0, 0, 0, 0.06);
-  --bg-glass: rgba(255, 255, 255, 0.88);
+  --bg-hover: rgba(0, 0, 0, 0.04);
+  --bg-active: rgba(0, 0, 0, 0.07);
+  --bg-glass: rgba(255, 255, 255, 0.90);
 
-  --border-faint: rgba(0, 0, 0, 0.06);
-  --border-subtle: rgba(0, 0, 0, 0.09);
-  --border-default: rgba(0, 0, 0, 0.13);
-  --border-focus: rgba(27, 168, 214, 0.5);
+  --border-faint: rgba(0, 0, 0, 0.05);
+  --border-subtle: rgba(0, 0, 0, 0.08);
+  --border-default: rgba(0, 0, 0, 0.12);
+  --border-focus: rgba(16, 185, 129, 0.5);
 
-  --text-primary: #1a1d27;
-  --text-secondary: #5a6070;
-  --text-tertiary: #9098a6;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-tertiary: #94a3b8;
   --text-inverse: #ffffff;
 
-  --accent-cyan: #1ba8d6;
-  --accent-bright: #3bc4e8;
-  --accent-deep: #1587ac;
-  --accent-muted: rgba(27, 168, 214, 0.07);
-  --accent-glow: rgba(27, 168, 214, 0.12);
-  --accent-border: rgba(27, 168, 214, 0.22);
+  --accent-cyan: #10b981;
+  --accent-bright: #34d399;
+  --accent-deep: #059669;
+  --accent-muted: rgba(16, 185, 129, 0.08);
+  --accent-glow: rgba(16, 185, 129, 0.15);
+  --accent-border: rgba(16, 185, 129, 0.25);
 
-  --gov-proposal: #2e94c4;
-  --gov-proposal-bg: rgba(46, 148, 196, 0.07);
-  --gov-proposal-border: rgba(46, 148, 196, 0.2);
+  --gov-proposal: #0284c7;
+  --gov-proposal-bg: rgba(2, 132, 199, 0.07);
+  --gov-proposal-border: rgba(2, 132, 199, 0.2);
 
-  --gov-approval: #b87d18;
-  --gov-approval-bg: rgba(184, 125, 24, 0.07);
-  --gov-approval-border: rgba(184, 125, 24, 0.22);
-  --gov-approval-glow: rgba(184, 125, 24, 0.1);
+  --gov-approval: #d97706;
+  --gov-approval-bg: rgba(217, 119, 6, 0.07);
+  --gov-approval-border: rgba(217, 119, 6, 0.22);
+  --gov-approval-glow: rgba(217, 119, 6, 0.1);
 
-  --gov-verified: #15916a;
-  --gov-verified-bg: rgba(21, 145, 106, 0.07);
-  --gov-verified-border: rgba(21, 145, 106, 0.2);
+  --gov-verified: #059669;
+  --gov-verified-bg: rgba(5, 150, 105, 0.07);
+  --gov-verified-border: rgba(5, 150, 105, 0.2);
 
-  --gov-refusal: #c84260;
-  --gov-refusal-bg: rgba(200, 66, 96, 0.07);
-  --gov-refusal-border: rgba(200, 66, 96, 0.2);
+  --gov-refusal: #e11d48;
+  --gov-refusal-bg: rgba(225, 29, 72, 0.07);
+  --gov-refusal-border: rgba(225, 29, 72, 0.2);
 
-  --gov-uncertain: #7b5fc8;
-  --gov-uncertain-bg: rgba(123, 95, 200, 0.07);
+  --gov-uncertain: #7c3aed;
+  --gov-uncertain-bg: rgba(124, 58, 237, 0.07);
 
   --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(0, 0, 0, 0.04);
   --shadow-elevated: 0 4px 16px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.05);
   --shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.06);
 
-  --scrollbar-thumb: rgba(0, 0, 0, 0.1);
-  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.18);
-  --scrim: rgba(243, 244, 247, 0.65);
+  --scrollbar-thumb: rgba(0, 0, 0, 0.12);
+  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.2);
+  --scrim: rgba(248, 250, 252, 0.7);
 
   /* --- shadcn expected names, mapped onto the above --- */
   --background: var(--bg-void);
@@ -105,7 +105,7 @@ html, body {
   --primary-foreground: var(--text-inverse);
   --secondary: var(--bg-elevated);
   --secondary-foreground: var(--text-primary);
-  --muted: var(--bg-surface);
+  --muted: var(--bg-deep);
   --muted-foreground: var(--text-secondary);
   --accent: var(--bg-hover);
   --accent-foreground: var(--text-primary);
@@ -127,10 +127,6 @@ html, body {
   --sidebar-accent-foreground: var(--text-primary);
   --sidebar-border: var(--border-subtle);
   --sidebar-ring: var(--border-focus);
-  /* Diff semantics (Phase D3): colour carries meaning here, so it gets a
-     token with a second cue (the +/- gutter), never a literal palette value
-     inside a component. Re-pointed at the governance family so Changes-surface
-     diffs move with the palette automatically. */
   --diff-added-bg: var(--gov-verified-bg);
   --diff-added-fg: var(--gov-verified);
   --diff-removed-bg: var(--gov-refusal-bg);
@@ -161,10 +157,6 @@ html, body {
   --sp-6: 24px;
   --sp-8: 32px;
 
-  /* The mockup's compact type scale (mockups/index.html 76-83). Tailwind's
-     defaults (xs 12 / base 14 px) were rendering everything one step larger
-     than the design; this is the density correction, mapped onto Tailwind
-     utilities in @theme inline below exactly like the radius scale. */
   --text-xs: 11px;
   --text-sm: 12px;
   --text-base: 13px;
@@ -178,60 +170,60 @@ html, body {
 }
 
 .dark {
-  /* --- Obsidian Cyan (dark) --- */
-  --bg-void: #060709;
-  --bg-deep: #0c0e15;
-  --bg-surface: #131620;
-  --bg-card: #1a1e2a;
-  --bg-elevated: #232838;
-  --bg-hover: rgba(255, 255, 255, 0.04);
-  --bg-active: rgba(255, 255, 255, 0.07);
-  --bg-glass: rgba(12, 14, 21, 0.85);
+  /* --- Obsidian Emerald / Carbon (dark) --- */
+  --bg-void: #090a0f;
+  --bg-deep: #0f1118;
+  --bg-surface: #141722;
+  --bg-card: #181c28;
+  --bg-elevated: #1e2332;
+  --bg-hover: rgba(255, 255, 255, 0.05);
+  --bg-active: rgba(255, 255, 255, 0.08);
+  --bg-glass: rgba(15, 17, 24, 0.88);
 
-  --border-faint: rgba(255, 255, 255, 0.05);
-  --border-subtle: rgba(255, 255, 255, 0.09);
-  --border-default: rgba(255, 255, 255, 0.13);
-  --border-focus: rgba(59, 196, 232, 0.5);
+  --border-faint: rgba(255, 255, 255, 0.06);
+  --border-subtle: rgba(255, 255, 255, 0.10);
+  --border-default: rgba(255, 255, 255, 0.14);
+  --border-focus: rgba(0, 212, 146, 0.6);
 
-  --text-primary: #e8eaf0;
-  --text-secondary: #98a0b0;
-  --text-tertiary: #5a606e;
-  --text-inverse: #060709;
+  --text-primary: #f3f4f6;
+  --text-secondary: #9ca3af;
+  --text-tertiary: #6b7280;
+  --text-inverse: #090a0f;
 
-  --accent-cyan: #3bc4e8;
-  --accent-bright: #5dd4f0;
-  --accent-deep: #2298c4;
-  --accent-muted: rgba(59, 196, 232, 0.1);
-  --accent-glow: rgba(59, 196, 232, 0.2);
-  --accent-border: rgba(59, 196, 232, 0.3);
+  --accent-cyan: #00d492;
+  --accent-bright: #34d399;
+  --accent-deep: #059669;
+  --accent-muted: rgba(0, 212, 146, 0.12);
+  --accent-glow: rgba(0, 212, 146, 0.25);
+  --accent-border: rgba(0, 212, 146, 0.35);
 
-  --gov-proposal: #6ab4f0;
-  --gov-proposal-bg: rgba(106, 180, 240, 0.1);
-  --gov-proposal-border: rgba(106, 180, 240, 0.25);
+  --gov-proposal: #38bdf8;
+  --gov-proposal-bg: rgba(56, 189, 248, 0.1);
+  --gov-proposal-border: rgba(56, 189, 248, 0.25);
 
-  --gov-approval: #e8a838;
-  --gov-approval-bg: rgba(232, 168, 56, 0.1);
-  --gov-approval-border: rgba(232, 168, 56, 0.3);
-  --gov-approval-glow: rgba(232, 168, 56, 0.15);
+  --gov-approval: #fbbf24;
+  --gov-approval-bg: rgba(251, 191, 36, 0.1);
+  --gov-approval-border: rgba(251, 191, 36, 0.3);
+  --gov-approval-glow: rgba(251, 191, 36, 0.18);
 
-  --gov-verified: #3ad8a0;
-  --gov-verified-bg: rgba(58, 216, 160, 0.08);
-  --gov-verified-border: rgba(58, 216, 160, 0.25);
+  --gov-verified: #00d492;
+  --gov-verified-bg: rgba(0, 212, 146, 0.1);
+  --gov-verified-border: rgba(0, 212, 146, 0.28);
 
-  --gov-refusal: #ec6a8a;
-  --gov-refusal-bg: rgba(236, 106, 138, 0.1);
-  --gov-refusal-border: rgba(236, 106, 138, 0.25);
+  --gov-refusal: #f43f5e;
+  --gov-refusal-bg: rgba(244, 63, 94, 0.1);
+  --gov-refusal-border: rgba(244, 63, 94, 0.28);
 
-  --gov-uncertain: #a78bfa;
-  --gov-uncertain-bg: rgba(167, 139, 250, 0.1);
+  --gov-uncertain: #a855f7;
+  --gov-uncertain-bg: rgba(168, 85, 247, 0.1);
 
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.3);
-  --shadow-elevated: 0 8px 32px rgba(0, 0, 0, 0.4);
-  --shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --shadow-elevated: 0 8px 32px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.08);
 
   --scrollbar-thumb: rgba(255, 255, 255, 0.08);
-  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.14);
-  --scrim: rgba(6, 7, 9, 0.55);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.15);
+  --scrim: rgba(9, 10, 15, 0.6);
 
   /* --- shadcn expected names, mapped onto the above --- */
   --background: var(--bg-void);
