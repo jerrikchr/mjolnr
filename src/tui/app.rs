@@ -1200,10 +1200,11 @@ async fn apply_selection_action(
                 view.close_overlay();
             }
             InputAction::PickerConfirm => {
-                let providers = view.auth_providers();
-                if let Some(provider) = providers.get(view.auth_cursor) {
-                    let provider_name = provider.provider.as_str().to_owned();
-                    return handle_auth_login_command(&provider_name, view, runtime, auth).await;
+                if let Some(provider) = view
+                    .selected_auth_provider()
+                    .map(|c| c.provider.as_str().to_owned())
+                {
+                    return handle_auth_login_command(&provider, view, runtime, auth).await;
                 }
             }
             _ => {}

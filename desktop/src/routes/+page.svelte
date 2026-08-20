@@ -38,6 +38,7 @@
   import AppEmblem from '$lib/components/chrome/AppEmblem.svelte';
   import AuroraBackground from '$lib/components/chrome/AuroraBackground.svelte';
   import GovernanceModal from '$lib/components/chrome/GovernanceModal.svelte';
+  import ModelPicker from '$lib/components/chrome/ModelPicker.svelte';
   import ProviderAuthModal from '$lib/components/chrome/ProviderAuthModal.svelte';
   import StatusOrb from '$lib/components/chrome/StatusOrb.svelte';
   import AttentionSurface from '$lib/components/surfaces/AttentionSurface.svelte';
@@ -61,7 +62,6 @@
   import { Input } from '$lib/components/ui/input';
   import * as Resizable from '$lib/components/ui/resizable';
   import * as ScrollArea from '$lib/components/ui/scroll-area';
-  import * as Select from '$lib/components/ui/select';
   import { Separator } from '$lib/components/ui/separator';
   import * as Sidebar from '$lib/components/ui/sidebar';
   import * as Tabs from '$lib/components/ui/tabs';
@@ -1302,22 +1302,7 @@
                       <div class="flex flex-wrap items-center gap-1.5">
                         <!-- Model Selector Pill -->
                         {#if snap.models.length > 0}
-                          <Select.Root type="single" bind:value={selectedModel}>
-                            <Select.Trigger class="h-6.5 border-border/60 bg-muted/40 text-[11px] px-2 py-0 gap-1 rounded-md font-mono hover:bg-muted/70 hover:text-foreground">
-                              <span class="text-primary font-sans font-medium">⚡</span>
-                              <span class="truncate max-w-32">{selectedModelLabel}</span>
-                            </Select.Trigger>
-                            <Select.Content>
-                              <Select.Group>
-                                <Select.Label>Available Models</Select.Label>
-                                {#each snap.models as choice (choice.model)}
-                                  <Select.Item value={choice.model} label={choice.displayName}>
-                                    {choice.displayName}
-                                  </Select.Item>
-                                {/each}
-                              </Select.Group>
-                            </Select.Content>
-                          </Select.Root>
+                          <ModelPicker models={snap.models} bind:value={selectedModel} onopenproviderauth={() => (providerAuthOpen = true)} />
                         {:else}
                           <button
                             type="button"
@@ -1510,22 +1495,7 @@
                   <div class="flex flex-wrap items-center gap-1.5">
                     <!-- Model Selector Pill -->
                     {#if snap.models.length > 0}
-                      <Select.Root type="single" bind:value={selectedModel}>
-                        <Select.Trigger class="h-6.5 border-border/60 bg-muted/40 text-[11px] px-2 py-0 gap-1 rounded-md font-mono hover:bg-muted/70 hover:text-foreground">
-                          <span class="text-primary font-sans font-medium">⚡</span>
-                          <span class="truncate max-w-32">{selectedModelLabel}</span>
-                        </Select.Trigger>
-                        <Select.Content>
-                          <Select.Group>
-                            <Select.Label>Available Models</Select.Label>
-                            {#each snap.models as choice (choice.model)}
-                              <Select.Item value={choice.model} label={choice.displayName}>
-                                {choice.displayName}
-                              </Select.Item>
-                            {/each}
-                          </Select.Group>
-                        </Select.Content>
-                      </Select.Root>
+                      <ModelPicker models={snap.models} bind:value={selectedModel} onopenproviderauth={() => (providerAuthOpen = true)} />
                     {/if}
 
                     <button

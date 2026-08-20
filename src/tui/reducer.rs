@@ -1630,8 +1630,46 @@ impl ViewState {
         self.snapshot.providers.iter().collect()
     }
 
+    pub(crate) fn filtered_auth_providers(&self) -> Vec<&crate::core::runtime::ProviderConnection> {
+        let needle = self.composer.trim().to_lowercase();
+        if needle.is_empty() {
+            return self.auth_providers();
+        }
+        self.snapshot
+            .providers
+            .iter()
+            .filter(|connection| {
+                let hay = format!(
+                    "{} {} {} {}",
+                    connection.provider.as_str(),
+                    connection.state.label(),
+                    connection.detail.as_deref().unwrap_or(""),
+                    match connection.provider.as_str() {
+                        "anthropic" => "subscription or API key",
+                        "openai-codex" | "gemini-cli" | "antigravity" => "subscription login",
+                        "lm-studio" => "local server optional API token",
+                        "ollama" => "local server",
+                        _ => "API key",
+                    }
+                )
+                .to_lowercase();
+                hay.contains(&needle)
+            })
+            .collect()
+    }
+
+    /// The highlighted provider in the filtered auth list.
+    pub(crate) fn selected_auth_provider(
+        &self,
+    ) -> Option<&crate::core::runtime::ProviderConnection> {
+        let filtered = self.filtered_auth_providers();
+        filtered
+            .get(self.auth_cursor.min(filtered.len().saturating_sub(1)))
+            .copied()
+    }
+
     pub(crate) fn move_auth_cursor(&mut self, delta: isize) {
-        let len = self.auth_providers().len();
+        let len = self.filtered_auth_providers().len();
         if len == 0 {
             self.auth_cursor = 0;
             return;

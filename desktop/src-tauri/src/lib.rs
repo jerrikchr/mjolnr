@@ -623,14 +623,38 @@ async fn subscribe_updates(
 }
 
 fn provider_registry(secrets: &Arc<dyn SecretStore>) -> Vec<Arc<dyn Provider>> {
-    vec![
+    use std::path::Path;
+    // Desktop has no project file tree before a workspace is opened; the
+    // workspace-local LM Studio endpoint (.mjolnr/providers/lm-studio.url)
+    // therefore resolves against the current directory. The env override
+    // MJOLNR_LM_STUDIO_BASE_URL still wins unconditionally.
+    let workspace_root = std::env::current_dir().unwrap_or_else(|_| Path::new(".").to_path_buf());
+    let mut providers: Vec<Arc<dyn Provider>> = vec![
         Arc::new(OpenAiProvider::new(Arc::clone(secrets))),
         Arc::new(AnthropicProvider::new(Arc::clone(secrets))),
         Arc::new(OpenAiCodexProvider::new(Arc::clone(secrets))),
         Arc::new(gemini::GeminiProvider::new(Arc::clone(secrets))),
+        Arc::new(mjolnr::providers::gemini_cli::GeminiCliProvider::new(
+            &mjolnr::providers::gemini_cli::GEMINI_CLI,
+            Arc::clone(secrets),
+        )),
+        Arc::new(mjolnr::providers::gemini_cli::GeminiCliProvider::new(
+            &mjolnr::providers::gemini_cli::ANTIGRAVITY,
+            Arc::clone(secrets),
+        )),
         Arc::new(openrouter::OpenRouterProvider::new(Arc::clone(secrets))),
         Arc::new(ollama::OllamaProvider::new()),
-    ]
+    ];
+    for descriptor in mjolnr::providers::openai_compat::CATALOG {
+        providers.push(Arc::new(
+            mjolnr::providers::openai_compat::OpenAiCompatProvider::for_workspace(
+                descriptor,
+                Arc::clone(secrets),
+                &workspace_root,
+            ),
+        ));
+    }
+    providers
 }
 
 /// Build the client bridge against an on-disk SQLite store. The
