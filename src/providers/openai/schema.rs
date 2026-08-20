@@ -1,5 +1,18 @@
 //! OpenAI-specific lowering for provider-neutral function schemas.
 
+/// Collapse a JSON Schema union `type` into the single scalar OpenAI and
+/// Jinja-based tool calling templates (LM Studio, Ollama, `LocalAI`) accept.
+/// `["integer", "null"]` becomes `"integer"`, `["string", "null"]` becomes `"string"`.
+fn collapse_type(value: &serde_json::Value) -> serde_json::Value {
+    if let Some(variants) = value.as_array() {
+        if let Some(concrete) = variants.iter().find(|variant| *variant != "null") {
+            return concrete.clone();
+        }
+        return serde_json::Value::String("string".to_owned());
+    }
+    value.clone()
+}
+
 /// Convert a tool schema into OpenAI's strict function subset.
 ///
 /// OpenAI rejects dialect markers and requires every property on every object
@@ -14,7 +27,14 @@ pub(crate) fn strict_parameters(schema: &serde_json::Value) -> serde_json::Value
             let mut lowered = object
                 .iter()
                 .filter(|(key, _)| key.as_str() != "$schema")
-                .map(|(key, value)| (key.clone(), strict_parameters(value)))
+                .map(|(key, value)| {
+                    let lowered = if key == "type" {
+                        collapse_type(value)
+                    } else {
+                        strict_parameters(value)
+                    };
+                    (key.clone(), lowered)
+                })
                 .collect::<serde_json::Map<_, _>>();
 
             if let Some(properties) = lowered
@@ -54,9 +74,46 @@ pub(crate) fn compatible_parameters(schema: &serde_json::Value) -> serde_json::V
             object
                 .iter()
                 .filter(|(key, _)| key.as_str() != "$schema")
-                .map(|(key, value)| (key.clone(), compatible_parameters(value)))
+                .map(|(key, value)| {
+                    let lowered = if key == "type" {
+                        collapse_type(value)
+                    } else {
+                        compatible_parameters(value)
+                    };
+                    (key.clone(), lowered)
+                })
                 .collect(),
         ),
         scalar => scalar.clone(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn compatible_parameters_collapses_union_types() {
+        let schema = serde_json::json!({
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+                "line_count": { "type": ["integer", "null"], "maximum": 1000 },
+                "path": { "type": "string" }
+            },
+            "required": ["path"]
+        });
+
+        let lowered = compatible_parameters(&schema);
+        assert!(lowered.get("$schema").is_none());
+        let properties = lowered.get("properties").expect("properties");
+        assert_eq!(
+            properties.get("line_count").unwrap().get("type"),
+            Some(&serde_json::json!("integer"))
+        );
+        assert_eq!(
+            properties.get("path").unwrap().get("type"),
+            Some(&serde_json::json!("string"))
+        );
     }
 }

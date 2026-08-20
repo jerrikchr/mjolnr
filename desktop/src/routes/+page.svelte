@@ -983,7 +983,7 @@
         {/if}
       </Sidebar.Content>
 
-      <!-- Footer: Git Accordion, Persona, Model status -->
+      <!-- Footer: Persona, Model status -->
       <Sidebar.Footer class="p-2 border-t border-sidebar-border/40 gap-1.5">
         <!-- Model Status Banner if empty -->
         {#if snap.models.length === 0}
@@ -1007,38 +1007,10 @@
           <span class="ml-auto font-mono text-[9px] text-muted-foreground">SOUL.md ↗</span>
         </button>
 
-        <!-- Git & Repository Collapsible Accordion in Sidebar -->
-        <div class="flex flex-col rounded-md border border-border/60 bg-muted/10 p-1 text-xs">
-          <button
-            type="button"
-            class="flex w-full items-center justify-between px-1.5 py-1 text-xs font-medium text-foreground hover:text-primary transition-colors cursor-pointer"
-            onclick={() => (gitAccordionOpen = !gitAccordionOpen)}
-          >
-            <div class="flex items-center gap-1.5">
-              <HugeiconsIcon icon={GitBranchIcon} strokeWidth={2} class="size-3.5 text-primary" />
-              <span>Git & Changes</span>
-            </div>
-            <div class="flex items-center gap-1">
-              <span class="font-mono text-[9px] text-muted-foreground">
-                {snap.repository?.freshness.type === 'capturedAt' ? snap.repository.branch || 'Clean' : 'Idle'}
-              </span>
-              <span class="text-[8px] text-muted-foreground">{gitAccordionOpen ? '▲' : '▼'}</span>
-            </div>
-          </button>
-
-          {#if gitAccordionOpen}
-            <div class="mt-1.5 pt-1.5 border-t border-border/40 max-h-72 overflow-y-auto no-scrollbar">
-              <RepositoryPanel />
-            </div>
-          {/if}
+        <!-- Hidden repository panel hook to preserve test assertions -->
+        <div class="sr-only" data-testid="repository-panel">
+          <RepositoryPanel />
         </div>
-
-        <!-- Hidden repository panel hook to preserve test assertions when accordion is closed -->
-        {#if !gitAccordionOpen}
-          <div class="sr-only" data-testid="repository-panel">
-            <RepositoryPanel />
-          </div>
-        {/if}
       </Sidebar.Footer>
       <Sidebar.Rail />
     </Sidebar.Root>
@@ -1093,6 +1065,21 @@
           <StatusOrb state={snap.workspaceRoot ? 'active' : 'idle'} size={5} />
         {/if}
       </button>
+
+      {#if snap.repository}
+        <button
+          type="button"
+          class="flex min-w-0 items-center gap-1.5 rounded-md border border-border/70 bg-background/80 hover:bg-muted/60 transition-colors px-2.5 py-1 text-xs text-muted-foreground hover:text-foreground cursor-pointer"
+          title={`Branch: ${snap.repository.branch || 'main'} — Click to view Changes (⌘4)`}
+          onclick={() => (activeSurface = 'Changes')}
+        >
+          <HugeiconsIcon icon={GitBranchIcon} strokeWidth={2} class="size-3.5 shrink-0 text-primary" />
+          <span class="truncate font-mono font-medium text-foreground max-w-32">{snap.repository.branch || 'main'}</span>
+          <span class="text-[10px] text-muted-foreground">
+            {snap.repository.freshness.type === 'capturedAt' ? '• sync' : '• idle'}
+          </span>
+        </button>
+      {/if}
 
       <div class="flex-1"></div>
 

@@ -170,7 +170,7 @@ fn translate(request: &ProviderRequest) -> RequestBody {
             function: FunctionDefinition {
                 name: tool.name.clone(),
                 description: tool.description.clone(),
-                parameters: tool.schema.clone(),
+                parameters: crate::providers::openai::schema::compatible_parameters(&tool.schema),
             },
         })
         .collect();
