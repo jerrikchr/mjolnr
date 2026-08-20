@@ -6,11 +6,11 @@ use tempfile::tempdir;
 use time::OffsetDateTime;
 use tokio_util::sync::CancellationToken;
 
-use smed::core::tool::{ReadSet, Tool, ToolContext, ToolTier};
-use smed::memory::store::MemoryStore;
-use smed::memory::{RuleDocument, RulesSnapshot};
-use smed::tools::ToolRegistry;
-use smed::tools::memory::{MemoryExpand, MemorySearch, MemoryTimeline};
+use mjolnr::core::tool::{ReadSet, Tool, ToolContext, ToolTier};
+use mjolnr::memory::store::MemoryStore;
+use mjolnr::memory::{RuleDocument, RulesSnapshot};
+use mjolnr::tools::ToolRegistry;
+use mjolnr::tools::memory::{MemoryExpand, MemorySearch, MemoryTimeline};
 
 #[test]
 fn memory_tools_are_built_in_and_have_valid_schemas() {
@@ -110,9 +110,9 @@ fn empty_rules_snapshot_produces_no_prompt_section() {
 #[tokio::test]
 async fn memory_tools_answer_from_workspace_store() {
     let workspace = tempdir().expect("tempdir");
-    let smed_dir = workspace.path().join(".smed").join("data");
-    std::fs::create_dir_all(&smed_dir).expect("create smed dir");
-    let db_path = smed_dir.join("memory.db");
+    let mjolnr_dir = workspace.path().join(".mjolnr").join("data");
+    std::fs::create_dir_all(&mjolnr_dir).expect("create mjolnr dir");
+    let db_path = mjolnr_dir.join("memory.db");
 
     // Populate facts directly in the projection database
     let store = MemoryStore::open(&db_path).await.expect("open store");

@@ -3,13 +3,11 @@
 *Gates that remain before this repository is made public.*
 
 - **Repository identity** — secure the GitHub org/name `mjolnr` and a home domain
-  (`mjolnr.dev` or `mjolnr.sh`). ADR-0018 records the rename and leaves domain
-  availability explicitly non-blocking.
+  (`mjolnr.com` is taken; `mjolnr.dev` or `mjolnr.sh`).
 - **First-impression surfaces** — a repository description and topics, and a
   screenshot or demo capture showing a governed refusal.
-- **Emblem** — the current mark is an anvil inherited from the `smed` (Danish
-  for "smith") era. It is a placeholder twice over now: chosen for legibility,
-  and no longer matching the name. ADR-0018's mythic vocabulary is the brief.
+- **Emblem** — the current mark is a placeholder chosen for legibility, not a
+  finished identity.
 - **One clean history** — the public repository begins with one reviewed root
   commit and contains no unreachable internal commit references, private
   worktree paths, transcripts, credentials, or captured provider responses.
@@ -38,8 +36,3 @@
   public release without an explicit owner action.
 - **crates.io / npm / PyPI** — names are free, but publishing the crate is a
   separate decision that has not been made; keep `publish = false`.
-
-- **Rename sweep closed out** — `tests/branding.rs` is green (it guards the
-  contract surfaces: commands, branch prefixes, environment prefix, release
-  scripts), and the cosmetic prose backlog in `docs/rename-sweep.md` is either
-  done or explicitly accepted as shipping with stale wording.

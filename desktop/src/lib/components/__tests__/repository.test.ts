@@ -41,7 +41,7 @@ const readRepository: ClientRepositoryState = {
   pathsTruncated: false,
   remoteSync: { type: 'synced' },
   freshness: { type: 'capturedAt', trigger: 'projectOpened', sequence: 12 },
-  trust: 'smedGoverned'
+  trust: 'mjolnrGoverned'
 };
 
 function mount(repository: ClientRepositoryState) {
@@ -91,7 +91,7 @@ describe('Repository panel (D5 UI, ADR 0009 layout)', () => {
     // writes its tracking ref without a reflog entry, so absence is ordinary
     // and must not be allowed to drop the sentence (ADR 0008).
     expect(getByTestId('repository-sync-as-of').textContent).toContain(
-      'the last time smed saw the remote'
+      'the last time mjolnr saw the remote'
     );
     expect(getByTestId('repository-sync-as-of').textContent).toContain('fetch');
   });
@@ -107,7 +107,7 @@ describe('Repository panel (D5 UI, ADR 0009 layout)', () => {
     expect(sync.textContent).toContain('2 ahead, 5 behind the ref last seen');
     expect(getByTestId('repository-sync-as-of').textContent).toContain('2026-07-30T11:02:00Z');
     expect(getByTestId('repository-sync-as-of').textContent).toContain(
-      'the last time smed saw the remote'
+      'the last time mjolnr saw the remote'
     );
   });
 
@@ -138,7 +138,7 @@ describe('Repository panel (D5 UI, ADR 0009 layout)', () => {
 
     const sync = getByTestId('repository-sync');
     expect(sync.textContent).toContain('No upstream to compare against');
-    expect(sync.textContent).toContain('not "smed did not look"');
+    expect(sync.textContent).toContain('not "mjolnr did not look"');
     expect(queryByTestId('repository-sync-as-of')).toBeNull();
   });
 
@@ -210,7 +210,7 @@ describe('Repository panel (D5 UI, ADR 0009 layout)', () => {
     });
 
     expect(getByTestId('repository-dirty').textContent).toContain('500+');
-    expect(getByTestId('repository-dirty').textContent).toContain("smed's bound");
+    expect(getByTestId('repository-dirty').textContent).toContain("mjolnr's bound");
     expect(getByTestId('repository-staged').textContent).toContain('2+');
   });
 
@@ -243,7 +243,7 @@ describe('Repository panel (D5 UI, ADR 0009 layout)', () => {
 
   it('shows the runtime-owned trust class rather than assuming one', () => {
     const { getByText } = mount(readRepository);
-    expect(getByText('smedGoverned')).toBeDefined();
+    expect(getByText('mjolnrGoverned')).toBeDefined();
   });
 
   it('loads bounded recent history through the client query', async () => {
@@ -251,14 +251,14 @@ describe('Repository panel (D5 UI, ADR 0009 layout)', () => {
       entries: [
         {
           revision: 'abc123456789',
-          author: 'smed Test',
+          author: 'mjolnr Test',
           authoredAt: '2026-08-10T12:00:00Z',
           subject: 'Add governed history'
         }
       ],
       hasMore: true,
       limit: 20,
-      trust: 'smedGoverned'
+      trust: 'mjolnrGoverned'
     });
     const view = mount(readRepository);
 

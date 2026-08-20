@@ -5,7 +5,7 @@
 //! an SDK —  forbids an unofficial OpenAI Rust SDK dependency, and
 //! `docs/provider-contract.md` §1 records what was confirmed.
 //!
-//! These types are **deliberately partial**. smed deserialises the fields it
+//! These types are **deliberately partial**. mjolnr deserialises the fields it
 //! acts on and ignores the rest: `serde` skips unknown fields by default, which
 //! is exactly right here. The provider adds fields continuously, and a struct
 //! that insisted on knowing all of them would break every time it did.
@@ -68,7 +68,7 @@ pub enum ContentPart {
     Text { text: String },
     #[serde(rename = "input_image")]
     Image {
-        /// A `data:` URI. smed holds the bytes and never hands the provider a
+        /// A `data:` URI. mjolnr holds the bytes and never hands the provider a
         /// URL to fetch, which would be an outbound request nothing reviewed.
         image_url: String,
         detail: &'static str,
@@ -202,7 +202,7 @@ pub struct IncompleteDetails {
 ///
 /// The `_details` sub-objects are **breakdowns of** their parents, not additions
 /// to them: `cached_tokens ⊆ input_tokens`, `reasoning_tokens ⊆ output_tokens`.
-/// smed drops them — real information the MVP has no surface for — rather than
+/// mjolnr drops them — real information the MVP has no surface for — rather than
 /// summing them into a wrong total.
 #[derive(Debug, Deserialize)]
 pub struct ResponseUsage {
@@ -333,7 +333,7 @@ mod tests {
     #[test]
     fn usage_details_are_not_added_to_their_parents() {
         // cached_tokens ⊆ input_tokens and reasoning_tokens ⊆ output_tokens.
-        // smed ignores the breakdowns; this pins that they are not summed in.
+        // mjolnr ignores the breakdowns; this pins that they are not summed in.
         let json = r#"{"input_tokens":100,"input_tokens_details":{"cached_tokens":80},"output_tokens":50,"output_tokens_details":{"reasoning_tokens":40},"total_tokens":150}"#;
         let usage: ResponseUsage = serde_json::from_str(json).expect("decode");
 

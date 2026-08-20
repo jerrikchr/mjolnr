@@ -2,7 +2,7 @@
 //!
 //! The rule this module exists to enforce is `AGENTS.md` §1.4:
 //!
-//! > **Uncertain side effects are never retried automatically.** If smed cannot
+//! > **Uncertain side effects are never retried automatically.** If mjolnr cannot
 //! > prove a write or command did not happen, it asks a human. Losing work beats
 //! > duplicating it.
 //!
@@ -83,10 +83,10 @@ pub struct InterruptedWork {
 }
 
 impl InterruptedWork {
-    /// Whether smed can prove no side effect occurred.
+    /// Whether mjolnr can prove no side effect occurred.
     ///
     /// Only [`ProposalUnapproved`](InterruptedKind::ProposalUnapproved) is
-    /// provably safe, and only because smed durably records intent *before*
+    /// provably safe, and only because mjolnr durably records intent *before*
     /// starting an effect. Without that ordering this question would
     /// be unanswerable for every variant.
     #[must_use]
@@ -106,7 +106,7 @@ impl InterruptedWork {
                 call, authority, ..
             } => format!(
                 "`{}` was {} and started, but no outcome was recorded. \
-                 It may or may not have run. smed cannot tell.",
+                 It may or may not have run. mjolnr cannot tell.",
                 call.name,
                 authority.describe()
             ),
@@ -117,13 +117,13 @@ impl InterruptedWork {
     }
 }
 
-/// The ways work can be interrupted, kept distinct by how much smed can prove.
+/// The ways work can be interrupted, kept distinct by how much mjolnr can prove.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InterruptedKind {
     /// `ToolProposed` is durable and carries an approval id, but no
     /// `ApprovalResolved` followed.
     ///
-    /// **Provably did not run.** smed persists intent before effect, and the
+    /// **Provably did not run.** mjolnr persists intent before effect, and the
     /// effect is gated on an approval that does not exist. Resume drops the
     /// proposal; it never executes it.
     ProposalUnapproved {
@@ -137,7 +137,7 @@ pub enum InterruptedKind {
     /// **The dangerous one.** The process died somewhere between "authorised"
     /// and "finished", which spans the entire side effect. The file may be
     /// written. The command may have run, half-run, or spawned something still
-    /// running. smed records this as unknown and refuses to characterise it.
+    /// running. mjolnr records this as unknown and refuses to characterise it.
     EffectUncertain {
         authority: Authority,
         call: ToolCall,
@@ -198,13 +198,13 @@ impl Authority {
 pub enum RecoveryDecision {
     /// Abandon the interrupted work and continue the session.
     ///
-    /// smed records the outcome as **unknown** and tells the model exactly
+    /// mjolnr records the outcome as **unknown** and tells the model exactly
     /// that. It does not claim the effect happened, and it does not claim it did
     /// not.
     AbandonAndContinue,
     /// Leave the workspace alone and end the session.
     ///
-    /// For when the human wants to inspect the repository before smed touches
+    /// For when the human wants to inspect the repository before mjolnr touches
     /// it again. The session is marked ended; its history stays readable.
     EndSession,
 }

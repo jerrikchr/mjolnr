@@ -3,7 +3,7 @@
 use crate::core::command::ApprovalId;
 use crate::core::tool::ToolTier;
 
-/// The policy modes smed exposes. There is deliberately no unrestricted mode:
+/// The policy modes mjolnr exposes. There is deliberately no unrestricted mode:
 /// full-auto changes approval handling, not structural guards.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PolicyMode {

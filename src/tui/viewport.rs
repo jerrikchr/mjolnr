@@ -1,4 +1,4 @@
-//! Viewport Scroll Engine for smed.
+//! Viewport Scroll Engine for mjolnr.
 //!
 //! Controls scroll position, follow-output intent, history pinning, and
 //! rendering of the floating pinned history indicator pill.

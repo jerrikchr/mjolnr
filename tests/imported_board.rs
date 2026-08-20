@@ -17,18 +17,18 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use smed::core::command::SmedCommand;
-use smed::core::error::ReasonCode;
-use smed::core::event::{SessionId, SmedEvent};
-use smed::core::frontier::{NodeId, NodeKind, Provenance};
-use smed::core::imported::{ImportedItem, ImportedItemId, ImportedItemState};
-use smed::core::model::{ModelId, ProviderId};
-use smed::core::provider::Provider;
-use smed::core::runtime::{RuntimeSnapshot, SmedRuntime};
-use smed::core::store::EventStore;
-use smed::providers::fake::FakeProvider;
-use smed::runtime::Runtime;
-use smed::store::memory::InMemoryEventStore;
+use mjolnr::core::command::MjolnrCommand;
+use mjolnr::core::error::ReasonCode;
+use mjolnr::core::event::{MjolnrEvent, SessionId};
+use mjolnr::core::frontier::{NodeId, NodeKind, Provenance};
+use mjolnr::core::imported::{ImportedItem, ImportedItemId, ImportedItemState};
+use mjolnr::core::model::{ModelId, ProviderId};
+use mjolnr::core::provider::Provider;
+use mjolnr::core::runtime::{MjolnrRuntime, RuntimeSnapshot};
+use mjolnr::core::store::EventStore;
+use mjolnr::providers::fake::FakeProvider;
+use mjolnr::runtime::Runtime;
+use mjolnr::store::memory::InMemoryEventStore;
 
 async fn open_project() -> (
     Runtime,
@@ -43,13 +43,13 @@ async fn open_project() -> (
         store.clone() as Arc<dyn EventStore>,
     );
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: temp.path().to_path_buf(),
         })
         .await
         .expect("open project");
     runtime
-        .dispatch(SmedCommand::CreateSession {
+        .dispatch(MjolnrCommand::CreateSession {
             provider: ProviderId::new(FakeProvider::ID),
             model: ModelId::new(FakeProvider::MODEL),
         })
@@ -92,7 +92,7 @@ fn imported(id: ImportedItemId, revision: &str, state: ImportedItemState) -> Imp
     }
 }
 
-async fn imported_events(store: &InMemoryEventStore, session: SessionId) -> Vec<SmedEvent> {
+async fn imported_events(store: &InMemoryEventStore, session: SessionId) -> Vec<MjolnrEvent> {
     store
         .events(session)
         .await
@@ -101,7 +101,7 @@ async fn imported_events(store: &InMemoryEventStore, session: SessionId) -> Vec<
         .filter(|stored| {
             matches!(
                 stored.event,
-                SmedEvent::ImportedItemFetched { .. } | SmedEvent::ImportedItemRefreshed { .. }
+                MjolnrEvent::ImportedItemFetched { .. } | MjolnrEvent::ImportedItemRefreshed { .. }
             )
         })
         .map(|stored| stored.event)
@@ -114,7 +114,7 @@ async fn importing_a_work_item_records_it_and_projects_it_on_the_board() {
     let id = ImportedItemId::new();
 
     runtime
-        .dispatch(SmedCommand::ImportWorkItem {
+        .dispatch(MjolnrCommand::ImportWorkItem {
             item: imported(id, "rev1", ImportedItemState::Open),
         })
         .await
@@ -124,7 +124,7 @@ async fn importing_a_work_item_records_it_and_projects_it_on_the_board() {
     assert_eq!(events.len(), 1, "exactly one fetch is recorded");
     assert!(matches!(
         events.first(),
-        Some(SmedEvent::ImportedItemFetched { item, .. }) if item.id == id
+        Some(MjolnrEvent::ImportedItemFetched { item, .. }) if item.id == id
     ));
 
     // The board is a projection of the log: the imported item appears as work,
@@ -154,14 +154,14 @@ async fn a_duplicate_import_id_is_refused_and_nothing_is_recorded() {
     let id = ImportedItemId::new();
 
     runtime
-        .dispatch(SmedCommand::ImportWorkItem {
+        .dispatch(MjolnrCommand::ImportWorkItem {
             item: imported(id, "rev1", ImportedItemState::Open),
         })
         .await
         .expect("first import records");
 
     let error = runtime
-        .dispatch(SmedCommand::ImportWorkItem {
+        .dispatch(MjolnrCommand::ImportWorkItem {
             item: imported(id, "rev2", ImportedItemState::Merged),
         })
         .await
@@ -181,14 +181,14 @@ async fn a_refresh_pinned_to_a_stale_revision_is_refused_not_recorded() {
     let (runtime, _temp, store, session) = open_project().await;
     let id = ImportedItemId::new();
     runtime
-        .dispatch(SmedCommand::ImportWorkItem {
+        .dispatch(MjolnrCommand::ImportWorkItem {
             item: imported(id, "rev1", ImportedItemState::Open),
         })
         .await
         .expect("import");
 
     let error = runtime
-        .dispatch(SmedCommand::RefreshImportedItem {
+        .dispatch(MjolnrCommand::RefreshImportedItem {
             expected_revision: "some-other-rev".to_owned(),
             item: imported(id, "rev2", ImportedItemState::Merged),
         })
@@ -217,7 +217,7 @@ async fn a_refresh_repeating_the_revision_or_moving_the_identity_is_refused() {
     let (runtime, _temp, store, session) = open_project().await;
     let id = ImportedItemId::new();
     runtime
-        .dispatch(SmedCommand::ImportWorkItem {
+        .dispatch(MjolnrCommand::ImportWorkItem {
             item: imported(id, "rev1", ImportedItemState::Open),
         })
         .await
@@ -225,7 +225,7 @@ async fn a_refresh_repeating_the_revision_or_moving_the_identity_is_refused() {
 
     // Re-recording the current revision would hide that the remote moved.
     let error = runtime
-        .dispatch(SmedCommand::RefreshImportedItem {
+        .dispatch(MjolnrCommand::RefreshImportedItem {
             expected_revision: "rev1".to_owned(),
             item: imported(id, "rev1", ImportedItemState::Closed),
         })
@@ -237,7 +237,7 @@ async fn a_refresh_repeating_the_revision_or_moving_the_identity_is_refused() {
     let mut moved = imported(id, "rev2", ImportedItemState::Open);
     moved.remote_id = "43".to_owned();
     let error = runtime
-        .dispatch(SmedCommand::RefreshImportedItem {
+        .dispatch(MjolnrCommand::RefreshImportedItem {
             expected_revision: "rev1".to_owned(),
             item: moved,
         })
@@ -254,7 +254,7 @@ async fn refreshing_an_item_that_was_never_imported_is_refused() {
     let (runtime, _temp, store, session) = open_project().await;
 
     let error = runtime
-        .dispatch(SmedCommand::RefreshImportedItem {
+        .dispatch(MjolnrCommand::RefreshImportedItem {
             expected_revision: "rev1".to_owned(),
             item: imported(ImportedItemId::new(), "rev2", ImportedItemState::Open),
         })
@@ -277,14 +277,14 @@ async fn a_valid_refresh_supersedes_the_prior_fetch_and_settles_a_terminal_state
     let (runtime, _temp, store, session) = open_project().await;
     let id = ImportedItemId::new();
     runtime
-        .dispatch(SmedCommand::ImportWorkItem {
+        .dispatch(MjolnrCommand::ImportWorkItem {
             item: imported(id, "rev1", ImportedItemState::Open),
         })
         .await
         .expect("import");
 
     runtime
-        .dispatch(SmedCommand::RefreshImportedItem {
+        .dispatch(MjolnrCommand::RefreshImportedItem {
             expected_revision: "rev1".to_owned(),
             item: imported(id, "rev2", ImportedItemState::Merged),
         })
@@ -299,7 +299,7 @@ async fn a_valid_refresh_supersedes_the_prior_fetch_and_settles_a_terminal_state
     );
     assert!(matches!(
         events.get(1),
-        Some(SmedEvent::ImportedItemRefreshed { expected_revision, item, .. })
+        Some(MjolnrEvent::ImportedItemRefreshed { expected_revision, item, .. })
             if expected_revision == "rev1" && item.fetched_revision == "rev2"
     ));
 
@@ -328,7 +328,7 @@ async fn a_replayed_session_remembers_imported_items_and_still_refuses_a_stale_t
     let (runtime, temp, store, session) = open_project().await;
     let id = ImportedItemId::new();
     runtime
-        .dispatch(SmedCommand::ImportWorkItem {
+        .dispatch(MjolnrCommand::ImportWorkItem {
             item: imported(id, "rev1", ImportedItemState::Open),
         })
         .await
@@ -342,13 +342,13 @@ async fn a_replayed_session_remembers_imported_items_and_still_refuses_a_stale_t
         store.clone() as Arc<dyn EventStore>,
     );
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: temp.path().to_path_buf(),
         })
         .await
         .expect("open project");
     runtime
-        .dispatch(SmedCommand::ResumeSession { session })
+        .dispatch(MjolnrCommand::ResumeSession { session })
         .await
         .expect("resume");
     settle_until(&runtime, |snap| snap.session.is_some()).await;
@@ -363,7 +363,7 @@ async fn a_replayed_session_remembers_imported_items_and_still_refuses_a_stale_t
     );
 
     let error = runtime
-        .dispatch(SmedCommand::RefreshImportedItem {
+        .dispatch(MjolnrCommand::RefreshImportedItem {
             expected_revision: "stale-after-restart".to_owned(),
             item: imported(id, "rev2", ImportedItemState::Done),
         })
@@ -375,7 +375,7 @@ async fn a_replayed_session_remembers_imported_items_and_still_refuses_a_stale_t
     );
 
     runtime
-        .dispatch(SmedCommand::RefreshImportedItem {
+        .dispatch(MjolnrCommand::RefreshImportedItem {
             expected_revision: "rev1".to_owned(),
             item: imported(id, "rev2", ImportedItemState::Done),
         })
@@ -396,14 +396,14 @@ async fn a_replayed_session_remembers_imported_items_and_still_refuses_a_stale_t
 // Contract (a) on the act path (§E5 step 4c)
 // ---------------------------------------------------------------------------
 //
-// `submit_change` is the first command that would leave smed and change
+// `submit_change` is the first command that would leave mjolnr and change
 // something a third party owns. The refusals below run *before* the capability
 // refusal that stands in for the unwritten producers, which is the whole point:
 // when a producer lands, the staleness guard is already in front of its network
 // call rather than something the producer must remember to add.
 
-fn submit(remote_id: &str, expected_revision: &str) -> SmedCommand {
-    SmedCommand::SubmitChange {
+fn submit(remote_id: &str, expected_revision: &str) -> MjolnrCommand {
+    MjolnrCommand::SubmitChange {
         source: "github".to_owned(),
         remote_id: remote_id.to_owned(),
         expected_revision: expected_revision.to_owned(),
@@ -420,13 +420,13 @@ async fn a_change_pinned_to_a_revision_the_item_has_moved_past_is_refused_stale(
     let (runtime, _temp, _store, _session) = open_project().await;
     let id = ImportedItemId::new();
     runtime
-        .dispatch(SmedCommand::ImportWorkItem {
+        .dispatch(MjolnrCommand::ImportWorkItem {
             item: imported(id, "rev1", ImportedItemState::Open),
         })
         .await
         .expect("import");
     runtime
-        .dispatch(SmedCommand::RefreshImportedItem {
+        .dispatch(MjolnrCommand::RefreshImportedItem {
             expected_revision: "rev1".to_owned(),
             item: imported(id, "rev2", ImportedItemState::Open),
         })
@@ -457,7 +457,7 @@ async fn a_correctly_pinned_change_passes_the_staleness_guard_and_stops_at_the_m
     let (runtime, _temp, _store, _session) = open_project().await;
     let id = ImportedItemId::new();
     runtime
-        .dispatch(SmedCommand::ImportWorkItem {
+        .dispatch(MjolnrCommand::ImportWorkItem {
             item: imported(id, "rev1", ImportedItemState::Open),
         })
         .await
@@ -479,13 +479,13 @@ async fn a_correctly_pinned_change_passes_the_staleness_guard_and_stops_at_the_m
 }
 
 /// Fail closed: a pin over a remote this session never imported names a
-/// revision smed cannot show anyone. Refusing is what keeps `expectedRevision`
+/// revision mjolnr cannot show anyone. Refusing is what keeps `expectedRevision`
 /// from becoming a field a caller can satisfy by inventing a value.
 #[tokio::test]
 async fn a_change_over_a_remote_that_was_never_imported_is_refused_before_the_producer() {
     let (runtime, _temp, _store, _session) = open_project().await;
     runtime
-        .dispatch(SmedCommand::ImportWorkItem {
+        .dispatch(MjolnrCommand::ImportWorkItem {
             item: imported(ImportedItemId::new(), "rev1", ImportedItemState::Open),
         })
         .await
@@ -525,13 +525,13 @@ async fn the_act_path_guard_holds_over_a_resumed_session() {
     let (runtime, temp, store, session) = open_project().await;
     let id = ImportedItemId::new();
     runtime
-        .dispatch(SmedCommand::ImportWorkItem {
+        .dispatch(MjolnrCommand::ImportWorkItem {
             item: imported(id, "rev1", ImportedItemState::Open),
         })
         .await
         .expect("import");
     runtime
-        .dispatch(SmedCommand::RefreshImportedItem {
+        .dispatch(MjolnrCommand::RefreshImportedItem {
             expected_revision: "rev1".to_owned(),
             item: imported(id, "rev2", ImportedItemState::Open),
         })
@@ -544,13 +544,13 @@ async fn the_act_path_guard_holds_over_a_resumed_session() {
         store.clone() as Arc<dyn EventStore>,
     );
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: temp.path().to_path_buf(),
         })
         .await
         .expect("open project");
     runtime
-        .dispatch(SmedCommand::ResumeSession { session })
+        .dispatch(MjolnrCommand::ResumeSession { session })
         .await
         .expect("resume");
     settle_until(&runtime, |snap| snap.session.is_some()).await;

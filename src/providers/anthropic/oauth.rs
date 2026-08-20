@@ -1,4 +1,4 @@
-//! smed-owned Claude Pro/Max subscription OAuth lifecycle.
+//! mjolnr-owned Claude Pro/Max subscription OAuth lifecycle.
 //!
 //! Same ownership rules as the Codex module: the refresh mutex is the
 //! boundary that stops two requests consuming one refresh generation, and a
@@ -166,7 +166,7 @@ struct AccountWire {
     uuid: Option<String>,
 }
 
-/// Run the paste-code login and persist smed's own credential copy.
+/// Run the paste-code login and persist mjolnr's own credential copy.
 ///
 /// `announce` shows the authorize URL; `read_code` returns what the user
 /// pasted from the console callback page (`code` or `code#state`).

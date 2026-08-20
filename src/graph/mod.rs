@@ -1,6 +1,6 @@
 //! A deterministic code graph over the workspace.
 //!
-//! One reason to change: what smed considers a node or an edge.
+//! One reason to change: what mjolnr considers a node or an edge.
 //!
 //! # Why this is not the memory layer `AGENTS.md` §11 law 2 rejects
 //!

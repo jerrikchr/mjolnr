@@ -1,4 +1,4 @@
-//! The SQL. One reason to change: how smed's data is read and written.
+//! The SQL. One reason to change: how mjolnr's data is read and written.
 //!
 //! Every function here is ordinary blocking `rusqlite` and runs on
 //! `tokio-rusqlite`'s connection thread, never on a Tokio worker
@@ -14,7 +14,7 @@ use uuid::Uuid;
 
 use crate::core::checkpoint::SessionCheckpoint;
 use crate::core::continuation::CommandFact;
-use crate::core::event::{EventId, SessionId, SmedEvent, StoredEvent};
+use crate::core::event::{EventId, MjolnrEvent, SessionId, StoredEvent};
 use crate::core::model::{ModelId, ProviderId};
 use crate::core::store::{BranchResume, BranchSummary, SessionTreeNode};
 use crate::core::store::{
@@ -26,7 +26,7 @@ use crate::store::wire;
 
 /// Register a project root, or return the id it already has.
 ///
-/// Upsert rather than select-then-insert: two smed processes opening the same
+/// Upsert rather than select-then-insert: two mjolnr processes opening the same
 /// project at once would race the gap between the two statements, and the
 /// `UNIQUE` constraint would surface as a spurious error rather than the shared
 /// id both callers want.
@@ -147,7 +147,7 @@ pub(super) fn sessions(connection: &Connection) -> SqlResult<Vec<SessionSummary>
 /// for listing; deriving from the events themselves means the two can never
 /// drift into assigning a slot twice, and the `PRIMARY KEY (session_id,
 /// sequence)` would catch it if they somehow did.
-pub(super) fn append(connection: &mut Connection, event: &SmedEvent) -> SqlResult<StoredEvent> {
+pub(super) fn append(connection: &mut Connection, event: &MjolnrEvent) -> SqlResult<StoredEvent> {
     append_after(connection, event, None)
 }
 
@@ -159,7 +159,7 @@ pub(super) fn append(connection: &mut Connection, event: &SmedEvent) -> SqlResul
 /// followed something earlier.
 pub(super) fn append_after(
     connection: &mut Connection,
-    event: &SmedEvent,
+    event: &MjolnrEvent,
     parent: Option<u64>,
 ) -> SqlResult<StoredEvent> {
     let payload = wire::encode(event.clone())?;
@@ -214,10 +214,10 @@ pub(super) fn append_after(
     // The session row mirrors the active model so `sessions list` can show it
     // without replaying history.
     match event {
-        SmedEvent::SessionCreated {
+        MjolnrEvent::SessionCreated {
             provider, model, ..
         }
-        | SmedEvent::ModelChanged {
+        | MjolnrEvent::ModelChanged {
             provider, model, ..
         } => {
             transaction.execute(
@@ -731,21 +731,21 @@ fn absorb(
     files_read: &mut std::collections::BTreeSet<std::path::PathBuf>,
     files_changed: &mut std::collections::BTreeSet<std::path::PathBuf>,
     proposals: &mut std::collections::BTreeMap<String, String>,
-    event: &SmedEvent,
+    event: &MjolnrEvent,
 ) {
     use crate::core::message::{Role, ToolEffect};
 
     match event {
-        SmedEvent::MessageAppended { message, .. } if message.role == Role::User => {
+        MjolnrEvent::MessageAppended { message, .. } if message.role == Role::User => {
             if summary.origin.is_none() {
                 summary.origin = Some(message.text());
             }
             summary.turns += 1;
         }
-        SmedEvent::ToolProposed { call, preview, .. } => {
+        MjolnrEvent::ToolProposed { call, preview, .. } => {
             proposals.insert(call.id.clone(), preview.clone());
         }
-        SmedEvent::ToolCompleted {
+        MjolnrEvent::ToolCompleted {
             call_id,
             name,
             result,
@@ -775,7 +775,7 @@ fn absorb(
                 | ToolEffect::SkillActivated { .. } => {}
             }
         }
-        SmedEvent::ToolFailed { call_id, code, .. } => {
+        MjolnrEvent::ToolFailed { call_id, code, .. } => {
             summary.tool_failures += 1;
             if let Some(command) = proposals.get(call_id) {
                 summary.commands.push(CommandFact {
@@ -895,7 +895,7 @@ pub(super) fn session_tree(
 
         let decoded = wire::decode_json(&payload, version_of(version))?;
         let event = wire::decode(session, decoded);
-        let SmedEvent::MessageAppended { message, .. } = &event else {
+        let MjolnrEvent::MessageAppended { message, .. } = &event else {
             continue;
         };
 
@@ -957,7 +957,7 @@ pub(super) fn branch_events_from(
     // column alone — the sequences are what the entries need, and decoding the
     // payloads to recover them would cost exactly what the checkpoint saved.
     //
-    // This kind list is `SmedEvent::introduces_message` expressed in SQL. The
+    // This kind list is `MjolnrEvent::introduces_message` expressed in SQL. The
     // two are pinned together by a test; if they drifted, every entry after the
     // divergence would anchor to the wrong event.
     // The `IN` list is built from a compile-time constant, never from input.

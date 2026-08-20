@@ -44,10 +44,10 @@ both are commonly asserted wrongly:
 
 - **Neither built bundle calls `eval` or `new Function`.** The one `eval(` hit
   in Monaco's `ts.worker` is the text `declare function eval(x: string): any;`
-  inside a bundled `lib.d.ts`, not a call site. smed's Tauri CSP does not need
+  inside a bundled `lib.d.ts`, not a call site. mjolnr's Tauri CSP does not need
   `'unsafe-eval'` for either candidate.
 - **Vite emits Monaco's workers as same-origin files**, not `blob:` URLs
-  (`new Worker("/assets/editor.worker-….js")`). smed's CSP declares no
+  (`new Worker("/assets/editor.worker-….js")`). mjolnr's CSP declares no
   `worker-src` or `child-src`, so workers inherit `default-src 'self'`, which
   those URLs satisfy.
 
@@ -65,13 +65,13 @@ the more complete one, and choosing CodeMirror gives that up.
 **D7 uses CodeMirror 6.**
 
 The deciding argument is not the byte count on its own; it is what the byte
-count is buying. smed's editor pane is one pane of a governed workspace, and
+count is buying. mjolnr's editor pane is one pane of a governed workspace, and
 §D7 scopes it to tabs, go-to-file, find, syntax highlighting, diagnostics
 display, autosave preference, and explicit save. Every one of those is
 CodeMirror's `basicSetup` plus a language package. Monaco's additional 584 KiB
 gzipped — before any language service — buys an IDE feature set D7 does not ask
 for, and its worker-per-language-service model buys a second execution context
-whose lifecycle smed would then own alongside the PTYs D8 is about to add.
+whose lifecycle mjolnr would then own alongside the PTYs D8 is about to add.
 
 Removal cost decides the near tie that remains. CodeMirror is a set of small
 packages assembled behind one mount function: removing it deletes that function
@@ -91,7 +91,7 @@ a highlight-only pane can afford.
 
 - **This is not a decision to render a language service.** D7 ships syntax
   highlighting and *displays* diagnostics; it does not run a type checker in the
-  frontend. Diagnostics arrive from Rust, from smed's own governed verification
+  frontend. Diagnostics arrive from Rust, from mjolnr's own governed verification
   commands, and a future frontend language service is a separate §8 checkpoint,
   not an implementation detail of this one.
 - **This is not a component-library change.** ADR-0005's supersession note and
@@ -105,14 +105,14 @@ a highlight-only pane can afford.
 
 **Monaco.** Rejected on the four dimensions above — 4× the gzipped weight for
 the feature set D7 actually specifies, 22× the `node_modules` footprint, a
-worker model smed would have to own, and a removal that reaches into global
+worker model mjolnr would have to own, and a removal that reaches into global
 scope and build configuration. Its accessibility layer is the real loss and is
 recorded as an accepted cost below, not waved away.
 
 **Neither — ship a read-only, syntax-highlighted viewer with no editor.**
 Rejected: §D7's acceptance requires a stale-on-disk save decision and
 keyboard-only edit/find/save/close, none of which a viewer can satisfy. It
-would also leave smed claiming an editor pane in the ADR-0009 layout that
+would also leave mjolnr claiming an editor pane in the ADR-0009 layout that
 cannot edit.
 
 **Defer the choice until the D7 producer lands.** Rejected: §D7 requires the

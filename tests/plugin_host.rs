@@ -11,8 +11,8 @@ use std::time::Duration;
 use tempfile::tempdir;
 use tokio_util::sync::CancellationToken;
 
-use smed::core::plugin::{PluginHook, PluginManifest, PluginRunCommand, PluginToolDeclaration};
-use smed::plugins::PluginHost;
+use mjolnr::core::plugin::{PluginHook, PluginManifest, PluginRunCommand, PluginToolDeclaration};
+use mjolnr::plugins::PluginHost;
 
 fn mock_plugin_manifest(script_path: &str) -> PluginManifest {
     PluginManifest {

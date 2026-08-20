@@ -8,7 +8,7 @@ They are also the single most likely place for a credential or someone's source 
 
 **Allowed:**
 
-- A response smed captured from a live provider call made by us, against our own account, using a scratch prompt.
+- A response mjolnr captured from a live provider call made by us, against our own account, using a scratch prompt.
 - A synthetic fixture handwritten from `docs/provider-contract.md` to exercise a specific decoder state (chunk splits, comment frames, unknown events, malformed tails).
 - A literal example printed in official provider documentation, cited in the fixture's metadata.
 

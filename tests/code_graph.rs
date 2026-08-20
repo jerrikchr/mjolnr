@@ -15,7 +15,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use smed::graph::{self, Direction, SourceLanguage};
+use mjolnr::graph::{self, Direction, SourceLanguage};
 use tempfile::TempDir;
 
 /// A workspace with `src/lib.rs` declaring `a` and `b`, where `a` imports `b`
@@ -44,13 +44,13 @@ fn write(root: &Path, relative: &str, contents: &str) {
     fs::write(path, contents).expect("write");
 }
 
-fn node_named(graph: &smed::graph::CodeGraph, relative: &str) -> smed::graph::NodeId {
+fn node_named(graph: &mjolnr::graph::CodeGraph, relative: &str) -> mjolnr::graph::NodeId {
     graph
         .find(Path::new(relative))
         .unwrap_or_else(|| panic!("{relative} is not a node"))
 }
 
-fn path_of(graph: &smed::graph::CodeGraph, id: smed::graph::NodeId) -> String {
+fn path_of(graph: &mjolnr::graph::CodeGraph, id: mjolnr::graph::NodeId) -> String {
     graph
         .node(id)
         .map_or_else(|| "<unknown>".to_owned(), |node| render_path(&node.path))
@@ -68,7 +68,7 @@ fn two_builds_of_one_tree_agree_exactly() {
 
     // Rendered rather than compared field-by-field: the claim is that the whole
     // structure is reproducible, not that one accessor happens to match.
-    let render = |graph: &smed::graph::CodeGraph| {
+    let render = |graph: &mjolnr::graph::CodeGraph| {
         graph
             .files()
             .iter()
@@ -379,10 +379,10 @@ fn definitions_carry_the_file_and_a_one_based_line() {
 #[test]
 fn a_file_outside_src_is_a_node_but_reaches_nothing_by_crate_path() {
     let temp = fixture();
-    // A test binary is its own crate root; `use smed::…` is an external crate
+    // A test binary is its own crate root; `use mjolnr::…` is an external crate
     // from the graph's point of view, and inventing an edge into `src/` here
     // would be the scanner guessing.
-    write(temp.path(), "tests/it.rs", "use smed::graph;\n");
+    write(temp.path(), "tests/it.rs", "use mjolnr::graph;\n");
     let graph = graph::build(temp.path()).expect("build");
 
     let node = graph.node(node_named(&graph, "tests/it.rs")).expect("node");

@@ -1,6 +1,6 @@
 # Same-session provider and model switching
 
-smed owns canonical history, tool state, project state, skills, budgets, and persistence. Providers own only the wire exchange that produced the next canonical assistant turn. That boundary is what makes switching possible without pretending hidden state migrates.
+mjolnr owns canonical history, tool state, project state, skills, budgets, and persistence. Providers own only the wire exchange that produced the next canonical assistant turn. That boundary is what makes switching possible without pretending hidden state migrates.
 
 ## Operator command
 

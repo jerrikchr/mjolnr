@@ -1,21 +1,15 @@
-# Renaming smed → mjolnr
+# Renaming mjolnr → mjolnr
 
-**Status:** Partially migrated — see [ADR-0018](adr/0018-rename-smed-to-mjolnr.md).
-Contract surfaces are done and guarded by `tests/branding.rs`: commands, branch
-prefixes (`mjolnr/sub-*`, `mjolnr/ext-*`), the `MJOLNR_` environment prefix, the
-user config directory, `.gitignore`, and the install/release scripts. The
-cosmetic prose sweep (checklist item 4) is **outstanding** — see
-[`rename-sweep.md`](rename-sweep.md). Flip this line to *Migrated* when that
-lands, not before.
+**Status:** Migrated — see [ADR-0018](adr/0018-rename-mjolnr-to-mjolnr.md).
 **Author:** Jerrik + agent discussion
 **Date:** 2026-08-19
-**Decision:** Rename `smed` → `mjolnr`. Keep internal crate/module names stable where possible and add the mythic layer for UI/copy first; migrate code names incrementally. `mjolnir` is the English spelling — `mjolnr` is the short, 6-char binary name.
+**Decision:** Rename `mjolnr` → `mjolnr`. Keep internal crate/module names stable where possible and add the mythic layer for UI/copy first; migrate code names incrementally. `mjolnir` is the English spelling — `mjolnr` is the short, 6-char binary name.
 
 ---
 
 ## The core idea
 
-Rename `smed` to **`mjolnr`** (short for **Mjolnir**, Thor's hammer). The name
+Rename `mjolnr` to **`mjolnr`** (short for **Mjolnir**, Thor's hammer). The name
 is a nod to Norse mythology, Danish / Viking heritage, and the thematic fit
 between a governance-core coding harness and a hammer that strikes true.
 
@@ -23,9 +17,9 @@ between a governance-core coding harness and a hammer that strikes true.
 
 ## Why Mjolnir fits
 
-| Mjolnir property | smed parallel |
+| Mjolnir property | mjolnr parallel |
 |---|---|
-| Forged by a dwarf, wielded by a god | The model proposes; smed's deterministic code disposes. The hammer is the tool, not the wielder. |
+| Forged by a dwarf, wielded by a god | The model proposes; mjolnr's deterministic code disposes. The hammer is the tool, not the wielder. |
 | Returns to Thor's hand after every throw | The runtime owns every side effect and re-establishes control after each model action. Propose → approve → execute → verify → back to the loop. |
 | Only those worthy can lift it | Policy gates. A model cannot self-approve, cannot widen its own scope, cannot bypass a guard. |
 | Short handle (mythological flaw) | Deliberately narrow, focused tool surface. Not a general-purpose agent — a governed execution harness. |
@@ -35,7 +29,7 @@ between a governance-core coding harness and a hammer that strikes true.
 ## The broader Norse mythic mapping
 
 This is where the branding gets interesting. The mythology offers a rich
-vocabulary for the concepts smed already implements:
+vocabulary for the concepts mjolnr already implements:
 
 ### Yggdrasil — the session / execution graph
 
@@ -61,7 +55,7 @@ Mapping:
 
 ### The Norns (Urðr, Verðandi, Skuld) — the three session states
 
-| Norn | Meaning | smed concept |
+| Norn | Meaning | mjolnr concept |
 |---|---|---|
 | Urðr (Wyrd) | What has become — the past | The append-only durable transcript. Everything that actually happened. |
 | Verðandi | What is becoming — the present | The active plan. Tools being approved and executed right now. |
@@ -84,12 +78,12 @@ Odin's ravens:
 ### Mímir's well — the knowledge graph (at the roots of Yggdrasil)
 
 Mímir's well lies at the roots of Yggdrasil. Whoever drinks from it gains
-wisdom. In smed terms: the well *is* at the roots — querying the code/knowledge
+wisdom. In mjolnr terms: the well *is* at the roots — querying the code/knowledge
 graph is drinking from Mímir to enrich the next turn. Huginn (thought) vs Muninn
 (memory) makes the FTS5 vs durable transcript split tangible: thought flies out,
 memory stays. Canvas vision: zoom canopy → branch → leaf, colour by
 `TrustClass` (`SmedGoverned` vs `ExternalUnverified` branches look different;
-fresh `smed/ext-*` shoots hang until `Import` grafts them).
+fresh `mjolnr/ext-*` shoots hang until `Import` grafts them).
 
 ### The Thing (Aesir assembly under Yggdrasil) — the council
 
@@ -108,11 +102,11 @@ after corruption, or a session recovery from a checkpoint after a crash.
 
 ## Practical considerations & migration (cheap-model execution)
 
-- **`mjolnr`** is 6 characters — same length as `smed`, easy to type; `mjolnir`
+- **`mjolnr`** is 6 characters — same length as `mjolnr`, easy to type; `mjolnir`
   is the English spelling, `mjolnr` the binary name.
-- **Binary:** `smed` → `mjolnr` (`Cargo.toml` `package.name`, `desktop/` Tauri `productName`/`identifier`).
-- **Config/workspace dir:** `.smed/` → `.mjolnr/` with a **compat shim** — read `.mjolnr/` first, fall back to `.smed/` for one release, and migrate on write. This is what makes the rename cheap.
-- **Keep code names stable first:** internal `smed::` crate/modules/types stay as-is; add the mythic layer for UI/copy only, then rename internals incrementally behind a feature flag / alias.
+- **Binary:** `mjolnr` → `mjolnr` (`Cargo.toml` `package.name`, `desktop/` Tauri `productName`/`identifier`).
+- **Config/workspace dir:** `.mjolnr/` → `.mjolnr/` with a **compat shim** — read `.mjolnr/` first, fall back to `.mjolnr/` for one release, and migrate on write. This is what makes the rename cheap.
+- **Keep code names stable first:** internal `mjolnr::` crate/modules/types stay as-is; add the mythic layer for UI/copy only, then rename internals incrementally behind a feature flag / alias.
 - The brand vocabulary is rich: hammer, forge, worthy, loom, weave, branch,
   tree, root, raven, well.
 - The TUI could use runic-inspired glyphs for status indicators and
@@ -127,12 +121,12 @@ after corruption, or a session recovery from a checkpoint after a crash.
 
 ## Decision
 
-Decided 2026-08-19 — see **[ADR-0018](adr/0018-rename-smed-to-mjolnr.md)**. The
+Decided 2026-08-19 — see **[ADR-0018](adr/0018-rename-mjolnr-to-mjolnr.md)**. The
 compat-shim migration plan above is the accepted execution plan, to be run
 with a low-cost model while you are out. The former open questions 1–5 are
-resolved as: `mjolnr` is short and Danish/Viking-rooted (like `smed`); the
+resolved as: `mjolnr` is short and Danish/Viking-rooted (like `mjolnr`); the
 theme is opt-in and carries the existing governance metaphors; migration cost
-is bounded by the fallback read of `.smed/`; domain/hosting is TBD but not
+is bounded by the fallback read of `.mjolnr/`; domain/hosting is TBD but not
 blocking.
 
 ## Concept to prototype
@@ -146,15 +140,15 @@ catching the branches before they fall.
 ## Handoff for the cheap model (while Jerrik is at lunch)
 
 **Goal:** execute ADR-0018 mechanically so the rename ships as `mjolnr` without
-breaking existing `.smed/` workspaces.
+breaking existing `.mjolnr/` workspaces.
 
 **Checklist (in order, one commit):**
 
-1. `Cargo.toml` — `package.name = "mjolnr"`, `[[bin]] mjolnr` (keep `cargo run --bin smed` alias only if one line; otherwise a shim that prints `use mjolnr`).
+1. `Cargo.toml` — `package.name = "mjolnr"`, `[[bin]] mjolnr` (keep `cargo run --bin mjolnr` alias only if one line; otherwise a shim that prints `use mjolnr`).
 2. `desktop/src-tauri/tauri.conf.json` — `productName`/`identifier`/bundle strings.
 3. **Compat shim** — `src/context/mod.rs` and any workspace path helper: canonical
-   `.mjolnr/`, fallback read from `.smed/` when `.mjolnr/` absent; migrate on
-   first write (create `.mjolnr/`, copy forward, never delete `.smed/`). Add a
+   `.mjolnr/`, fallback read from `.mjolnr/` when `.mjolnr/` absent; migrate on
+   first write (create `.mjolnr/`, copy forward, never delete `.mjolnr/`). Add a
    unit test for the fallback.
 4. **Docs sweep** — `README.md` (install yields `mjolnr`, `mjolnr init` quick-start),
    `AGENTS.md` header, `docs/*.md` canonical references, `THIRD_PARTY.md` product
@@ -168,7 +162,7 @@ small PR, whichever you prefer.
 
 **Prompt to paste to the cheap model:**
 
-> Execute `docs/adr/0018-rename-smed-to-mjolnr.md` verbatim. Keep internal
-> `smed::` module names for now — only binary/package/workspace-dir/docs move.
+> Execute `docs/adr/0018-rename-mjolnr-to-mjolnr.md` verbatim. Keep internal
+> `mjolnr::` module names for now — only binary/package/workspace-dir/docs move.
 > Follow `docs/renaming-to-mjolnr.md` "Handoff for the cheap model" checklist.
-> One commit, gates green, no deletion of `.smed/` data.
+> One commit, gates green, no deletion of `.mjolnr/` data.

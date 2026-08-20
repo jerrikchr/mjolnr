@@ -125,11 +125,11 @@ impl Actor {
 
     pub(super) fn command_waits_for_catalog(
         &self,
-        command: &crate::core::command::SmedCommand,
+        command: &crate::core::command::MjolnrCommand,
     ) -> bool {
         let provider = match command {
-            crate::core::command::SmedCommand::SelectModel { provider, .. }
-            | crate::core::command::SmedCommand::ResumeCompact {
+            crate::core::command::MjolnrCommand::SelectModel { provider, .. }
+            | crate::core::command::MjolnrCommand::ResumeCompact {
                 provider: Some(provider),
                 ..
             } => Some(provider),

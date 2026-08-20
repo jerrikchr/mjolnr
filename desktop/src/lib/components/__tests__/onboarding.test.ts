@@ -30,8 +30,8 @@ const snapshot: ClientSnapshot = {
 const preview: ClientOnboardingPreview = {
   root: '/tmp/project',
   files: [
-    { path: '.smed/SOUL.md', action: 'write' },
-    { path: '.smed/USER.md', action: 'preserve' }
+    { path: '.mjolnr/SOUL.md', action: 'write' },
+    { path: '.mjolnr/USER.md', action: 'preserve' }
   ]
 };
 

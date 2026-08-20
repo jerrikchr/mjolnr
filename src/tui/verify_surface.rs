@@ -1,4 +1,4 @@
-//! Verification & Governance Evidence Surface for smed (Phase UX 3).
+//! Verification & Governance Evidence Surface for mjolnr (Phase UX 3).
 //!
 //! Visualizes post-mutation execution evidence, governance policy telemetry,
 //! auto-allowed side effect tallies, and audit logs.

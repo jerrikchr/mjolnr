@@ -7,7 +7,7 @@
 //!
 //! What is canonical: user-visible text, tool calls, tool results, and task
 //! state. What is **not** canonical: provider-private reasoning state and cache
-//! handles. Those do not survive a model switch, and smed discloses that rather
+//! handles. Those do not survive a model switch, and mjolnr discloses that rather
 //! than pretending they migrate.
 
 use time::OffsetDateTime;
@@ -49,7 +49,7 @@ pub struct ToolCall {
     /// because requests are rebuilt by replaying persisted messages: an
     /// in-memory map would evaporate on resume and fail the turn after.
     ///
-    /// Deliberately provider-*opaque* — smed never interprets it, and
+    /// Deliberately provider-*opaque* — mjolnr never interprets it, and
     /// OpenAI's reasoning-item ids are the same shape of problem.
     pub provider_signature: Option<String>,
 }

@@ -40,13 +40,13 @@ const repository: ClientRepositoryState = {
   pathsTruncated: false,
   remoteSync: { type: 'unknown' },
   freshness: { type: 'capturedAt', trigger: 'requested', sequence: 12 },
-  trust: 'smedGoverned'
+  trust: 'mjolnrGoverned'
 };
 
 function mount(overrides: Partial<ClientRepositoryState> = {}) {
   clientStore.snapshot = {
     ...baseSnapshot,
-    workspaceRoot: 'C:/work/smed',
+    workspaceRoot: 'C:/work/mjolnr',
     repository: { ...repository, ...overrides }
   };
   return render(RepositoryControls);
@@ -70,7 +70,7 @@ describe('Repository controls (D5 preview boundary)', () => {
 
     await fireEvent.click(view.getByRole('button', { name: 'Stage paths' }));
 
-    expect(view.getByTestId('repository-preview-root').textContent).toContain('C:/work/smed');
+    expect(view.getByTestId('repository-preview-root').textContent).toContain('C:/work/mjolnr');
     expect(view.getByTestId('repository-preview-base').textContent).toContain('a1b2c3d');
     expect(view.getByTestId('repository-preview-index').textContent).toContain('idx-1');
     expect(view.getByTestId('repository-preview-paths').textContent).toContain('src/a.rs');
@@ -125,14 +125,14 @@ describe('Repository controls (D5 preview boundary)', () => {
     clientStore.worktrees = [
       {
         child: 'child-1',
-        branch: 'smed/child-1',
+        branch: 'mjolnr/child-1',
         path: 'C:/work/child-1',
         directive: 'finish the change',
         done: true
       },
       {
         child: 'child-2',
-        branch: 'smed/child-2',
+        branch: 'mjolnr/child-2',
         path: 'C:/work/child-2',
         directive: 'still running',
         done: false
@@ -142,8 +142,8 @@ describe('Repository controls (D5 preview boundary)', () => {
     const view = mount({ dirtyCount: 0 });
 
     await fireEvent.click(view.getByRole('button', { name: 'Integrate settled child branch' }));
-    expect(view.getByRole('option', { name: 'smed/child-1' })).toBeDefined();
-    expect(view.queryByRole('option', { name: 'smed/child-2' })).toBeNull();
+    expect(view.getByRole('option', { name: 'mjolnr/child-1' })).toBeDefined();
+    expect(view.queryByRole('option', { name: 'mjolnr/child-2' })).toBeNull();
 
     await fireEvent.input(view.getByLabelText('Merge commit message'), {
       target: { value: 'Integrate the settled child work' }
@@ -152,7 +152,7 @@ describe('Repository controls (D5 preview boundary)', () => {
 
     expect(dispatch).toHaveBeenCalledWith({
       type: 'integrateChildBranch',
-      name: 'smed/child-1',
+      name: 'mjolnr/child-1',
       message: 'Integrate the settled child work',
       expectedHead: repository.head
     });

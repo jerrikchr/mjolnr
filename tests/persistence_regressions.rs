@@ -14,24 +14,26 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use smed::core::checkpoint::SessionCheckpoint;
-use smed::core::command::{ApprovalDecision, ApprovalId, SmedCommand};
-use smed::core::error::{ProviderError, ReasonCode};
-use smed::core::event::{FinishReason, ProviderEvent, RunId, SessionId, SmedEvent, StoredEvent};
-use smed::core::message::{CanonicalMessage, ContentBlock, ToolCall, ToolOutcome, ToolResult};
-use smed::core::model::{ModelCapabilities, ModelDescriptor, ModelId, ProviderId};
-use smed::core::provider::{Provider, ProviderCompletion, ProviderRequest};
-use smed::core::runtime::{RuntimeSnapshot, SmedRuntime};
-use smed::core::store::{
+use mjolnr::core::checkpoint::SessionCheckpoint;
+use mjolnr::core::command::{ApprovalDecision, ApprovalId, MjolnrCommand};
+use mjolnr::core::error::{ProviderError, ReasonCode};
+use mjolnr::core::event::{
+    FinishReason, MjolnrEvent, ProviderEvent, RunId, SessionId, StoredEvent,
+};
+use mjolnr::core::message::{CanonicalMessage, ContentBlock, ToolCall, ToolOutcome, ToolResult};
+use mjolnr::core::model::{ModelCapabilities, ModelDescriptor, ModelId, ProviderId};
+use mjolnr::core::provider::{Provider, ProviderCompletion, ProviderRequest};
+use mjolnr::core::runtime::{MjolnrRuntime, RuntimeSnapshot};
+use mjolnr::core::store::{
     EventStore, ProjectId, SessionLease, SessionStatus, SessionSummary, StoreError,
     StoredCheckpoint,
 };
-use smed::core::tool::ToolTier;
-use smed::providers::fake::{FakeProvider, FakeScript};
-use smed::runtime::Runtime;
-use smed::runtime::recovery::project;
-use smed::store::memory::InMemoryEventStore;
-use smed::store::sqlite::SqliteEventStore;
+use mjolnr::core::tool::ToolTier;
+use mjolnr::providers::fake::{FakeProvider, FakeScript};
+use mjolnr::runtime::Runtime;
+use mjolnr::runtime::recovery::project;
+use mjolnr::store::memory::InMemoryEventStore;
+use mjolnr::store::sqlite::SqliteEventStore;
 use tempfile::TempDir;
 use tokio::sync::{mpsc, watch};
 use tokio_util::sync::CancellationToken;
@@ -50,7 +52,7 @@ struct Fixture {
 impl Fixture {
     fn new() -> Self {
         let directory = TempDir::new().expect("temporary directory");
-        let database = directory.path().join("smed.sqlite3");
+        let database = directory.path().join("mjolnr.sqlite3");
         let workspace = directory.path().join("workspace");
         std::fs::create_dir_all(&workspace).expect("workspace");
         let workspace = workspace.canonicalize().expect("canonical workspace");
@@ -83,15 +85,15 @@ async fn create_session(store: &dyn EventStore, root: &Path) -> SessionId {
     session
 }
 
-fn created(session: SessionId, provider: &str, model: &str) -> SmedEvent {
-    SmedEvent::SessionCreated {
+fn created(session: SessionId, provider: &str, model: &str) -> MjolnrEvent {
+    MjolnrEvent::SessionCreated {
         session,
         provider: ProviderId::new(provider),
         model: ModelId::new(model),
     }
 }
 
-async fn append_all(store: &dyn EventStore, events: impl IntoIterator<Item = SmedEvent>) {
+async fn append_all(store: &dyn EventStore, events: impl IntoIterator<Item = MjolnrEvent>) {
     for event in events {
         store.append(event).await.expect("append event");
     }
@@ -119,9 +121,9 @@ async fn wait_snapshot(
 }
 
 async fn wait_event(
-    events: &mut smed::core::runtime::RuntimeSubscription,
-    ready: impl Fn(&SmedEvent) -> bool,
-) -> SmedEvent {
+    events: &mut mjolnr::core::runtime::RuntimeSubscription,
+    ready: impl Fn(&MjolnrEvent) -> bool,
+) -> MjolnrEvent {
     tokio::time::timeout(Duration::from_secs(5), async {
         loop {
             let event = events.recv().await.expect("runtime event");
@@ -256,13 +258,13 @@ async fn close_during_active_provider_resumes_into_recovery() {
     let runtime = Runtime::spawn(vec![provider], Arc::clone(&store) as Arc<dyn EventStore>);
 
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: fixture.workspace.clone(),
         })
         .await
         .expect("open project");
     runtime
-        .dispatch(SmedCommand::CreateSession {
+        .dispatch(MjolnrCommand::CreateSession {
             provider: ProviderId::new(HANGING_PROVIDER),
             model: ModelId::new(HANGING_MODEL),
         })
@@ -273,9 +275,9 @@ async fn close_during_active_provider_resumes_into_recovery() {
         .session
         .expect("session id");
     runtime
-        .dispatch(SmedCommand::SendUserMessage {
+        .dispatch(MjolnrCommand::SendUserMessage {
             text: "wait".to_owned(),
-            source: smed::core::directive::DirectiveSource::Human,
+            source: mjolnr::core::directive::DirectiveSource::Human,
         })
         .await
         .expect("start provider");
@@ -292,7 +294,7 @@ async fn close_during_active_provider_resumes_into_recovery() {
         Arc::clone(&store) as Arc<dyn EventStore>,
     );
     resumed
-        .dispatch(SmedCommand::ResumeSession { session })
+        .dispatch(MjolnrCommand::ResumeSession { session })
         .await
         .expect("resume");
     let state = wait_snapshot(&resumed, |state| state.session == Some(session)).await;
@@ -312,13 +314,13 @@ async fn ending_an_active_run_cannot_erase_uncertain_work() {
     let runtime = Runtime::spawn(vec![provider], Arc::clone(&store) as Arc<dyn EventStore>);
 
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: fixture.workspace.clone(),
         })
         .await
         .expect("open project");
     runtime
-        .dispatch(SmedCommand::CreateSession {
+        .dispatch(MjolnrCommand::CreateSession {
             provider: ProviderId::new(HANGING_PROVIDER),
             model: ModelId::new(HANGING_MODEL),
         })
@@ -329,9 +331,9 @@ async fn ending_an_active_run_cannot_erase_uncertain_work() {
         .session
         .expect("session id");
     runtime
-        .dispatch(SmedCommand::SendUserMessage {
+        .dispatch(MjolnrCommand::SendUserMessage {
             text: "wait".to_owned(),
-            source: smed::core::directive::DirectiveSource::Human,
+            source: mjolnr::core::directive::DirectiveSource::Human,
         })
         .await
         .expect("start provider");
@@ -341,7 +343,7 @@ async fn ending_an_active_run_cannot_erase_uncertain_work() {
         .expect("watch remains open");
 
     runtime
-        .dispatch(SmedCommand::EndSession)
+        .dispatch(MjolnrCommand::EndSession)
         .await
         .expect("queue end request");
     runtime.close().await.expect("close");
@@ -360,7 +362,7 @@ async fn ending_an_active_run_cannot_erase_uncertain_work() {
             .await
             .expect("events")
             .iter()
-            .all(|event| !matches!(event.event, SmedEvent::SessionEnded { .. })),
+            .all(|event| !matches!(event.event, MjolnrEvent::SessionEnded { .. })),
         "an active run must remain recoverable instead of being sealed as ended"
     );
 }
@@ -382,8 +384,8 @@ async fn unresolved_recovery_survives_close_and_second_resume() {
         store.as_ref(),
         [
             created(session, FakeProvider::ID, FakeProvider::MODEL),
-            SmedEvent::RunStarted { session, run },
-            SmedEvent::ToolProposed {
+            MjolnrEvent::RunStarted { session, run },
+            MjolnrEvent::ToolProposed {
                 session,
                 run,
                 approval: Some(approval),
@@ -391,7 +393,7 @@ async fn unresolved_recovery_survives_close_and_second_resume() {
                 tier: ToolTier::Write,
                 preview: "+ b".to_owned(),
             },
-            SmedEvent::ApprovalResolved {
+            MjolnrEvent::ApprovalResolved {
                 session,
                 run,
                 approval,
@@ -403,7 +405,7 @@ async fn unresolved_recovery_survives_close_and_second_resume() {
 
     let first = fake_runtime(&store);
     first
-        .dispatch(SmedCommand::ResumeSession { session })
+        .dispatch(MjolnrCommand::ResumeSession { session })
         .await
         .expect("first resume");
     assert!(
@@ -416,7 +418,7 @@ async fn unresolved_recovery_survives_close_and_second_resume() {
 
     let second = fake_runtime(&store);
     second
-        .dispatch(SmedCommand::ResumeSession { session })
+        .dispatch(MjolnrCommand::ResumeSession { session })
         .await
         .expect("second resume");
     let state = wait_snapshot(&second, |state| state.session == Some(session)).await;
@@ -454,7 +456,7 @@ impl EventStore for CheckpointFailingStore {
     async fn sessions(&self) -> Result<Vec<SessionSummary>, StoreError> {
         self.inner.sessions().await
     }
-    async fn append(&self, event: SmedEvent) -> Result<StoredEvent, StoreError> {
+    async fn append(&self, event: MjolnrEvent) -> Result<StoredEvent, StoreError> {
         self.inner.append(event).await
     }
     async fn events(&self, session: SessionId) -> Result<Vec<StoredEvent>, StoreError> {
@@ -486,8 +488,8 @@ impl EventStore for CheckpointFailingStore {
     }
     async fn search_workspace(
         &self,
-        filter: smed::core::store::WorkspaceSearchFilter,
-    ) -> Result<smed::core::store::WorkspaceSearchPage, StoreError> {
+        filter: mjolnr::core::store::WorkspaceSearchFilter,
+    ) -> Result<mjolnr::core::store::WorkspaceSearchPage, StoreError> {
         self.inner.search_workspace(filter).await
     }
     async fn acquire_session(&self, session: SessionId) -> Result<SessionLease, StoreError> {
@@ -513,13 +515,13 @@ async fn checkpoint_write_failure_makes_close_fail() {
     let provider: Arc<dyn Provider> = Arc::new(FakeProvider::new(FakeScript::Text));
     let runtime = Runtime::spawn(vec![provider], Arc::clone(&store) as Arc<dyn EventStore>);
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: workspace.path().to_path_buf(),
         })
         .await
         .expect("open project");
     runtime
-        .dispatch(SmedCommand::CreateSession {
+        .dispatch(MjolnrCommand::CreateSession {
             provider: ProviderId::new(FakeProvider::ID),
             model: ModelId::new(FakeProvider::MODEL),
         })
@@ -547,8 +549,8 @@ async fn orphaned_tool_outcomes_restore_canonical_result_messages() {
         };
         let mut events = vec![
             created(session, FakeProvider::ID, FakeProvider::MODEL),
-            SmedEvent::RunStarted { session, run },
-            SmedEvent::MessageAppended {
+            MjolnrEvent::RunStarted { session, run },
+            MjolnrEvent::MessageAppended {
                 session,
                 message: Box::new(CanonicalMessage::assistant(
                     vec![ContentBlock::ToolCall(call.clone())],
@@ -556,7 +558,7 @@ async fn orphaned_tool_outcomes_restore_canonical_result_messages() {
                     ModelId::new(FakeProvider::MODEL),
                 )),
             },
-            SmedEvent::ToolProposed {
+            MjolnrEvent::ToolProposed {
                 session,
                 run,
                 approval: None,
@@ -566,7 +568,7 @@ async fn orphaned_tool_outcomes_restore_canonical_result_messages() {
             },
         ];
         events.push(if failed {
-            SmedEvent::ToolFailed {
+            MjolnrEvent::ToolFailed {
                 session,
                 run,
                 call_id: call.id.clone(),
@@ -575,7 +577,7 @@ async fn orphaned_tool_outcomes_restore_canonical_result_messages() {
                 detail: "read failed".to_owned(),
             }
         } else {
-            SmedEvent::ToolCompleted {
+            MjolnrEvent::ToolCompleted {
                 session,
                 run,
                 call_id: call.id.clone(),
@@ -621,7 +623,7 @@ async fn ended_session_does_not_accept_new_work_after_resume() {
         store.as_ref(),
         [
             created(session, FakeProvider::ID, FakeProvider::MODEL),
-            SmedEvent::SessionEnded { session },
+            MjolnrEvent::SessionEnded { session },
         ],
     )
     .await;
@@ -640,12 +642,12 @@ async fn ended_session_does_not_accept_new_work_after_resume() {
 
     let runtime = fake_runtime(&store);
     let _ = runtime
-        .dispatch(SmedCommand::ResumeSession { session })
+        .dispatch(MjolnrCommand::ResumeSession { session })
         .await;
     let _ = runtime
-        .dispatch(SmedCommand::SendUserMessage {
+        .dispatch(MjolnrCommand::SendUserMessage {
             text: "resurrect".to_owned(),
-            source: smed::core::directive::DirectiveSource::Human,
+            source: mjolnr::core::directive::DirectiveSource::Human,
         })
         .await;
     let _ = runtime.close().await;
@@ -666,8 +668,8 @@ async fn tail_sequence_gap_is_refused() {
         store.as_ref(),
         [
             created(session, FakeProvider::ID, FakeProvider::MODEL),
-            SmedEvent::RunStarted { session, run },
-            SmedEvent::RunFinished {
+            MjolnrEvent::RunStarted { session, run },
+            MjolnrEvent::RunFinished {
                 session,
                 run,
                 reason: FinishReason::Stop,
@@ -799,13 +801,13 @@ async fn replaced_root_symlink_cannot_run_command_outside_workspace() {
     let provider: Arc<dyn Provider> = Arc::new(CommandProvider);
     let runtime = Runtime::spawn(vec![provider], Arc::clone(&store) as Arc<dyn EventStore>);
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: fixture.workspace.clone(),
         })
         .await
         .expect("open current path");
     runtime
-        .dispatch(SmedCommand::ResumeSession { session })
+        .dispatch(MjolnrCommand::ResumeSession { session })
         .await
         .expect("resume");
     let state = wait_snapshot(&runtime, |state| {
@@ -820,24 +822,24 @@ async fn replaced_root_symlink_cannot_run_command_outside_workspace() {
 
     let mut events = runtime.subscribe();
     runtime
-        .dispatch(SmedCommand::SendUserMessage {
+        .dispatch(MjolnrCommand::SendUserMessage {
             text: "run it".to_owned(),
-            source: smed::core::directive::DirectiveSource::Human,
+            source: mjolnr::core::directive::DirectiveSource::Human,
         })
         .await
         .expect("send");
     let proposal = wait_event(&mut events, |event| {
-        matches!(event, SmedEvent::ToolProposed { call, .. } if call.name == "run_command")
-            || matches!(event, SmedEvent::RunFailed { .. })
+        matches!(event, MjolnrEvent::ToolProposed { call, .. } if call.name == "run_command")
+            || matches!(event, MjolnrEvent::RunFailed { .. })
     })
     .await;
-    if let SmedEvent::ToolProposed {
+    if let MjolnrEvent::ToolProposed {
         approval: Some(approval),
         ..
     } = proposal
     {
         runtime
-            .dispatch(SmedCommand::ResolveApproval {
+            .dispatch(MjolnrCommand::ResolveApproval {
                 approval,
                 decision: ApprovalDecision::ApproveOnce,
             })
@@ -846,8 +848,8 @@ async fn replaced_root_symlink_cannot_run_command_outside_workspace() {
         wait_event(&mut events, |event| {
             matches!(
                 event,
-                SmedEvent::ToolCompleted { name, .. }
-                    | SmedEvent::ToolFailed { name, .. } if name == "run_command"
+                MjolnrEvent::ToolCompleted { name, .. }
+                    | MjolnrEvent::ToolFailed { name, .. } if name == "run_command"
             )
         })
         .await;

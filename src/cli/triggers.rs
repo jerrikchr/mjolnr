@@ -14,7 +14,7 @@
 
 use clap::Subcommand;
 
-use crate::core::event::SmedEvent;
+use crate::core::event::MjolnrEvent;
 use crate::core::store::{EventStore, StoreError};
 use crate::triggers::{control, definition, status};
 
@@ -105,7 +105,7 @@ async fn list(store: &Store, workspace_root: &std::path::Path) -> Result<i32, St
 
     for diagnostic in &diagnostics {
         eprintln!(
-            "smed: {} could not be loaded as a trigger: {}",
+            "mjolnr: {} could not be loaded as a trigger: {}",
             diagnostic.path.display(),
             diagnostic.detail
         );
@@ -125,7 +125,7 @@ async fn rearm(
         return Ok(1);
     }
     let Ok(root_realpath) = control::root_realpath(workspace_root) else {
-        eprintln!("smed: could not resolve the project root");
+        eprintln!("mjolnr: could not resolve the project root");
         return Ok(1);
     };
     let control_session = control::control_session_id(&root_realpath, name);
@@ -137,7 +137,7 @@ async fn rearm(
     }
 
     store
-        .append(SmedEvent::TriggerRearmed {
+        .append(MjolnrEvent::TriggerRearmed {
             session: control_session,
             trigger: name.to_owned(),
         })

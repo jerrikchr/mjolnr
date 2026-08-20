@@ -15,17 +15,17 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use smed::core::checkpoint::SessionCheckpoint;
-use smed::core::command::SmedCommand;
-use smed::core::event::{RunId, SessionId, SmedEvent};
-use smed::core::message::{CanonicalMessage, ContentBlock, ToolCall};
-use smed::core::model::{ModelId, ProviderId};
-use smed::core::provider::Provider;
-use smed::core::runtime::SmedRuntime;
-use smed::core::store::{EventStore, IntegrityReport, StoreDiagnostics, StoreError};
-use smed::providers::fake::{FakeProvider, FakeScript};
-use smed::runtime::Runtime;
-use smed::store::sqlite::SqliteEventStore;
+use mjolnr::core::checkpoint::SessionCheckpoint;
+use mjolnr::core::command::MjolnrCommand;
+use mjolnr::core::event::{MjolnrEvent, RunId, SessionId};
+use mjolnr::core::message::{CanonicalMessage, ContentBlock, ToolCall};
+use mjolnr::core::model::{ModelId, ProviderId};
+use mjolnr::core::provider::Provider;
+use mjolnr::core::runtime::MjolnrRuntime;
+use mjolnr::core::store::{EventStore, IntegrityReport, StoreDiagnostics, StoreError};
+use mjolnr::providers::fake::{FakeProvider, FakeScript};
+use mjolnr::runtime::Runtime;
+use mjolnr::store::sqlite::SqliteEventStore;
 use tempfile::TempDir;
 
 /// Spelled out rather than read from the crate, deliberately: importing
@@ -45,7 +45,7 @@ struct Fixture {
 impl Fixture {
     fn new() -> Self {
         let directory = TempDir::new().expect("temp dir");
-        let database = directory.path().join("smed.sqlite3");
+        let database = directory.path().join("mjolnr.sqlite3");
         let workspace = directory
             .path()
             .canonicalize()
@@ -75,7 +75,7 @@ async fn open_session(store: &SqliteEventStore, root: &std::path::Path) -> Sessi
         .await
         .expect("session");
     store
-        .append(SmedEvent::SessionCreated {
+        .append(MjolnrEvent::SessionCreated {
             session,
             provider: ProviderId::new(FakeProvider::ID),
             model: ModelId::new(FakeProvider::MODEL),
@@ -132,7 +132,7 @@ async fn reopening_an_existing_database_migrates_nothing_and_keeps_its_data() {
 }
 
 #[tokio::test]
-async fn a_database_from_a_newer_smed_is_refused_rather_than_read() {
+async fn a_database_from_a_newer_mjolnr_is_refused_rather_than_read() {
     // Fail closed (AGENTS.md §1.2): a build that reads a newer schema
     // best-effort drops the columns it does not understand on its next write.
     let fixture = Fixture::new();
@@ -150,7 +150,7 @@ async fn a_database_from_a_newer_smed_is_refused_rather_than_read() {
             assert_eq!(supported, EXPECTED_SCHEMA_VERSION);
         }
         Err(other) => panic!("expected an unsupported-schema refusal, got {other:?}"),
-        Ok(_) => panic!("a database from a newer smed must not be opened"),
+        Ok(_) => panic!("a database from a newer mjolnr must not be opened"),
     }
 }
 
@@ -190,7 +190,7 @@ async fn refusing_a_newer_schema_does_not_switch_its_journal_mode() {
     );
 }
 
-/// Rewrite `user_version` out of band, as a future smed would.
+/// Rewrite `user_version` out of band, as a future mjolnr would.
 fn bump_user_version(path: &std::path::Path, version: u32) {
     let connection = tokio_rusqlite_connection(path);
     connection
@@ -248,11 +248,11 @@ async fn a_gap_in_stored_history_is_refused_rather_than_papered_over() {
         let session = open_session(&store, &fixture.workspace).await;
         let run = RunId::new();
         for event in [
-            SmedEvent::RunStarted { session, run },
-            SmedEvent::RunFinished {
+            MjolnrEvent::RunStarted { session, run },
+            MjolnrEvent::RunFinished {
                 session,
                 run,
-                reason: smed::core::event::FinishReason::Stop,
+                reason: mjolnr::core::event::FinishReason::Stop,
             },
         ] {
             store.append(event).await.expect("append");
@@ -297,14 +297,14 @@ async fn a_missing_final_event_is_refused_as_a_sequence_gap() {
         let session = open_session(&store, &fixture.workspace).await;
         let run = RunId::new();
         store
-            .append(SmedEvent::RunStarted { session, run })
+            .append(MjolnrEvent::RunStarted { session, run })
             .await
             .expect("started");
         store
-            .append(SmedEvent::RunFinished {
+            .append(MjolnrEvent::RunFinished {
                 session,
                 run,
-                reason: smed::core::event::FinishReason::Stop,
+                reason: mjolnr::core::event::FinishReason::Stop,
             })
             .await
             .expect("finished");
@@ -338,14 +338,14 @@ async fn sequences_are_contiguous_and_per_session() {
     let second = open_session(&store, &fixture.workspace).await;
 
     let a = store
-        .append(SmedEvent::RunStarted {
+        .append(MjolnrEvent::RunStarted {
             session: first,
             run: RunId::new(),
         })
         .await
         .expect("append");
     let b = store
-        .append(SmedEvent::RunStarted {
+        .append(MjolnrEvent::RunStarted {
             session: second,
             run: RunId::new(),
         })
@@ -438,7 +438,7 @@ async fn a_text_delta_has_no_persisted_form() {
     let session = open_session(&store, &fixture.workspace).await;
 
     let refused = store
-        .append(SmedEvent::TextDelta {
+        .append(MjolnrEvent::TextDelta {
             session,
             run: RunId::new(),
             text: "tok".to_owned(),
@@ -468,22 +468,22 @@ async fn a_streamed_answer_produces_one_message_row_not_one_per_fragment() {
         let provider: Arc<dyn Provider> = Arc::new(FakeProvider::new(FakeScript::Text));
         let runtime = Runtime::spawn(vec![provider], Arc::clone(&store) as Arc<dyn EventStore>);
         runtime
-            .dispatch(SmedCommand::OpenProject {
+            .dispatch(MjolnrCommand::OpenProject {
                 root: fixture.workspace.clone(),
             })
             .await
             .expect("open project");
         runtime
-            .dispatch(SmedCommand::CreateSession {
+            .dispatch(MjolnrCommand::CreateSession {
                 provider: ProviderId::new(FakeProvider::ID),
                 model: ModelId::new(FakeProvider::MODEL),
             })
             .await
             .expect("create session");
         runtime
-            .dispatch(SmedCommand::SendUserMessage {
+            .dispatch(MjolnrCommand::SendUserMessage {
                 text: "hello".to_owned(),
-                source: smed::core::directive::DirectiveSource::Human,
+                source: mjolnr::core::directive::DirectiveSource::Human,
             })
             .await
             .expect("send");
@@ -493,7 +493,7 @@ async fn a_streamed_answer_produces_one_message_row_not_one_per_fragment() {
                 .snapshot()
                 .messages
                 .iter()
-                .any(|message| message.role == smed::core::message::Role::Assistant)
+                .any(|message| message.role == mjolnr::core::message::Role::Assistant)
             {
                 break;
             }
@@ -509,8 +509,8 @@ async fn a_streamed_answer_produces_one_message_row_not_one_per_fragment() {
         .filter(|stored| {
             matches!(
                 &stored.event,
-                SmedEvent::MessageAppended { message, .. }
-                    if message.role == smed::core::message::Role::Assistant
+                MjolnrEvent::MessageAppended { message, .. }
+                    if message.role == mjolnr::core::message::Role::Assistant
             )
         })
         .count();
@@ -524,8 +524,8 @@ async fn a_streamed_answer_produces_one_message_row_not_one_per_fragment() {
     let text = events
         .iter()
         .find_map(|stored| match &stored.event {
-            SmedEvent::MessageAppended { message, .. }
-                if message.role == smed::core::message::Role::Assistant =>
+            MjolnrEvent::MessageAppended { message, .. }
+                if message.role == mjolnr::core::message::Role::Assistant =>
             {
                 Some(message.text())
             }
@@ -544,7 +544,7 @@ async fn a_streamed_answer_produces_one_message_row_not_one_per_fragment() {
 
 #[tokio::test]
 async fn a_second_writer_is_refused_and_told_who_holds_the_session() {
-    // SQLite serialises writers to the *file*; nothing in SQLite stops two smed
+    // SQLite serialises writers to the *file*; nothing in SQLite stops two mjolnr
     // processes interleaving runs into one *session*. This is that gate
     // (`docs/persistence.md` §5).
     let fixture = Fixture::new();
@@ -580,7 +580,7 @@ async fn a_second_writer_is_refused_and_told_who_holds_the_session() {
 
 #[tokio::test]
 async fn a_lease_left_by_a_crash_is_reclaimed_only_by_an_explicit_act() {
-    // smed cannot prove the holder is dead, so it does not steal the lease. The
+    // mjolnr cannot prove the holder is dead, so it does not steal the lease. The
     // explicit act is `mjolnr sessions release`.
     let fixture = Fixture::new();
     let store = fixture.store().await;
@@ -798,7 +798,7 @@ async fn a_tool_call_survives_the_wire_format_intact() {
         provider_signature: None,
     };
     store
-        .append(SmedEvent::MessageAppended {
+        .append(MjolnrEvent::MessageAppended {
             session,
             message: Box::new(CanonicalMessage::assistant(
                 vec![ContentBlock::ToolCall(call.clone())],
@@ -813,7 +813,7 @@ async fn a_tool_call_survives_the_wire_format_intact() {
     let restored = events
         .iter()
         .find_map(|stored| match &stored.event {
-            SmedEvent::MessageAppended { message, .. } => message.tool_calls().next().cloned(),
+            MjolnrEvent::MessageAppended { message, .. } => message.tool_calls().next().cloned(),
             _ => None,
         })
         .expect("a tool call");

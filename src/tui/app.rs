@@ -1,6 +1,6 @@
 //! The TUI event loop.
 //!
-//! A client of [`SmedRuntime`] and nothing more: it renders snapshots, reduces
+//! A client of [`MjolnrRuntime`] and nothing more: it renders snapshots, reduces
 //! events, and sends commands. It never calls a provider, never touches the
 //! store, and never owns the transcript.
 //!
@@ -18,9 +18,9 @@ use futures_util::StreamExt;
 use ratatui::DefaultTerminal;
 use tokio::sync::broadcast::error::RecvError;
 
-use crate::core::command::SmedCommand;
+use crate::core::command::MjolnrCommand;
 use crate::core::model::{ModelId, ProviderId};
-use crate::core::runtime::SmedRuntime;
+use crate::core::runtime::MjolnrRuntime;
 use crate::tui::keymap::{InputAction, InputContext};
 use crate::tui::layout;
 use crate::tui::reducer::ViewState;
@@ -77,7 +77,7 @@ fn detect_image_protocol(view: &ViewState) {
 /// Run the TUI until the user quits.
 pub async fn run(
     terminal: &mut DefaultTerminal,
-    runtime: &dyn SmedRuntime,
+    runtime: &dyn MjolnrRuntime,
     auth: &dyn AuthFlows,
 ) -> io::Result<()> {
     initialize_theme();
@@ -166,7 +166,7 @@ pub async fn run(
 async fn handle_snapshot_update(
     snapshot: crate::core::runtime::RuntimeSnapshot,
     view: &mut ViewState,
-    runtime: &dyn SmedRuntime,
+    runtime: &dyn MjolnrRuntime,
 ) {
     let was_active = view.snapshot.run_active;
     view.sync(snapshot);
@@ -188,14 +188,14 @@ async fn handle_snapshot_update(
 async fn resolve_armed_grant(
     key: crossterm::event::KeyEvent,
     view: &mut ViewState,
-    runtime: &dyn SmedRuntime,
+    runtime: &dyn MjolnrRuntime,
 ) -> Option<Flow> {
     let confirmed = key.code == crossterm::event::KeyCode::Char('y');
     if view.full_auto_armed {
         view.full_auto_armed = false;
         if confirmed {
             let _ = runtime
-                .dispatch(SmedCommand::SetPolicy {
+                .dispatch(MjolnrCommand::SetPolicy {
                     mode: crate::core::policy::PolicyMode::FullAuto,
                 })
                 .await;
@@ -205,7 +205,7 @@ async fn resolve_armed_grant(
     if let Some(envelope) = view.envelope_armed.take() {
         if confirmed {
             let _ = runtime
-                .dispatch(SmedCommand::ArmSpawnEnvelope { envelope })
+                .dispatch(MjolnrCommand::ArmSpawnEnvelope { envelope })
                 .await;
         }
         return Some(Flow::Redraw);
@@ -216,7 +216,7 @@ async fn resolve_armed_grant(
 async fn handle_input(
     event: &Event,
     view: &mut ViewState,
-    runtime: &dyn SmedRuntime,
+    runtime: &dyn MjolnrRuntime,
     auth: &dyn AuthFlows,
 ) -> Flow {
     let key = match event {
@@ -273,7 +273,7 @@ async fn handle_input(
 async fn handle_direct_key_intercepts(
     key: crossterm::event::KeyEvent,
     view: &mut ViewState,
-    runtime: &dyn SmedRuntime,
+    runtime: &dyn MjolnrRuntime,
 ) -> Option<Flow> {
     if let Some(flow) = resolve_armed_grant(key, view, runtime).await {
         return Some(flow);
@@ -287,7 +287,7 @@ async fn handle_direct_key_intercepts(
     if view.snapshot.resume_advice.is_some() && !view.snapshot.recovery.is_required() {
         if let Some(choice) = resume_choice_for(key.code) {
             let _ = runtime
-                .dispatch(SmedCommand::ResolveResume { choice })
+                .dispatch(MjolnrCommand::ResolveResume { choice })
                 .await;
             return Some(Flow::Redraw);
         }
@@ -408,7 +408,7 @@ fn handle_mouse_left_click(mouse: crossterm::event::MouseEvent, view: &mut ViewS
 async fn apply_launcher_key(
     key: crossterm::event::KeyEvent,
     view: &mut ViewState,
-    runtime: &dyn SmedRuntime,
+    runtime: &dyn MjolnrRuntime,
 ) -> Option<Flow> {
     use crossterm::event::KeyCode;
 
@@ -428,7 +428,7 @@ async fn apply_launcher_key(
         KeyCode::Enter => {
             let mode = view.launcher.selected_mode()?;
             if mode != view.snapshot.policy {
-                let _ = runtime.dispatch(SmedCommand::SetPolicy { mode }).await;
+                let _ = runtime.dispatch(MjolnrCommand::SetPolicy { mode }).await;
             }
         }
         _ => return None,
@@ -595,7 +595,7 @@ fn apply_text_editor_action(action: InputAction, view: &mut ViewState) -> Option
 async fn apply_action(
     action: InputAction,
     view: &mut ViewState,
-    runtime: &dyn SmedRuntime,
+    runtime: &dyn MjolnrRuntime,
     auth: &dyn AuthFlows,
 ) -> Flow {
     if let Some(flow) = apply_text_editor_action(action, view) {
@@ -613,7 +613,7 @@ async fn apply_action(
             // and delivering it afterwards sends it into a context they never
             // saw.
             view.restore_queued_to_composer();
-            let _ = runtime.dispatch(SmedCommand::CancelRun).await;
+            let _ = runtime.dispatch(MjolnrCommand::CancelRun).await;
             Flow::Redraw
         }
         InputAction::ClearComposer => {
@@ -639,7 +639,7 @@ async fn apply_action(
             view.clear_composer();
             view.scroll_to_bottom();
             let _ = runtime
-                .dispatch(SmedCommand::QueueSteeringMessage { text })
+                .dispatch(MjolnrCommand::QueueSteeringMessage { text })
                 .await;
             Flow::Redraw
         }
@@ -649,7 +649,7 @@ async fn apply_action(
         }
         InputAction::CyclePolicy => {
             let _ = runtime
-                .dispatch(SmedCommand::SetPolicy {
+                .dispatch(MjolnrCommand::SetPolicy {
                     mode: view.snapshot.policy.next(),
                 })
                 .await;
@@ -694,7 +694,7 @@ async fn apply_action(
                 return Flow::Continue;
             };
             let _ = runtime
-                .dispatch(SmedCommand::ResolveApproval { approval, decision })
+                .dispatch(MjolnrCommand::ResolveApproval { approval, decision })
                 .await;
             Flow::Redraw
         }
@@ -706,7 +706,7 @@ async fn apply_action(
                 return Flow::Continue;
             }
             let _ = runtime
-                .dispatch(SmedCommand::ResolveRecovery { decision })
+                .dispatch(MjolnrCommand::ResolveRecovery { decision })
                 .await;
             Flow::Redraw
         }
@@ -763,14 +763,14 @@ async fn apply_action(
     }
 }
 
-fn plan_approval_command(view: &ViewState) -> Option<SmedCommand> {
+fn plan_approval_command(view: &ViewState) -> Option<MjolnrCommand> {
     let workflow = view.snapshot.plan.as_ref()?;
     let (crate::core::plan::PlanStage::Proposed { proposal }
     | crate::core::plan::PlanStage::Reviewed { proposal, .. }) = &workflow.stage
     else {
         return None;
     };
-    Some(SmedCommand::ApprovePlan {
+    Some(MjolnrCommand::ApprovePlan {
         approval: crate::core::plan::PlanApproval {
             plan_id: workflow.plan_id,
             revision_id: proposal.revision_id,
@@ -787,7 +787,7 @@ fn plan_approval_command(view: &ViewState) -> Option<SmedCommand> {
     clippy::too_many_lines,
     reason = "Slash command dispatcher matches built-in commands"
 )]
-async fn submit(view: &mut ViewState, runtime: &dyn SmedRuntime) -> Flow {
+async fn submit(view: &mut ViewState, runtime: &dyn MjolnrRuntime) -> Flow {
     let text = view.composer.trim().to_owned();
     if text.is_empty() {
         return Flow::Continue;
@@ -862,7 +862,7 @@ async fn submit(view: &mut ViewState, runtime: &dyn SmedRuntime) -> Flow {
         // on — the runtime replays only the active branch, so nothing else
         // would ever put a sibling on the snapshot.
         if view.overlay == crate::tui::reducer::Overlay::Tree {
-            let _ = runtime.dispatch(SmedCommand::LoadSessionTree).await;
+            let _ = runtime.dispatch(MjolnrCommand::LoadSessionTree).await;
         }
         return Flow::Redraw;
     }
@@ -886,7 +886,7 @@ async fn submit(view: &mut ViewState, runtime: &dyn SmedRuntime) -> Flow {
             Some(target.to_owned())
         };
         let _ = runtime
-            .dispatch(SmedCommand::CreateHandoff { target: target_opt })
+            .dispatch(MjolnrCommand::CreateHandoff { target: target_opt })
             .await;
         return Flow::Redraw;
     }
@@ -899,7 +899,7 @@ async fn submit(view: &mut ViewState, runtime: &dyn SmedRuntime) -> Flow {
             (body.to_string(), None)
         };
         let _ = runtime
-            .dispatch(SmedCommand::ConveneCouncil {
+            .dispatch(MjolnrCommand::ConveneCouncil {
                 question,
                 plan_file,
             })
@@ -920,7 +920,7 @@ async fn submit(view: &mut ViewState, runtime: &dyn SmedRuntime) -> Flow {
         view.close_overlay();
         view.active_surface = crate::tui::workspace_types::WorkspaceSurface::Plan;
         let _ = runtime
-            .dispatch(SmedCommand::StartPlanInterview {
+            .dispatch(MjolnrCommand::StartPlanInterview {
                 goal: goal.to_owned(),
             })
             .await;
@@ -982,7 +982,7 @@ async fn submit(view: &mut ViewState, runtime: &dyn SmedRuntime) -> Flow {
                 view.close_overlay();
                 view.scroll_to_bottom();
                 let _ = runtime
-                    .dispatch(SmedCommand::SelectModel {
+                    .dispatch(MjolnrCommand::SelectModel {
                         provider: ProviderId::new(provider),
                         model: ModelId::new(model),
                     })
@@ -1002,7 +1002,7 @@ async fn submit(view: &mut ViewState, runtime: &dyn SmedRuntime) -> Flow {
     }
     if text == "/reload" {
         view.close_overlay();
-        let _ = runtime.dispatch(SmedCommand::ReloadResources).await;
+        let _ = runtime.dispatch(MjolnrCommand::ReloadResources).await;
         // The runtime reloads synchronously and republishes; the notice is
         // rendered from the snapshot on the next frame.
         return Flow::Redraw;
@@ -1010,7 +1010,7 @@ async fn submit(view: &mut ViewState, runtime: &dyn SmedRuntime) -> Flow {
     if text == "/discover" {
         view.toggle_discovery();
         if view.overlay == crate::tui::reducer::Overlay::Discovery {
-            match runtime.dispatch(SmedCommand::RunDiscovery).await {
+            match runtime.dispatch(MjolnrCommand::RunDiscovery).await {
                 Ok(()) => view.note_model_command_notice(
                     "DISCOVERY COMPLETE — durable OKF bundle written; proposal remains owner-editable",
                 ),
@@ -1032,7 +1032,7 @@ async fn submit(view: &mut ViewState, runtime: &dyn SmedRuntime) -> Flow {
             return Flow::Redraw;
         }
         let _ = runtime
-            .dispatch(SmedCommand::LoadExtension {
+            .dispatch(MjolnrCommand::LoadExtension {
                 name: name.to_owned(),
             })
             .await;
@@ -1049,7 +1049,7 @@ async fn submit(view: &mut ViewState, runtime: &dyn SmedRuntime) -> Flow {
         view.close_overlay();
         view.scroll_to_bottom();
         let _ = runtime
-            .dispatch(SmedCommand::SendPromptTemplate { name, arguments })
+            .dispatch(MjolnrCommand::SendPromptTemplate { name, arguments })
             .await;
         return Flow::Redraw;
     }
@@ -1064,7 +1064,7 @@ async fn submit(view: &mut ViewState, runtime: &dyn SmedRuntime) -> Flow {
     if let Some(Some((plan_id, question_id))) = pending_question {
         view.close_overlay();
         let _ = runtime
-            .dispatch(SmedCommand::AnswerPlanQuestion {
+            .dispatch(MjolnrCommand::AnswerPlanQuestion {
                 plan_id,
                 answer: crate::core::plan::QuestionAnswer {
                     question_id,
@@ -1089,7 +1089,7 @@ async fn submit(view: &mut ViewState, runtime: &dyn SmedRuntime) -> Flow {
     view.close_overlay();
     view.scroll_to_bottom();
     let _ = runtime
-        .dispatch(SmedCommand::SendUserMessage {
+        .dispatch(MjolnrCommand::SendUserMessage {
             text,
             // The composer is the human, by definition.
             source: crate::core::directive::DirectiveSource::Human,
@@ -1121,7 +1121,7 @@ fn prompt_template_invocation(text: &str, view: &ViewState) -> Option<(String, S
 async fn apply_config_action(
     action: InputAction,
     view: &mut ViewState,
-    runtime: &dyn SmedRuntime,
+    runtime: &dyn MjolnrRuntime,
 ) -> Flow {
     use crate::tui::reducer::ConfigStaged;
     match action {
@@ -1133,7 +1133,7 @@ async fn apply_config_action(
         InputAction::PickerConfirm => match view.take_config_staged() {
             Some(ConfigStaged::RoutePersona { route, persona }) => {
                 let _ = runtime
-                    .dispatch(SmedCommand::BindRoutePersona { route, persona })
+                    .dispatch(MjolnrCommand::BindRoutePersona { route, persona })
                     .await;
             }
             Some(ConfigStaged::Theme { theme }) => {
@@ -1159,7 +1159,7 @@ async fn apply_config_action(
 async fn apply_selection_action(
     action: InputAction,
     view: &mut ViewState,
-    runtime: &dyn SmedRuntime,
+    runtime: &dyn MjolnrRuntime,
     auth: &dyn AuthFlows,
 ) -> Flow {
     if view.overlay == crate::tui::reducer::Overlay::Config {
@@ -1283,7 +1283,7 @@ fn persist_theme(theme: crate::tui::theme::ThemeId) {
 }
 
 /// Commit the highlighted connected model.
-async fn confirm_model_pick(view: &mut ViewState, runtime: &dyn SmedRuntime) -> Flow {
+async fn confirm_model_pick(view: &mut ViewState, runtime: &dyn MjolnrRuntime) -> Flow {
     let Some(choice) = view.selected_model() else {
         view.note_model_command_failure("NO_MATCH — no model matches that filter");
         return Flow::Redraw;
@@ -1295,7 +1295,7 @@ async fn confirm_model_pick(view: &mut ViewState, runtime: &dyn SmedRuntime) -> 
     view.clear_composer();
     view.scroll_to_bottom();
     let _ = runtime
-        .dispatch(SmedCommand::SelectModel { provider, model })
+        .dispatch(MjolnrCommand::SelectModel { provider, model })
         .await;
     Flow::Redraw
 }
@@ -1311,7 +1311,7 @@ async fn confirm_model_pick(view: &mut ViewState, runtime: &dyn SmedRuntime) -> 
 /// Both refusals below are visible. `rewind_to` returns nothing and no-ops when
 /// it cannot act, so a silent dispatch would leave the user looking at an
 /// overlay that closed and a session that did not move.
-async fn confirm_tree_rewind(view: &mut ViewState, runtime: &dyn SmedRuntime) -> Flow {
+async fn confirm_tree_rewind(view: &mut ViewState, runtime: &dyn MjolnrRuntime) -> Flow {
     let Some(row) = view.selected_tree_row() else {
         view.note_model_command_failure("NO_TURN — there is nothing to branch from yet");
         return Flow::Redraw;
@@ -1345,11 +1345,11 @@ async fn confirm_tree_rewind(view: &mut ViewState, runtime: &dyn SmedRuntime) ->
     // Collapsing the two into one action would make selecting an abandoned turn
     // rewind the branch you are on to a point that is not even on it.
     if row.on_active_branch {
-        let _ = runtime.dispatch(SmedCommand::RewindTo { sequence }).await;
+        let _ = runtime.dispatch(MjolnrCommand::RewindTo { sequence }).await;
         view.set_composer(&row.prompt);
     } else {
         let _ = runtime
-            .dispatch(SmedCommand::FollowBranch { sequence })
+            .dispatch(MjolnrCommand::FollowBranch { sequence })
             .await;
     }
     view.scroll_to_bottom();
@@ -1357,14 +1357,14 @@ async fn confirm_tree_rewind(view: &mut ViewState, runtime: &dyn SmedRuntime) ->
 }
 
 /// `/clone` — duplicate the active branch into a session of its own.
-async fn clone_command(view: &mut ViewState, runtime: &dyn SmedRuntime) -> Flow {
+async fn clone_command(view: &mut ViewState, runtime: &dyn MjolnrRuntime) -> Flow {
     view.close_overlay();
     if view.snapshot.run_active {
         view.note_model_command_failure("RUN_ACTIVE — finish the turn before cloning it");
         return Flow::Redraw;
     }
     let _ = runtime
-        .dispatch(SmedCommand::ForkSession { before: None })
+        .dispatch(MjolnrCommand::ForkSession { before: None })
         .await;
     Flow::Redraw
 }
@@ -1374,7 +1374,7 @@ async fn clone_command(view: &mut ViewState, runtime: &dyn SmedRuntime) -> Flow 
 /// Numbered rather than addressed by sequence because the numbers are what the
 /// overlay actually shows. A raw event sequence is the honest identifier and a
 /// useless one to type.
-async fn fork_command(argument: &str, view: &mut ViewState, runtime: &dyn SmedRuntime) -> Flow {
+async fn fork_command(argument: &str, view: &mut ViewState, runtime: &dyn MjolnrRuntime) -> Flow {
     let rows = view.tree_rows();
     let argument = argument.trim();
 
@@ -1414,7 +1414,7 @@ async fn fork_command(argument: &str, view: &mut ViewState, runtime: &dyn SmedRu
     let prompt = row.prompt.clone();
     view.close_overlay();
     let _ = runtime
-        .dispatch(SmedCommand::ForkSession {
+        .dispatch(MjolnrCommand::ForkSession {
             before: Some(sequence),
         })
         .await;
@@ -1435,7 +1435,7 @@ async fn route_command(
     by: crate::tui::commands::RouteBy,
     argument: &str,
     view: &mut ViewState,
-    runtime: &dyn SmedRuntime,
+    runtime: &dyn MjolnrRuntime,
 ) -> Flow {
     view.close_overlay();
     if view.snapshot.run_active {
@@ -1446,7 +1446,7 @@ async fn route_command(
         crate::tui::commands::RoutePlan::Attach { route, role } => {
             view.scroll_to_bottom();
             let _ = runtime
-                .dispatch(SmedCommand::AttachRoute {
+                .dispatch(MjolnrCommand::AttachRoute {
                     route,
                     role,
                     task_class: "default".to_owned(),
@@ -1465,7 +1465,11 @@ async fn route_command(
 /// against the offered personas, so an unknown name is a stated notice rather
 /// than a silent no-op. It changes the next turn's system prompt, so — like
 /// `/route` and `/model` — it is refused while a run is active.
-async fn persona_command(argument: &str, view: &mut ViewState, runtime: &dyn SmedRuntime) -> Flow {
+async fn persona_command(
+    argument: &str,
+    view: &mut ViewState,
+    runtime: &dyn MjolnrRuntime,
+) -> Flow {
     view.close_overlay();
     if view.snapshot.run_active {
         view.note_model_command_failure("cannot change persona while a run is active");
@@ -1475,7 +1479,7 @@ async fn persona_command(argument: &str, view: &mut ViewState, runtime: &dyn Sme
         crate::tui::commands::PersonaPlan::Select(persona) => {
             view.scroll_to_bottom();
             let _ = runtime
-                .dispatch(SmedCommand::SelectPersona { persona })
+                .dispatch(MjolnrCommand::SelectPersona { persona })
                 .await;
         }
         crate::tui::commands::PersonaPlan::Notice(text) => {
@@ -1505,7 +1509,7 @@ fn soul_command(view: &mut ViewState) -> Flow {
 async fn set_policy_command(
     requested: &str,
     view: &mut ViewState,
-    runtime: &dyn SmedRuntime,
+    runtime: &dyn MjolnrRuntime,
 ) -> Flow {
     use crate::core::policy::PolicyMode;
 
@@ -1525,7 +1529,7 @@ async fn set_policy_command(
     };
     match mode {
         Some(mode) => {
-            let _ = runtime.dispatch(SmedCommand::SetPolicy { mode }).await;
+            let _ = runtime.dispatch(MjolnrCommand::SetPolicy { mode }).await;
         }
         None => view.note_model_command_failure(
             "SCHEMA_INVALID — use /policy read-only|ask|workspace-write|full-auto",
@@ -1543,7 +1547,7 @@ async fn set_policy_command(
 async fn envelope_command(
     requested: &str,
     view: &mut ViewState,
-    runtime: &dyn SmedRuntime,
+    runtime: &dyn MjolnrRuntime,
 ) -> Flow {
     use crate::core::envelope::SpawnEnvelope;
 
@@ -1564,7 +1568,7 @@ async fn envelope_command(
         return Flow::Redraw;
     }
     if requested == "off" {
-        let _ = runtime.dispatch(SmedCommand::ClearSpawnEnvelope).await;
+        let _ = runtime.dispatch(MjolnrCommand::ClearSpawnEnvelope).await;
         return Flow::Redraw;
     }
     if view.snapshot.run_active {
@@ -1803,7 +1807,7 @@ enum AuthFlowOutcome {
 async fn handle_auth_login_command(
     provider_str: &str,
     view: &mut ViewState,
-    runtime: &dyn SmedRuntime,
+    runtime: &dyn MjolnrRuntime,
     auth: &dyn AuthFlows,
 ) -> Flow {
     let provider_lower = provider_str.trim().to_lowercase();
@@ -1824,7 +1828,7 @@ async fn handle_auth_login_command(
         AuthFlowOutcome::StoredApiKey(secret) => {
             // Dispatch credential storage command to runtime actor
             let _ = runtime
-                .dispatch(crate::core::command::SmedCommand::RegisterCredential {
+                .dispatch(crate::core::command::MjolnrCommand::RegisterCredential {
                     provider: crate::core::model::ProviderId::new(&provider_lower),
                     secret: crate::core::command::CredentialSecret(secret),
                 })
@@ -1832,7 +1836,7 @@ async fn handle_auth_login_command(
         }
         AuthFlowOutcome::StoredOAuth | AuthFlowOutcome::RefreshOnly => {
             let _ = runtime
-                .dispatch(crate::core::command::SmedCommand::RefreshCredentials)
+                .dispatch(crate::core::command::MjolnrCommand::RefreshCredentials)
                 .await;
         }
         AuthFlowOutcome::Aborted => return Flow::HardRedraw,
@@ -1945,8 +1949,8 @@ fn report_oauth_outcome(result: Result<i64, String>) -> AuthFlowOutcome {
     match result {
         Ok(expires_at_unix) => {
             println!(
-                "Stored a smed-owned OAuth credential in an owner-only file.\n\
-                 Access token expires at Unix time {expires_at_unix}; smed refreshes it automatically."
+                "Stored a mjolnr-owned OAuth credential in an owner-only file.\n\
+                 Access token expires at Unix time {expires_at_unix}; mjolnr refreshes it automatically."
             );
             AuthFlowOutcome::StoredOAuth
         }
@@ -2006,7 +2010,7 @@ mod tests {
     #[test]
     fn theme_file_round_trips_and_corruption_falls_back() {
         let directory =
-            std::env::temp_dir().join(format!("smed-theme-test-{}", uuid::Uuid::now_v7()));
+            std::env::temp_dir().join(format!("mjolnr-theme-test-{}", uuid::Uuid::now_v7()));
         std::fs::create_dir_all(&directory).expect("test directory");
         let path = directory.join("theme");
 
@@ -2154,7 +2158,7 @@ mod tests {
 
         let command = plan_approval_command(&view).expect("pending plan maps to approval");
         match command {
-            SmedCommand::ApprovePlan { approval } => {
+            MjolnrCommand::ApprovePlan { approval } => {
                 assert_eq!(approval.plan_id, plan_id);
                 assert_eq!(approval.revision_id, revision_id);
                 assert_eq!(approval.decision, crate::core::plan::ReviewVerdict::Approve);

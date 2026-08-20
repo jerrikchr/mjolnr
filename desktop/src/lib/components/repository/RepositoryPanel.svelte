@@ -11,7 +11,7 @@
    * and ADR 0009 names both as traps this component must not reproduce:
    *
    * 1. `sync: synced` in the verified colour. ADR 0008: the counts describe the
-   *    remote-tracking ref as smed last saw it, never the remote now. So the
+   *    remote-tracking ref as mjolnr last saw it, never the remote now. So the
    *    row always carries the as-of qualifier, and never a bare "synced". The
    *    qualifier is not conditional on a timestamp existing — a fresh clone
    *    writes its tracking ref with no reflog entry, so `remoteSyncAsOf` is
@@ -50,7 +50,7 @@
    *
    * The wire values are stable identifiers (`core::repository::RefreshTrigger`);
    * this is presentation only. An unrecognised trigger renders verbatim rather
-   * than as "unknown" — a value smed sent is better evidence than a shrug.
+   * than as "unknown" — a value mjolnr sent is better evidence than a shrug.
    */
   const TRIGGER_PROSE: Record<string, string> = {
     projectOpened: 'the project was opened',
@@ -151,7 +151,7 @@
       <dd data-testid="repository-dirty">
         {repository.dirtyCount}{repository.dirtyCountTruncated ? '+' : ''}
         {#if repository.dirtyCountTruncated}
-          <span class="text-muted-foreground">(counted to smed's bound, not to the end)</span>
+          <span class="text-muted-foreground">(counted to mjolnr's bound, not to the end)</span>
         {/if}
       </dd>
 
@@ -173,15 +173,15 @@
         <span>{syncSentence(sync)}</span>
         {#if sync.type === 'unknown'}
           <span class="text-muted-foreground">
-            No upstream is configured, or git would not answer. This is not "smed did not look".
+            No upstream is configured, or git would not answer. This is not "mjolnr did not look".
           </span>
         {:else}
           <span class="text-muted-foreground" data-testid="repository-sync-as-of">
             {#if repository.remoteSyncAsOf}
-              As of {repository.remoteSyncAsOf}, the last time smed saw the remote. Whether it
+              As of {repository.remoteSyncAsOf}, the last time mjolnr saw the remote. Whether it
               has moved since is not knowable without a fetch.
             {:else}
-              As of the last time smed saw the remote — no timestamp was recorded for it.
+              As of the last time mjolnr saw the remote — no timestamp was recorded for it.
               Whether the remote has moved since is not knowable without a fetch.
             {/if}
           </span>

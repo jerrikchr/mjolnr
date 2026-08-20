@@ -1,16 +1,16 @@
 # Agent-authored tool extensions
 
-> **Sibling system:** Third-party plugins are JSON-RPC stdio subprocesses per [ADR-0016](adr/0016-plugin-protocol-and-capability-modules.md) — see [Master Plan §3](../docs/master-implementation-plan.md), `src/cli/plugin.rs` (`smed plugin create <name> [--template node|rust|python] [--yes]`, `smed plugin list`), and per-file manifests `.smed/plugins/*.yaml` discovered by `src/context/plugins.rs`. Flagship example `examples/plugins/vercel-deployments/`. Extensions below are declarative argv templates; plugins are `Execute`-pinned subprocess tools with observer-only hooks.
+> **Sibling system:** Third-party plugins are JSON-RPC stdio subprocesses per [ADR-0016](adr/0016-plugin-protocol-and-capability-modules.md) — see [Master Plan §3](../docs/master-implementation-plan.md), `src/cli/plugin.rs` (`mjolnr plugin create <name> [--template node|rust|python] [--yes]`, `mjolnr plugin list`), and per-file manifests `.mjolnr/plugins/*.yaml` discovered by `src/context/plugins.rs`. Flagship example `examples/plugins/vercel-deployments/`. Extensions below are declarative argv templates; plugins are `Execute`-pinned subprocess tools with observer-only hooks.
 
-Phase 17 lets smed's agent loop propose a new tool and — only after an explicit
+Phase 17 lets mjolnr's agent loop propose a new tool and — only after an explicit
 human act — make it callable. An extension is **data, not code**: a declarative
-argv template smed runs through the command path it already gates. The design
+argv template mjolnr runs through the command path it already gates. The design
 and the alternatives considered are in
 [`adr/0002-scripted-extension-shim.md`](adr/0002-scripted-extension-shim.md).
 
 ## The file
 
-An extension is one YAML file at `.smed/extensions/<name>.yaml`. The file stem
+An extension is one YAML file at `.mjolnr/extensions/<name>.yaml`. The file stem
 is the tool name; the two may not disagree.
 
 ```yaml
@@ -44,7 +44,7 @@ run:
 ## Discovery, load, and gating
 
 Discovery **lists** an extension; it does not make it callable. `/reload`
-re-reads `.smed/extensions/` and reports what appeared or vanished alongside
+re-reads `.mjolnr/extensions/` and reports what appeared or vanished alongside
 skills and templates. A malformed file is reported with a typed reason and
 skipped — it never half-registers.
 

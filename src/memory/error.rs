@@ -40,7 +40,7 @@ pub enum MemoryError {
     #[error("the memory query was refused: {detail}")]
     QueryRefused { detail: String },
 
-    /// The projection database failed in a way smed does not classify
+    /// The projection database failed in a way mjolnr does not classify
     /// further. The SQLite text is carried verbatim.
     #[error("the memory projection failed: {detail}")]
     Execution { detail: String },

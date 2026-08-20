@@ -9,7 +9,7 @@ use time::OffsetDateTime;
 
 use crate::core::continuation::QuotaReserveStatus;
 use crate::core::error::ReasonCode;
-use crate::core::event::{RunId, SmedEvent};
+use crate::core::event::{MjolnrEvent, RunId};
 use crate::core::model::ProviderId;
 use crate::core::routing::{
     AdvanceOutcome, CircuitBreaker, RouteAdvanceCondition, RouteRuntime, advance_position,
@@ -105,7 +105,7 @@ impl Actor {
         let model = hop.model.clone();
 
         if let Err(error) = self
-            .persist(SmedEvent::RouteSelected {
+            .persist(MjolnrEvent::RouteSelected {
                 session,
                 child: None,
                 route: route_name.clone(),
@@ -240,7 +240,7 @@ impl Actor {
         match advance_position(&definition, current.position) {
             AdvanceOutcome::Advanced { position, hop } => {
                 if let Err(error) = self
-                    .persist(SmedEvent::RouteAdvanced {
+                    .persist(MjolnrEvent::RouteAdvanced {
                         session,
                         run,
                         route: definition.name.clone(),
@@ -282,7 +282,7 @@ impl Actor {
             }
             AdvanceOutcome::Exhausted => {
                 if let Err(error) = self
-                    .persist(SmedEvent::RouteExhausted {
+                    .persist(MjolnrEvent::RouteExhausted {
                         session,
                         run,
                         route: definition.name.clone(),
@@ -317,7 +317,7 @@ impl Actor {
             return;
         };
         if let Err(error) = self
-            .persist(SmedEvent::BreakerStateChanged {
+            .persist(MjolnrEvent::BreakerStateChanged {
                 session,
                 provider,
                 from: transition.from,
@@ -334,10 +334,10 @@ impl Actor {
 mod tests {
     use std::sync::Arc;
 
-    use crate::core::command::SmedCommand;
+    use crate::core::command::MjolnrCommand;
     use crate::core::model::{ModelId, ProviderId};
     use crate::core::routing::{RouteDefinition, RouteHop, RouteTable};
-    use crate::core::runtime::SmedRuntime;
+    use crate::core::runtime::MjolnrRuntime;
     use crate::core::store::EventStore;
     use crate::providers::fake::FakeProvider;
     use crate::runtime::Runtime;
@@ -386,13 +386,13 @@ mod tests {
             Arc::new(table_with_one_route()),
         );
         runtime
-            .dispatch(SmedCommand::OpenProject {
+            .dispatch(MjolnrCommand::OpenProject {
                 root: std::env::current_dir().expect("cwd"),
             })
             .await
             .expect("open");
         runtime
-            .dispatch(SmedCommand::CreateSession {
+            .dispatch(MjolnrCommand::CreateSession {
                 provider: ProviderId::new(FakeProvider::ID),
                 model: ModelId::new(FakeProvider::MODEL),
             })
@@ -402,7 +402,7 @@ mod tests {
 
         let mut snapshots = runtime.snapshots();
         runtime
-            .dispatch(SmedCommand::AttachRoute {
+            .dispatch(MjolnrCommand::AttachRoute {
                 route: None,
                 role: None,
                 task_class: "default".to_owned(),
@@ -425,7 +425,7 @@ mod tests {
         let history = store.events(session).await.expect("history");
         assert!(history.iter().any(|stored| matches!(
             stored.event,
-            crate::core::event::SmedEvent::RouteSelected {
+            crate::core::event::MjolnrEvent::RouteSelected {
                 reason: crate::core::routing::RouteSelectionReason::TaskClass(_),
                 ..
             }
@@ -440,13 +440,13 @@ mod tests {
             store as Arc<dyn EventStore>,
         );
         runtime
-            .dispatch(SmedCommand::OpenProject {
+            .dispatch(MjolnrCommand::OpenProject {
                 root: std::env::current_dir().expect("cwd"),
             })
             .await
             .expect("open");
         runtime
-            .dispatch(SmedCommand::CreateSession {
+            .dispatch(MjolnrCommand::CreateSession {
                 provider: ProviderId::new(FakeProvider::ID),
                 model: ModelId::new(FakeProvider::MODEL),
             })
@@ -454,7 +454,7 @@ mod tests {
             .expect("create session");
         wait_for_session(&runtime).await;
         runtime
-            .dispatch(SmedCommand::AttachRoute {
+            .dispatch(MjolnrCommand::AttachRoute {
                 route: None,
                 role: None,
                 task_class: "default".to_owned(),

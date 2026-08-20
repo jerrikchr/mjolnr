@@ -1,17 +1,17 @@
 # Headless runs
 
-`smed exec "<directive>"` creates one ordinary durable session, runs one
+`mjolnr exec "<directive>"` creates one ordinary durable session, runs one
 directive through the same runtime as the TUI, writes its history to the same
 SQLite database, emits one JSON line, and exits.
 
 ```console
-smed exec "inspect the release state"
-smed exec "update generated files" --policy workspace-write
-smed exec "run the governed migration" --policy full-auto
+mjolnr exec "inspect the release state"
+mjolnr exec "update generated files" --policy workspace-write
+mjolnr exec "run the governed migration" --policy full-auto
 ```
 
 The default is `read-only`. Headless has no `ask` policy and no approval input
-channel. If `workspace-write` reaches an Execute tool, smed resolves the
+channel. If `workspace-write` reaches an Execute tool, mjolnr resolves the
 ordinary pending approval as denied and reports the same typed refusal the TUI
 would return. `full-auto` remains explicit and retains containment,
 read-before-edit, output, budget, quota, evidence, audit, and recovery guards.
@@ -32,5 +32,5 @@ line has this stable shape:
 | `30` | provider, tool, durability, setup, or unverified-completion failure |
 
 The session remains active and can be opened with
-`smed --resume <session_id>`. Stdout contains only the JSON record, making the
+`mjolnr --resume <session_id>`. Stdout contains only the JSON record, making the
 command safe for CI parsers; diagnostics go to stderr before a report exists.

@@ -64,7 +64,7 @@ pub(super) enum InputBlock {
     },
 }
 
-/// A base64 image payload. Only the `base64` source type: smed holds the bytes
+/// A base64 image payload. Only the `base64` source type: mjolnr holds the bytes
 /// and never hands a provider a URL to fetch, which would be an outbound request
 /// nothing in the gate reviewed.
 #[derive(Debug, Serialize)]

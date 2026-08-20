@@ -167,14 +167,14 @@ impl ModelTier {
         }
     }
 
-    /// smed's own curated tier suggestion for a known `(provider, model)`, or
-    /// `None` when smed holds no opinion — in which case the onboarding role
+    /// mjolnr's own curated tier suggestion for a known `(provider, model)`, or
+    /// `None` when mjolnr holds no opinion — in which case the onboarding role
     /// step prompts with no suggestion rather than fabricating a ranking (plan
     /// §Phase 22: "Absent a hint, the step asks with no suggestion").
     ///
     /// Curation lives in this one place so it reads as a single, reviewable
     /// judgement rather than a claim smuggled into each provider's model table.
-    /// Only models smed has an actual opinion about appear; everything else is
+    /// Only models mjolnr has an actual opinion about appear; everything else is
     /// deliberately absent.
     #[must_use]
     pub fn curated(provider: &ProviderId, model: &ModelId) -> Option<Self> {
@@ -275,7 +275,7 @@ pub struct QuotaWindow {
     pub resets_at: Option<OffsetDateTime>,
 }
 
-/// Quota facts a provider actually reported. Absence means unknown; smed
+/// Quota facts a provider actually reported. Absence means unknown; mjolnr
 /// never guesses a fraction to populate this type. Most providers report
 /// this passively on the response of a request already made for useful
 /// work. Google reports nothing there (E0 spike) — its `gemini_cli`
@@ -338,8 +338,8 @@ mod tests {
     }
 
     #[test]
-    fn curated_tier_is_a_suggestion_only_for_models_smed_has_an_opinion_about() {
-        // A curated model surfaces smed's ranking as a suggestion.
+    fn curated_tier_is_a_suggestion_only_for_models_mjolnr_has_an_opinion_about() {
+        // A curated model surfaces mjolnr's ranking as a suggestion.
         assert_eq!(
             ModelTier::curated(
                 &ProviderId::new("anthropic"),

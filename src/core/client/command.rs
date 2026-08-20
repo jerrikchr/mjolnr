@@ -129,7 +129,7 @@ pub enum ClientCommand {
     /// Ask what git says about the open project right now (§D5 producer).
     ///
     /// No fields, deliberately. The runtime reads the project it already has
-    /// open; accepting a root here would be a second way to point smed at a
+    /// open; accepting a root here would be a second way to point mjolnr at a
     /// directory, bypassing every refusal `OpenProject` applies.
     RefreshRepository,
     #[serde(rename_all = "camelCase")]
@@ -285,7 +285,7 @@ pub enum ClientCommand {
     },
     #[serde(rename_all = "camelCase")]
     Commit {
-        /// The human's chosen message. smed may *suggest* text, but the
+        /// The human's chosen message. mjolnr may *suggest* text, but the
         /// suggestion is advisory: the value that reaches `git commit` is
         /// whatever the person selected or edited (Phase D5 acceptance).
         message: String,
@@ -299,7 +299,7 @@ pub enum ClientCommand {
         name: String,
         /// Required, not generated. An integration merge is a commit, and a
         /// commit's message is a human act — the earlier auto-generated
-        /// "Integrate child branch <name>" made smed the author of a record
+        /// "Integrate child branch <name>" made mjolnr the author of a record
         /// the human never wrote.
         message: String,
         /// The HEAD the human saw when they selected this integration.
@@ -323,7 +323,7 @@ pub enum ClientCommand {
     /// initiated from the desktop preview; the model never self-approves.
     #[serde(rename_all = "camelCase")]
     IntegrateUpstream {
-        /// Required and human-supplied: when the merge creates a commit, smed
+        /// Required and human-supplied: when the merge creates a commit, mjolnr
         /// never authors its record. Consumed only in that case — a
         /// fast-forward creates no commit, exactly as `git pull` does.
         message: String,
@@ -361,7 +361,7 @@ pub enum ClientCommand {
         source: String,
         request: ClientRemoteChangeRequest,
     },
-    /// Pin a review note to one line of the diff smed last captured (§D3).
+    /// Pin a review note to one line of the diff mjolnr last captured (§D3).
     ///
     /// `captureDigest` is the diff revision the human was looking at and is
     /// required, not optional: an opt-in staleness guard is not a guard. A
@@ -380,13 +380,13 @@ pub enum ClientCommand {
         body: String,
     },
     /// Add a further human remark to an existing thread. Never a model's:
-    /// smed answers a review in the transcript, not in the thread.
+    /// mjolnr answers a review in the transcript, not in the thread.
     #[serde(rename_all = "camelCase")]
     AddReviewComment {
         thread_id: String,
         body: String,
     },
-    /// Send the selected threads to smed as a durable revision request (§D3).
+    /// Send the selected threads to mjolnr as a durable revision request (§D3).
     #[serde(rename_all = "camelCase")]
     SendReviewNotes {
         thread_ids: Vec<String>,
@@ -545,7 +545,7 @@ pub struct ClientRemoteChangeRequest {
     /// The revision of the imported item the human was looking at when they
     /// approved this change. Required, not optional: an opt-in staleness check
     /// is not a check (§E5 contract (a), `AddReviewNote::capture_digest`'s rule
-    /// applied to a remote). A pin that does not match what smed recorded is
+    /// applied to a remote). A pin that does not match what mjolnr recorded is
     /// refused with `WORKSPACE_STALE_REVISION` and nothing is posted.
     pub expected_revision: String,
     pub title: String,

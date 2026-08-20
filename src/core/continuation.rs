@@ -70,7 +70,7 @@ impl HandoffCheckpoint {
     #[must_use]
     pub fn compact_seed(&self) -> String {
         format!(
-            "SMED COMPACT RESUME // handoff {} created {}\n\n{}\n\nMechanical facts:\n- files read: {}\n- files changed: {}\n- commands recorded: {}\n- prior usage: {} input + {} output tokens\n- active skills: {}",
+            "MJOLNR COMPACT RESUME // handoff {} created {}\n\n{}\n\nMechanical facts:\n- files read: {}\n- files changed: {}\n- commands recorded: {}\n- prior usage: {} input + {} output tokens\n- active skills: {}",
             self.id,
             self.created_at,
             self.status,

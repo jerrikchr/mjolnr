@@ -2,11 +2,11 @@
 
 use std::sync::Arc;
 
-use smed::core::client::types::ClientMemorySummary;
-use smed::core::memory::MemorySummary;
-use smed::core::runtime::RuntimeSnapshot;
-use smed::runtime::client_bridge::convert::snapshot_to_client;
-use smed::tui::reducer::{Overlay, ViewState};
+use mjolnr::core::client::types::ClientMemorySummary;
+use mjolnr::core::memory::MemorySummary;
+use mjolnr::core::runtime::RuntimeSnapshot;
+use mjolnr::runtime::client_bridge::convert::snapshot_to_client;
+use mjolnr::tui::reducer::{Overlay, ViewState};
 
 #[test]
 fn memory_slash_command_exists_in_registry() {
@@ -25,7 +25,7 @@ fn memory_slash_command_exists_in_registry() {
 
     let mut view = ViewState::default();
     view.sync(snapshot);
-    let memory_cmd = smed::tui::commands::COMMANDS
+    let memory_cmd = mjolnr::tui::commands::COMMANDS
         .iter()
         .find(|cmd| cmd.name == "/memory")
         .expect("/memory command must be registered");

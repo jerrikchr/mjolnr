@@ -1,4 +1,4 @@
-// TypeScript interfaces mirroring smed's Rust Client DTO Contract (src/core/client/)
+// TypeScript interfaces mirroring mjolnr's Rust Client DTO Contract (src/core/client/)
 
 export type ClientPolicy = 'read-only' | 'ask' | 'workspace-write' | 'full-auto';
 export type ClientToolOutcome = 'ok' | 'refused' | 'failed';
@@ -313,7 +313,7 @@ export interface ClientSnapshot {
    * route's own persona applies instead, not that no persona exists at all.
    */
   activePersona?: string;
-  /** Personas discovered under .smed/personas/ and the user config dir. */
+  /** Personas discovered under .mjolnr/personas/ and the user config dir. */
   personas: ClientPersonaSummary[];
   /** Soul/profile file names in effect. Names only, never file content. */
   souls: string[];
@@ -321,7 +321,7 @@ export interface ClientSnapshot {
   routes: ClientRoute[];
   /** The latest completed advisory council distribution, if one ran. */
   council?: ClientCouncilReview | null;
-  /** One entry per provider smed is configured to talk to (§E2). */
+  /** One entry per provider mjolnr is configured to talk to (§E2). */
   accounts: ClientAccount[];
   plan?: ClientPlanWorkflow;
   changes?: ClientChangeSet;
@@ -622,7 +622,7 @@ export type ClientCommand =
   /**
    * Ask what git says about the open project now. No fields: the runtime reads
    * the project it already has open, and accepting a root here would be a
-   * second way to point smed at a directory, bypassing every refusal
+   * second way to point mjolnr at a directory, bypassing every refusal
    * `openProject` applies.
    */
   | { type: 'refreshRepository' }
@@ -669,7 +669,7 @@ export type ClientCommand =
   // message is the human's; expectedIndexRevision is the index the human saw
   // when they approved. A mismatch is refused with WORKSPACE_STALE_REVISION.
   | { type: 'commit'; message: string; expectedIndexRevision: string }
-  // message is required and human-supplied: smed never authors the merge
+  // message is required and human-supplied: mjolnr never authors the merge
   // commit's record.
   | { type: 'integrateChildBranch'; name: string; message: string; expectedHead: string }
   // Fetch from the configured upstream remote. Inert and human-initiated: it
@@ -723,7 +723,7 @@ export type ClientCommand =
 // Mirrors: src/core/client/workspace.rs
 // ---------------------------------------------------------------------------
 
-export type ClientTrustClass = 'smedGoverned' | 'operatorControlled' | 'externalUnverified';
+export type ClientTrustClass = 'mjolnrGoverned' | 'operatorControlled' | 'externalUnverified';
 
 export interface ClientWorkItemProvenance {
   source: string;
@@ -752,12 +752,12 @@ export interface ClientWorkRelation {
 /**
  * Where the branch stands against its remote-tracking ref (ADR 0008).
  *
- * Every variant except `unknown` describes the ref as it stood when smed last
+ * Every variant except `unknown` describes the ref as it stood when mjolnr last
  * saw the remote — NOT the remote now. Computing this touches no network;
  * learning whether the remote has moved since would, and no read path may.
  *
  * `unknown` means there is no upstream to compare against, or git would not
- * answer. It does not mean "smed did not look".
+ * answer. It does not mean "mjolnr did not look".
  *
  * **`synced` is a trap.** It means "level with the ref last seen". Never render
  * it as a bare "synced", and never in the verified colour: being level with a
@@ -775,7 +775,7 @@ export type ClientRepositorySyncState =
 /**
  * Whether the repository was read, and if so at what moment (Phase D5).
  *
- * There is deliberately no `fresh` or `upToDate` variant. smed refreshes on
+ * There is deliberately no `fresh` or `upToDate` variant. mjolnr refreshes on
  * explicit triggers and nothing watches the filesystem, so a surface can say
  * what git reported and when it was asked — never that the answer is still
  * true. Render `capturedAt` as the freshness marker; do not translate it into
@@ -815,7 +815,7 @@ export interface ClientRepositoryState {
   pathsTruncated: boolean;
   remoteSync: ClientRepositorySyncState;
   /**
-   * When smed last saw the remote, for qualifying `remoteSync`.
+   * When mjolnr last saw the remote, for qualifying `remoteSync`.
    *
    * Often absent — a fresh clone writes its tracking ref without a reflog
    * entry. The as-of qualifier is rendered WHETHER OR NOT this is present; the
@@ -886,7 +886,7 @@ export interface ClientFileOpen {
   trust: ClientTrustClass;
 }
 
-/** Human-controlled editor preferences persisted under the workspace `.smed/` directory. */
+/** Human-controlled editor preferences persisted under the workspace `.mjolnr/` directory. */
 export interface ClientEditorPreferences {
   autosave: boolean;
 }
@@ -896,7 +896,7 @@ export interface ClientEditorPreferences {
  *
  * Exported so a snapshot fixture is one line rather than a nine-field literal
  * repeated across every test. `externalUnverified` is deliberate and must not
- * be "tidied" to `smedGoverned`: an empty state is the absence of a governed
+ * be "tidied" to `mjolnrGoverned`: an empty state is the absence of a governed
  * observation, not a governed observation of an empty repository.
  */
 export const NO_PROJECT_REPOSITORY: ClientRepositoryState = {
@@ -962,7 +962,7 @@ export interface ClientReviewComment {
 
 /**
  * `status` is `'open'` or `'sent'` and nothing else. There is deliberately no
- * `'resolved'`, `'applied'`, or `'verified'`: smed cannot know a note was
+ * `'resolved'`, `'applied'`, or `'verified'`: mjolnr cannot know a note was
  * addressed, so no surface may render as if it does.
  */
 export interface ClientReviewThreadSummary {
@@ -975,7 +975,7 @@ export interface ClientReviewThreadSummary {
   /** True when the diff has moved since the note was taken — or when nothing is captured to compare against, which is not the same as "still current". */
   anchorStale: boolean;
   comments: ClientReviewComment[];
-  /** The `ClientMessage` id smed answered with, once a sent request produced one. */
+  /** The `ClientMessage` id mjolnr answered with, once a sent request produced one. */
   responseMessageId?: string;
 }
 

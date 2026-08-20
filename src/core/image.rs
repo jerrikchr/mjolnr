@@ -15,23 +15,23 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-/// The media types smed will send.
+/// The media types mjolnr will send.
 ///
 /// These four are the intersection of three constraints that happen to agree,
 /// and the agreement is worth keeping: every image-capable adapter documents
 /// them (`provider-contract.md` §5.5), and they are exactly the codecs the
-/// `image` dependency is compiled with. So an image smed can *show* in the
-/// transcript is an image smed can *send*, and neither half can quietly grow
+/// `image` dependency is compiled with. So an image mjolnr can *show* in the
+/// transcript is an image mjolnr can *send*, and neither half can quietly grow
 /// past the other. Anything else is refused before a socket opens rather than
 /// after a provider rejects it.
 pub const SUPPORTED_MEDIA_TYPES: &[&str] = &["image/png", "image/jpeg", "image/gif", "image/webp"];
 
-/// smed's own per-image ceiling, in bytes of the *encoded file*.
+/// mjolnr's own per-image ceiling, in bytes of the *encoded file*.
 ///
 /// Below every provider's documented limit on purpose (`provider-contract.md`
 /// §5.5: Anthropic 10 MB base64, Gemini 20 MB for the whole request). A
 /// provider-side rejection costs a round trip and the tokens that went with it
-/// to learn something smed could have said instantly.
+/// to learn something mjolnr could have said instantly.
 pub const MAX_IMAGE_BYTES: usize = 4 * 1024 * 1024;
 
 /// Most images one request may carry.
@@ -99,21 +99,21 @@ impl ImageRefusal {
     pub fn detail(&self) -> String {
         match self {
             Self::UnsupportedMediaType { media_type } => format!(
-                "`{media_type}` is not a media type smed sends; supported: {}",
+                "`{media_type}` is not a media type mjolnr sends; supported: {}",
                 SUPPORTED_MEDIA_TYPES.join(", ")
             ),
             Self::TooLarge { bytes, limit } => {
-                format!("the image is {bytes} bytes; smed's limit is {limit}")
+                format!("the image is {bytes} bytes; mjolnr's limit is {limit}")
             }
             Self::TooMany { count, limit } => {
-                format!("this request carries {count} images; smed's limit is {limit}")
+                format!("this request carries {count} images; mjolnr's limit is {limit}")
             }
             Self::Unreadable { detail } => format!("the image could not be read: {detail}"),
         }
     }
 }
 
-/// The media type for a path's extension, if smed sends it.
+/// The media type for a path's extension, if mjolnr sends it.
 #[must_use]
 pub fn media_type_for(path: &std::path::Path) -> Option<&'static str> {
     let extension = path.extension()?.to_str()?.to_ascii_lowercase();
@@ -161,7 +161,7 @@ mod tests {
         use std::path::Path;
         assert_eq!(media_type_for(Path::new("a.PNG")), Some("image/png"));
         assert_eq!(media_type_for(Path::new("a.jpeg")), Some("image/jpeg"));
-        // Real image formats smed still will not send, because not every
+        // Real image formats mjolnr still will not send, because not every
         // adapter documents them and a partial capability is worse than none.
         assert_eq!(media_type_for(Path::new("a.heic")), None);
         assert_eq!(media_type_for(Path::new("a.bmp")), None);
@@ -172,7 +172,7 @@ mod tests {
     fn every_supported_type_has_an_extension_that_maps_to_it() {
         use std::path::Path;
         // Drift guard: a media type in the list that no extension produces is a
-        // capability smed claims and can never exercise.
+        // capability mjolnr claims and can never exercise.
         for media_type in SUPPORTED_MEDIA_TYPES {
             let extension = media_type.trim_start_matches("image/");
             let path = format!("sample.{extension}");

@@ -4,7 +4,7 @@ use std::process::Stdio;
 use crate::core::error::ReasonCode;
 use crate::core::event::SessionId;
 
-const WORKTREES_DIR: &str = "smed-worktrees";
+const WORKTREES_DIR: &str = "mjolnr-worktrees";
 
 fn worktree_path(ext_id: &str) -> PathBuf {
     std::env::temp_dir()
@@ -40,7 +40,7 @@ fn sanitized_env() -> Vec<(String, String)> {
 pub async fn create(
     workspace: &Path,
     ext_id: &str,
-) -> Result<(PathBuf, String), crate::core::error::SmedError> {
+) -> Result<(PathBuf, String), crate::core::error::MjolnrError> {
     let branch = branch_name(ext_id);
     let path = worktree_path(ext_id);
     let output = git(
@@ -55,10 +55,10 @@ pub async fn create(
     )
     .await
     .map_err(|detail| {
-        crate::core::error::SmedError::workspace_refused(ReasonCode::WorktreeUnavailable, detail)
+        crate::core::error::MjolnrError::workspace_refused(ReasonCode::WorktreeUnavailable, detail)
     })?;
     if !output.status.success() {
-        return Err(crate::core::error::SmedError::workspace_refused(
+        return Err(crate::core::error::MjolnrError::workspace_refused(
             ReasonCode::WorktreeUnavailable,
             String::from_utf8_lossy(&output.stderr).trim().to_owned(),
         ));

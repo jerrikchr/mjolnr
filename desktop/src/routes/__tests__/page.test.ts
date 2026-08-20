@@ -97,7 +97,7 @@ describe('Desktop workspace route', () => {
     vi.spyOn(clientStore, 'listDirectory').mockImplementation(async (path) => {
       if (path === '') {
         return directoryPage('', [
-          directoryEntry('.smed', '.smed', 'directory'),
+          directoryEntry('.mjolnr', '.mjolnr', 'directory'),
           directoryEntry('src', 'src', 'directory'),
           directoryEntry('README.md', 'README.md', 'file')
         ]);
@@ -128,7 +128,7 @@ describe('Desktop workspace route', () => {
 
     expect(getByTestId('launch-journey')).toBeDefined();
     expect(getByTestId('guided-setup')).toBeDefined();
-    expect(getByText(/smed started without a project folder/)).toBeDefined();
+    expect(getByText(/mjolnr started without a project folder/)).toBeDefined();
     expect(getByTestId('choose-workspace')).toBeDefined();
     expect(queryByText('No stored sessions are available yet for this workspace.')).toBeNull();
     expect(queryByRole('radio', { name: 'full-auto' })).toBeNull();
@@ -591,7 +591,7 @@ describe('Desktop workspace route', () => {
     expect(getByText('Route default')).toBeDefined();
   });
 
-  it('shows only connected accounts, not every provider smed can authenticate', () => {
+  it('shows only connected accounts, not every provider mjolnr can authenticate', () => {
     clientStore.snapshot = {
       ...baseSnapshot,
       accounts: [
@@ -630,14 +630,14 @@ describe('Desktop workspace route', () => {
         directive: 'refactor the auth module',
         directiveTruncated: false,
         branch: 'mjolnr/sub-0190d5f0-child',
-        worktree: '/work/.smed/worktrees/0190d5f0-child'
+        worktree: '/work/.mjolnr/worktrees/0190d5f0-child'
       }
     });
 
     await waitFor(() => expect(getAllByTestId('worktree-item').length).toBeGreaterThan(0));
     const items = getAllByTestId('worktree-item');
     expect(items[0].textContent).toContain('mjolnr/sub-0190d5f0-child');
-    expect(items[0].textContent).toContain('/work/.smed/worktrees/0190d5f0-child');
+    expect(items[0].textContent).toContain('/work/.mjolnr/worktrees/0190d5f0-child');
 
     clientStore.handleUpdate({
       type: 'event',
@@ -883,7 +883,7 @@ describe('Desktop workspace route', () => {
   it('shows a stale-file refusal in the editor without claiming the edit was saved', async () => {
     const saveFile = vi.spyOn(clientStore, 'saveFile').mockResolvedValue({
       code: 'STALE_FILE_VERSION',
-      message: 'the file changed outside smed; reload it before saving'
+      message: 'the file changed outside mjolnr; reload it before saving'
     });
     const { getByTestId, getByText, getByRole } = render(Page);
 
@@ -894,18 +894,18 @@ describe('Desktop workspace route', () => {
     await waitFor(() => expect(getByTestId('code-editor')).toBeDefined());
 
     const content = getByTestId('code-editor').querySelector('.cm-content') as HTMLElement;
-    content.textContent = `${content.textContent}\n// changed outside smed`;
+    content.textContent = `${content.textContent}\n// changed outside mjolnr`;
     await fireEvent.input(content);
     await fireEvent.keyDown(content, { key: 's', ctrlKey: true });
 
     const refusal = await waitFor(() => getByRole('alert'));
-    expect(refusal.textContent).toContain('the file changed outside smed');
+    expect(refusal.textContent).toContain('the file changed outside mjolnr');
     expect(getByTestId('editor-status').textContent).toContain('save refused');
     expect(refusal.textContent?.toLowerCase()).not.toContain('saved');
     expect(saveFile).toHaveBeenCalledWith(
       'src/checkout/provider.rs',
       'a'.repeat(64),
-      expect.stringContaining('// changed outside smed')
+      expect.stringContaining('// changed outside mjolnr')
     );
     saveFile.mockRestore();
   });

@@ -25,23 +25,23 @@ fn call() -> ToolCall {
     clippy::too_many_lines,
     reason = "the exhaustive fixture deliberately lists every durable event variant"
 )]
-fn every_durable_event(session: SessionId, run: RunId) -> Vec<SmedEvent> {
+fn every_durable_event(session: SessionId, run: RunId) -> Vec<MjolnrEvent> {
     let review_id = crate::core::council::CouncilReviewId::new();
     let finding_id = crate::core::council::CouncilFindingId::new();
     let ticket_id = crate::core::board::DecisionTicketId::new();
     let blocker_id = crate::core::board::DecisionTicketId::new();
     let mut events = vec![
-        SmedEvent::SessionCreated {
+        MjolnrEvent::SessionCreated {
             session,
             provider: ProviderId::new("fake"),
             model: ModelId::new("fake-1"),
         },
-        SmedEvent::MessageAppended {
+        MjolnrEvent::MessageAppended {
             session,
             message: Box::new(CanonicalMessage::user("hello")),
         },
-        SmedEvent::RunStarted { session, run },
-        SmedEvent::UsageReported {
+        MjolnrEvent::RunStarted { session, run },
+        MjolnrEvent::UsageReported {
             session,
             run,
             usage: Usage {
@@ -49,23 +49,23 @@ fn every_durable_event(session: SessionId, run: RunId) -> Vec<SmedEvent> {
                 output_tokens: 9,
             },
         },
-        SmedEvent::PolicyChanged {
+        MjolnrEvent::PolicyChanged {
             session,
             mode: PolicyMode::WorkspaceWrite,
         },
-        SmedEvent::ExtensionLoaded {
+        MjolnrEvent::ExtensionLoaded {
             session,
             name: "count-lines".to_owned(),
             program: "wc".to_owned(),
             by: crate::core::event::ExtensionLoadAuthority::Command,
         },
-        SmedEvent::ExtensionLoaded {
+        MjolnrEvent::ExtensionLoaded {
             session,
             name: "approved-tool".to_owned(),
             program: "approved".to_owned(),
             by: crate::core::event::ExtensionLoadAuthority::Approved,
         },
-        SmedEvent::ToolProposed {
+        MjolnrEvent::ToolProposed {
             session,
             run,
             approval: Some(ApprovalId::new()),
@@ -73,7 +73,7 @@ fn every_durable_event(session: SessionId, run: RunId) -> Vec<SmedEvent> {
             tier: ToolTier::Execute,
             preview: "git diff".to_owned(),
         },
-        SmedEvent::ToolProposed {
+        MjolnrEvent::ToolProposed {
             session,
             run,
             approval: None,
@@ -81,20 +81,20 @@ fn every_durable_event(session: SessionId, run: RunId) -> Vec<SmedEvent> {
             tier: ToolTier::Read,
             preview: String::new(),
         },
-        SmedEvent::ApprovalResolved {
+        MjolnrEvent::ApprovalResolved {
             session,
             run,
             approval: ApprovalId::new(),
             decision: ApprovalDecision::ApproveExactForSession,
         },
-        SmedEvent::ToolCompleted {
+        MjolnrEvent::ToolCompleted {
             session,
             run,
             call_id: "call_1".to_owned(),
             name: "read_file".to_owned(),
             result: ToolResult::ok("contents"),
         },
-        SmedEvent::ToolFailed {
+        MjolnrEvent::ToolFailed {
             session,
             run,
             call_id: "call_1".to_owned(),
@@ -102,52 +102,52 @@ fn every_durable_event(session: SessionId, run: RunId) -> Vec<SmedEvent> {
             code: ReasonCode::ToolExecution,
             detail: "boom".to_owned(),
         },
-        SmedEvent::BudgetExhausted { session, run },
-        SmedEvent::RunFinished {
+        MjolnrEvent::BudgetExhausted { session, run },
+        MjolnrEvent::RunFinished {
             session,
             run,
             reason: FinishReason::Stop,
         },
-        SmedEvent::RunFailed {
+        MjolnrEvent::RunFailed {
             session,
             run,
             code: ReasonCode::ProviderAuth,
             detail: "bad key".to_owned(),
         },
-        SmedEvent::ModelChanged {
+        MjolnrEvent::ModelChanged {
             session,
             provider: ProviderId::new("openai"),
             model: ModelId::new("gpt-4o-mini"),
         },
         model_refusal(session),
-        SmedEvent::FileSaved {
+        MjolnrEvent::FileSaved {
             session,
             path: "src/main.rs".to_owned(),
             observed_digest: "a".repeat(64),
             new_digest: "b".repeat(64),
             size_bytes: 13,
         },
-        SmedEvent::SubagentSpawned {
+        MjolnrEvent::SubagentSpawned {
             session,
             run,
             child: SessionId::new(),
             directive: "worker:alpha.txt".to_owned(),
             policy: PolicyMode::WorkspaceWrite,
             branch: "mjolnr/sub-abc12345".to_owned(),
-            worktree: "/tmp/smed-worktrees/abc".to_owned(),
+            worktree: "/tmp/mjolnr-worktrees/abc".to_owned(),
         },
-        SmedEvent::SubagentResultLate {
+        MjolnrEvent::SubagentResultLate {
             session,
             child: SessionId::new(),
             detail: "{\"outcome\":\"completed\"}".to_owned(),
         },
-        SmedEvent::ReadSetCollision {
+        MjolnrEvent::ReadSetCollision {
             session,
             reader: SessionId::new(),
             writer: SessionId::new(),
             path: "shared.txt".to_owned(),
         },
-        SmedEvent::RecoveryRequired {
+        MjolnrEvent::RecoveryRequired {
             session,
             work: Box::new(InterruptedWork {
                 run,
@@ -159,17 +159,17 @@ fn every_durable_event(session: SessionId, run: RunId) -> Vec<SmedEvent> {
                 },
             }),
         },
-        SmedEvent::RecoveryResolved {
+        MjolnrEvent::RecoveryResolved {
             session,
             decision: RecoveryDecision::AbandonAndContinue,
         },
-        SmedEvent::SessionEnded { session },
-        SmedEvent::PlanInterviewStarted {
+        MjolnrEvent::SessionEnded { session },
+        MjolnrEvent::PlanInterviewStarted {
             session,
             plan_id: crate::core::plan::PlanId::new(),
             goal: "Turn an idea into a reviewed plan".to_owned(),
         },
-        SmedEvent::PlanQuestionAsked {
+        MjolnrEvent::PlanQuestionAsked {
             session,
             plan_id: crate::core::plan::PlanId::new(),
             question: crate::core::plan::Question {
@@ -180,7 +180,7 @@ fn every_durable_event(session: SessionId, run: RunId) -> Vec<SmedEvent> {
                 created_at: time::OffsetDateTime::now_utc(),
             },
         },
-        SmedEvent::PlanQuestionAnswered {
+        MjolnrEvent::PlanQuestionAnswered {
             session,
             plan_id: crate::core::plan::PlanId::new(),
             answer: crate::core::plan::QuestionAnswer {
@@ -190,7 +190,7 @@ fn every_durable_event(session: SessionId, run: RunId) -> Vec<SmedEvent> {
                 answered_at: time::OffsetDateTime::now_utc(),
             },
         },
-        SmedEvent::PlanPrdProposed {
+        MjolnrEvent::PlanPrdProposed {
             session,
             prd: crate::core::plan::ProductRequirementsDocument {
                 id: crate::core::plan::PrdId::new(),
@@ -209,7 +209,7 @@ fn every_durable_event(session: SessionId, run: RunId) -> Vec<SmedEvent> {
                 created_at: time::OffsetDateTime::now_utc(),
             },
         },
-        SmedEvent::PlanProposed {
+        MjolnrEvent::PlanProposed {
             session,
             proposal: crate::core::plan::PlanProposal {
                 plan_id: crate::core::plan::PlanId::new(),
@@ -224,7 +224,7 @@ fn every_durable_event(session: SessionId, run: RunId) -> Vec<SmedEvent> {
                 proposed_at: time::OffsetDateTime::now_utc(),
             },
         },
-        SmedEvent::PlanReviewed {
+        MjolnrEvent::PlanReviewed {
             session,
             review: crate::core::plan::PlanReview {
                 plan_id: crate::core::plan::PlanId::new(),
@@ -235,7 +235,7 @@ fn every_durable_event(session: SessionId, run: RunId) -> Vec<SmedEvent> {
                 reviewed_at: time::OffsetDateTime::now_utc(),
             },
         },
-        SmedEvent::PlanApproved {
+        MjolnrEvent::PlanApproved {
             session,
             approval: crate::core::plan::PlanApproval {
                 plan_id: crate::core::plan::PlanId::new(),
@@ -246,7 +246,7 @@ fn every_durable_event(session: SessionId, run: RunId) -> Vec<SmedEvent> {
                 approved_at: time::OffsetDateTime::now_utc(),
             },
         },
-        SmedEvent::PlanHandoffCreated {
+        MjolnrEvent::PlanHandoffCreated {
             session,
             handoff: crate::core::plan::PlanHandoff {
                 plan_id: crate::core::plan::PlanId::new(),
@@ -255,7 +255,7 @@ fn every_durable_event(session: SessionId, run: RunId) -> Vec<SmedEvent> {
                 created_at: time::OffsetDateTime::now_utc(),
             },
         },
-        SmedEvent::CouncilReviewed {
+        MjolnrEvent::CouncilReviewed {
             session,
             review: Box::new(crate::core::council::CouncilReview {
                 review_id,
@@ -274,7 +274,7 @@ fn every_durable_event(session: SessionId, run: RunId) -> Vec<SmedEvent> {
                 }],
             }),
         },
-        SmedEvent::CouncilFindingDispositionRecorded {
+        MjolnrEvent::CouncilFindingDispositionRecorded {
             session,
             disposition: crate::core::council::CouncilFindingDisposition {
                 review_id,
@@ -284,7 +284,7 @@ fn every_durable_event(session: SessionId, run: RunId) -> Vec<SmedEvent> {
                 decided_at: time::OffsetDateTime::now_utc(),
             },
         },
-        SmedEvent::CouncilAmendmentProposed {
+        MjolnrEvent::CouncilAmendmentProposed {
             session,
             amendment: Box::new(crate::core::council::CouncilAmendment {
                 review_id,
@@ -294,7 +294,7 @@ fn every_durable_event(session: SessionId, run: RunId) -> Vec<SmedEvent> {
                 text: "# Goal\nship it\n".to_owned(),
             }),
         },
-        SmedEvent::DecisionTicketOpened {
+        MjolnrEvent::DecisionTicketOpened {
             session,
             ticket: crate::core::board::DecisionTicket {
                 id: ticket_id,
@@ -304,7 +304,7 @@ fn every_durable_event(session: SessionId, run: RunId) -> Vec<SmedEvent> {
                 blocked_by: vec![blocker_id],
             },
         },
-        SmedEvent::DecisionTicketResolved {
+        MjolnrEvent::DecisionTicketResolved {
             session,
             resolution: crate::core::board::DecisionResolution {
                 id: crate::core::board::DecisionResolutionId::new(),
@@ -318,7 +318,7 @@ fn every_durable_event(session: SessionId, run: RunId) -> Vec<SmedEvent> {
                 supersedes: None,
             },
         },
-        SmedEvent::ImportedItemFetched {
+        MjolnrEvent::ImportedItemFetched {
             session,
             item: crate::core::imported::ImportedItem {
                 id: crate::core::imported::ImportedItemId::new(),
@@ -331,7 +331,7 @@ fn every_durable_event(session: SessionId, run: RunId) -> Vec<SmedEvent> {
                 blocked_by: Vec::new(),
             },
         },
-        SmedEvent::ImportedItemRefreshed {
+        MjolnrEvent::ImportedItemRefreshed {
             session,
             expected_revision: "rev1".to_owned(),
             item: crate::core::imported::ImportedItem {
@@ -345,7 +345,7 @@ fn every_durable_event(session: SessionId, run: RunId) -> Vec<SmedEvent> {
                 blocked_by: Vec::new(),
             },
         },
-        SmedEvent::ImportedActRecorded {
+        MjolnrEvent::ImportedActRecorded {
             session,
             act: crate::core::imported::ImportedAct {
                 act_id: crate::core::imported::ImportedActId::new(),
@@ -359,7 +359,7 @@ fn every_durable_event(session: SessionId, run: RunId) -> Vec<SmedEvent> {
                 },
             },
         },
-        SmedEvent::ImportedCommentRecorded {
+        MjolnrEvent::ImportedCommentRecorded {
             session,
             item_id: crate::core::imported::ImportedItemId::new(),
             comment_id: "comment-1".to_owned(),
@@ -370,9 +370,9 @@ fn every_durable_event(session: SessionId, run: RunId) -> Vec<SmedEvent> {
     events
 }
 
-fn continuation_events(session: SessionId, run: RunId) -> [SmedEvent; 2] {
+fn continuation_events(session: SessionId, run: RunId) -> [MjolnrEvent; 2] {
     [
-        SmedEvent::QuotaBoundaryReached {
+        MjolnrEvent::QuotaBoundaryReached {
             session,
             run,
             reserve: QuotaReserveStatus {
@@ -386,7 +386,7 @@ fn continuation_events(session: SessionId, run: RunId) -> [SmedEvent; 2] {
                 phase: QuotaReservePhase::Draining,
             },
         },
-        SmedEvent::HandoffCreated {
+        MjolnrEvent::HandoffCreated {
             session,
             handoff: Box::new(HandoffCheckpoint {
                 id: HandoffId::new(),
@@ -405,8 +405,8 @@ fn continuation_events(session: SessionId, run: RunId) -> [SmedEvent; 2] {
     ]
 }
 
-fn model_refusal(session: SessionId) -> SmedEvent {
-    SmedEvent::ModelChangeRefused {
+fn model_refusal(session: SessionId) -> MjolnrEvent {
+    MjolnrEvent::ModelChangeRefused {
         session,
         provider: ProviderId::new("anthropic"),
         model: ModelId::new("claude-sonnet-5"),
@@ -437,22 +437,22 @@ fn the_format_cannot_express_display_only_events() {
     let session = SessionId::new();
     let run = RunId::new();
     let events = [
-        SmedEvent::TextDelta {
+        MjolnrEvent::TextDelta {
             session,
             run,
             text: "tok".to_owned(),
         },
-        SmedEvent::ReasoningDelta {
+        MjolnrEvent::ReasoningDelta {
             session,
             run,
             text: "private reasoning".to_owned(),
         },
-        SmedEvent::ToolAssembling {
+        MjolnrEvent::ToolAssembling {
             session,
             run,
             name: "list_dir".to_owned(),
         },
-        SmedEvent::QuotaReported {
+        MjolnrEvent::QuotaReported {
             session,
             run,
             snapshot: QuotaSnapshot {
@@ -460,7 +460,7 @@ fn the_format_cannot_express_display_only_events() {
                 windows: Vec::new(),
             },
         },
-        SmedEvent::SubagentActivity {
+        MjolnrEvent::SubagentActivity {
             session,
             run,
             child: SessionId::new(),
@@ -494,7 +494,7 @@ fn the_kind_column_matches_the_payload_tag() {
 
 #[test]
 fn every_durable_variant_is_covered_by_the_round_trip() {
-    // Guards the fixture itself: a new SmedEvent variant that nobody adds
+    // Guards the fixture itself: a new MjolnrEvent variant that nobody adds
     // here would otherwise be "tested" by omission.
     let kinds: std::collections::HashSet<&str> =
         every_durable_event(SessionId::new(), RunId::new())
@@ -505,13 +505,13 @@ fn every_durable_variant_is_covered_by_the_round_trip() {
     assert_eq!(
         kinds.len(),
         41,
-        "SmedEvent has a durable variant with no round-trip coverage"
+        "MjolnrEvent has a durable variant with no round-trip coverage"
     );
 }
 
 #[test]
 fn a_newer_payload_version_is_refused_rather_than_read_best_effort() {
-    let payload = encode(SmedEvent::RunStarted {
+    let payload = encode(MjolnrEvent::RunStarted {
         session: SessionId::new(),
         run: RunId::new(),
     })
@@ -539,7 +539,7 @@ fn a_checkpoint_refuses_a_newer_version() {
 fn a_payload_is_not_debug_output() {
     // The plan's anti-pattern: Debug as a serialization contract. If someone
     // "simplifies" encode_json to format!("{event:?}"), this fails.
-    let payload = encode(SmedEvent::RunStarted {
+    let payload = encode(MjolnrEvent::RunStarted {
         session: SessionId::new(),
         run: RunId::new(),
     })
@@ -568,7 +568,7 @@ fn the_message_bearing_kind_list_matches_the_event_predicate() {
         let in_sql = MESSAGE_BEARING_KINDS.contains(&kind);
         assert_eq!(
             predicate, in_sql,
-            "`{kind}`: SmedEvent::introduces_message says {predicate}, \
+            "`{kind}`: MjolnrEvent::introduces_message says {predicate}, \
              but MESSAGE_BEARING_KINDS says {in_sql}"
         );
     }

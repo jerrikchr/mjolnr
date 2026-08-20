@@ -1,4 +1,4 @@
-//! smed-owned tool registry and built-in repository tools.
+//! mjolnr-owned tool registry and built-in repository tools.
 
 mod arguments;
 mod command;
@@ -160,7 +160,7 @@ mod tests {
             (
                 "search_text",
                 serde_json::json!({
-                    "query": "smed",
+                    "query": "mjolnr",
                     "path": null,
                     "max_results": null
                 }),

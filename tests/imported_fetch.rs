@@ -17,20 +17,20 @@ use std::process::Command;
 use std::sync::Arc;
 use std::time::Duration;
 
-use smed::core::command::SmedCommand;
-use smed::core::error::ReasonCode;
-use smed::core::event::{SessionId, SmedEvent};
-use smed::core::frontier::{NodeId, Provenance};
-use smed::core::imported::{ImportedItem, ImportedItemState};
-use smed::core::model::{ModelId, ProviderId};
-use smed::core::provider::Provider;
-use smed::core::runtime::{RuntimeSnapshot, SmedRuntime};
-use smed::core::store::EventStore;
-use smed::integrations::TaskSource;
-use smed::integrations::github::GitHubSource;
-use smed::providers::fake::FakeProvider;
-use smed::runtime::Runtime;
-use smed::store::memory::InMemoryEventStore;
+use mjolnr::core::command::MjolnrCommand;
+use mjolnr::core::error::ReasonCode;
+use mjolnr::core::event::{MjolnrEvent, SessionId};
+use mjolnr::core::frontier::{NodeId, Provenance};
+use mjolnr::core::imported::{ImportedItem, ImportedItemState};
+use mjolnr::core::model::{ModelId, ProviderId};
+use mjolnr::core::provider::Provider;
+use mjolnr::core::runtime::{MjolnrRuntime, RuntimeSnapshot};
+use mjolnr::core::store::EventStore;
+use mjolnr::integrations::TaskSource;
+use mjolnr::integrations::github::GitHubSource;
+use mjolnr::providers::fake::FakeProvider;
+use mjolnr::runtime::Runtime;
+use mjolnr::store::memory::InMemoryEventStore;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -48,7 +48,7 @@ async fn open_project_with(
     let temp = tempfile::tempdir().expect("tempdir");
     initialize_repository(temp.path());
     let store = Arc::new(InMemoryEventStore::new());
-    let producer = GitHubSource::new(smed::core::secrets::Secret::new(TOKEN.to_owned()))
+    let producer = GitHubSource::new(mjolnr::core::secrets::Secret::new(TOKEN.to_owned()))
         .with_base_url(server.uri());
     let runtime = Runtime::spawn_with_task_source(
         vec![Arc::new(FakeProvider::default()) as Arc<dyn Provider>],
@@ -56,13 +56,13 @@ async fn open_project_with(
         Arc::new(producer) as Arc<dyn TaskSource>,
     );
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: temp.path().to_path_buf(),
         })
         .await
         .expect("open project");
     runtime
-        .dispatch(SmedCommand::CreateSession {
+        .dispatch(MjolnrCommand::CreateSession {
             provider: ProviderId::new(FakeProvider::ID),
             model: ModelId::new(FakeProvider::MODEL),
         })
@@ -102,21 +102,21 @@ async fn fetched_items(store: &InMemoryEventStore, session: SessionId) -> Vec<Im
         .expect("events")
         .into_iter()
         .filter_map(|stored| match stored.event {
-            SmedEvent::ImportedItemFetched { item, .. } => Some(item),
+            MjolnrEvent::ImportedItemFetched { item, .. } => Some(item),
             _ => None,
         })
         .collect()
 }
 
-fn fetch(task_id: &str) -> SmedCommand {
-    SmedCommand::FetchTask {
+fn fetch(task_id: &str) -> MjolnrCommand {
+    MjolnrCommand::FetchTask {
         source: "github".to_owned(),
         task_id: task_id.to_owned(),
     }
 }
 
-fn fetch_batch(task_ids: &[&str]) -> SmedCommand {
-    SmedCommand::FetchTasks {
+fn fetch_batch(task_ids: &[&str]) -> MjolnrCommand {
+    MjolnrCommand::FetchTasks {
         source: "github".to_owned(),
         task_ids: task_ids
             .iter()
@@ -161,7 +161,7 @@ fn git(repository: &std::path::Path, args: &[&str]) {
 fn initialize_repository(root: &std::path::Path) -> String {
     git(root, &["init", "-b", "feature-parser"]);
     git(root, &["config", "user.email", "test@example.invalid"]);
-    git(root, &["config", "user.name", "smed Test"]);
+    git(root, &["config", "user.name", "mjolnr Test"]);
     std::fs::write(root.join("parser.rs"), "fn parse() {}\n").expect("file");
     git(root, &["add", "parser.rs"]);
     git(root, &["commit", "-m", "initial"]);
@@ -177,8 +177,8 @@ fn initialize_repository(root: &std::path::Path) -> String {
         .to_owned()
 }
 
-fn submit(head_commit: &str) -> SmedCommand {
-    SmedCommand::SubmitChange {
+fn submit(head_commit: &str) -> MjolnrCommand {
+    MjolnrCommand::SubmitChange {
         source: "github".to_owned(),
         remote_id: "octocat/hello#1".to_owned(),
         expected_revision: "2026-08-06T10:00:00Z".to_owned(),
@@ -234,13 +234,13 @@ async fn a_matching_local_commit_creates_a_pull_request_and_records_terminal_eve
     let events = store.events(session).await.expect("events");
     assert!(events.iter().any(|stored| matches!(
         &stored.event,
-        SmedEvent::ToolCompleted { name, result, .. }
+        MjolnrEvent::ToolCompleted { name, result, .. }
             if name == "submit_change" && result.content == "https://github.com/octocat/hello/pull/99"
     )));
     assert!(
         events
             .iter()
-            .any(|stored| matches!(stored.event, SmedEvent::RunFinished { .. }))
+            .any(|stored| matches!(stored.event, MjolnrEvent::RunFinished { .. }))
     );
 }
 
@@ -315,7 +315,7 @@ async fn a_fetched_issue_is_recorded_once_and_reaches_the_board_with_its_provena
     );
     assert!(
         item.blocked_by.is_empty(),
-        "blockers are smed's own ordering; a remote does not get to set them"
+        "blockers are mjolnr's own ordering; a remote does not get to set them"
     );
 
     let board = runtime.query_board().await.expect("the board answers");
@@ -384,14 +384,14 @@ async fn a_refetch_of_a_moved_remote_refreshes_the_recorded_item() {
     let fetched: Vec<ImportedItem> = events
         .iter()
         .filter_map(|stored| match &stored.event {
-            SmedEvent::ImportedItemFetched { item, .. } => Some(item.clone()),
+            MjolnrEvent::ImportedItemFetched { item, .. } => Some(item.clone()),
             _ => None,
         })
         .collect();
     let refreshed: Vec<ImportedItem> = events
         .iter()
         .filter_map(|stored| match &stored.event {
-            SmedEvent::ImportedItemRefreshed { item, .. } => Some(item.clone()),
+            MjolnrEvent::ImportedItemRefreshed { item, .. } => Some(item.clone()),
             _ => None,
         })
         .collect();
@@ -464,7 +464,7 @@ async fn a_refetch_of_an_unchanged_remote_is_refused_and_records_nothing() {
         .await
         .expect("events")
         .into_iter()
-        .filter(|stored| matches!(stored.event, SmedEvent::ImportedItemRefreshed { .. }))
+        .filter(|stored| matches!(stored.event, MjolnrEvent::ImportedItemRefreshed { .. }))
         .count();
     assert_eq!(refreshed, 0, "a refused refresh records nothing");
 }
@@ -539,7 +539,7 @@ async fn a_state_the_producer_could_not_interpret_is_recorded_as_unknown_and_nev
             .frontier
             .iter()
             .any(|node| node.id == NodeId::Imported(item.id)),
-        "it is still work smed knows about, so it stays on the board"
+        "it is still work mjolnr knows about, so it stays on the board"
     );
 }
 
@@ -558,7 +558,7 @@ async fn a_malformed_id_and_an_integration_without_credentials_are_different_ref
     // Addressable and implemented, but not authenticated: not the caller's
     // schema mistake, and no request should leave the process.
     let error = runtime
-        .dispatch(SmedCommand::FetchTask {
+        .dispatch(MjolnrCommand::FetchTask {
             source: "linear".to_owned(),
             task_id: "SIM-1".to_owned(),
         })
@@ -628,7 +628,7 @@ async fn an_injected_source_does_not_answer_for_another_integration() {
     let (runtime, _temp, _store, _session) = open_project_with(&server).await;
 
     let error = runtime
-        .dispatch(SmedCommand::FetchTask {
+        .dispatch(MjolnrCommand::FetchTask {
             source: "linear".to_owned(),
             task_id: "octocat/hello#1".to_owned(),
         })
@@ -666,7 +666,7 @@ async fn a_fetched_item_is_rebuilt_from_the_log_after_a_restart() {
         .clone();
     runtime.close().await.expect("close");
 
-    // The remote moved while smed was down. The resumed session rebuilds the
+    // The remote moved while mjolnr was down. The resumed session rebuilds the
     // item from the log, so the re-fetch finds it already imported and routes
     // to a refresh — pinned to the revision the log holds, decided by the same
     // `apply_refresh` the live path used.
@@ -679,7 +679,7 @@ async fn a_fetched_item_is_rebuilt_from_the_log_after_a_restart() {
         )))
         .mount(&server)
         .await;
-    let producer = GitHubSource::new(smed::core::secrets::Secret::new(TOKEN.to_owned()))
+    let producer = GitHubSource::new(mjolnr::core::secrets::Secret::new(TOKEN.to_owned()))
         .with_base_url(server.uri());
     let runtime = Runtime::spawn_with_task_source(
         vec![Arc::new(FakeProvider::default()) as Arc<dyn Provider>],
@@ -687,13 +687,13 @@ async fn a_fetched_item_is_rebuilt_from_the_log_after_a_restart() {
         Arc::new(producer) as Arc<dyn TaskSource>,
     );
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: temp.path().to_path_buf(),
         })
         .await
         .expect("open project");
     runtime
-        .dispatch(SmedCommand::ResumeSession { session })
+        .dispatch(MjolnrCommand::ResumeSession { session })
         .await
         .expect("resume");
     settle_until(&runtime, |snap| snap.session.is_some()).await;
@@ -718,7 +718,7 @@ async fn a_fetched_item_is_rebuilt_from_the_log_after_a_restart() {
         .expect("events")
         .into_iter()
         .filter_map(|stored| match stored.event {
-            SmedEvent::ImportedItemRefreshed { item, .. } => Some(item),
+            MjolnrEvent::ImportedItemRefreshed { item, .. } => Some(item),
             _ => None,
         })
         .collect();

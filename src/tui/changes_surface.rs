@@ -1,6 +1,6 @@
 //! Changes surface: the file mutation record for this session (Phase UX 3).
 //!
-//! Shows which files smed actually wrote, in order, with the content hash it
+//! Shows which files mjolnr actually wrote, in order, with the content hash it
 //! recorded for each write and whether a read of that path was on record first.
 //!
 //! It deliberately does **not** present itself as a diff viewer. A unified diff
@@ -34,7 +34,7 @@ pub struct Mutation {
     /// Whether a read of this path was recorded before this write.
     ///
     /// Read-before-edit is the evidence that a write was made against content
-    /// smed had actually seen. `false` is not proof of a bad write — a
+    /// mjolnr had actually seen. `false` is not proof of a bad write — a
     /// freshly created file has nothing to read — but it is the thing a
     /// reviewer wants flagged rather than inferred.
     pub read_first: bool,

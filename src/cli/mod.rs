@@ -1,6 +1,6 @@
 //! The command line.
 //!
-//! `smed` with no arguments opens the TUI on a new session. The subcommands
+//! `mjolnr` with no arguments opens the TUI on a new session. The subcommands
 //! exist for the things a terminal UI is the wrong shape for: storing a
 //! credential without echoing it, listing sessions before choosing one, and
 //! inspecting the database when something is wrong with it.
@@ -276,29 +276,29 @@ mod tests {
     }
 
     #[test]
-    fn bare_smed_opens_the_tui() {
-        let cli = Cli::try_parse_from(["smed"]).expect("parse");
+    fn bare_mjolnr_opens_the_tui() {
+        let cli = Cli::try_parse_from(["mjolnr"]).expect("parse");
         assert!(cli.command.is_none());
         assert!(cli.resume.is_none());
     }
 
     #[test]
     fn headless_policy_defaults_closed_and_has_no_ask_value() {
-        let cli = Cli::try_parse_from(["smed", "exec", "inspect the repository"]).expect("parse");
+        let cli = Cli::try_parse_from(["mjolnr", "exec", "inspect the repository"]).expect("parse");
         let Some(Command::Exec(args)) = cli.command else {
             panic!("exec command");
         };
         assert_eq!(args.policy, ExecPolicy::ReadOnly);
-        assert!(Cli::try_parse_from(["smed", "exec", "work", "--policy", "ask"]).is_err());
+        assert!(Cli::try_parse_from(["mjolnr", "exec", "work", "--policy", "ask"]).is_err());
     }
 
     #[test]
     fn auth_login_requires_a_known_provider() {
-        assert!(Cli::try_parse_from(["smed", "auth", "login", "openai"]).is_ok());
-        assert!(Cli::try_parse_from(["smed", "auth", "login", "anthropic"]).is_ok());
-        assert!(Cli::try_parse_from(["smed", "auth", "login", "openai-codex"]).is_ok());
+        assert!(Cli::try_parse_from(["mjolnr", "auth", "login", "openai"]).is_ok());
+        assert!(Cli::try_parse_from(["mjolnr", "auth", "login", "anthropic"]).is_ok());
+        assert!(Cli::try_parse_from(["mjolnr", "auth", "login", "openai-codex"]).is_ok());
         assert!(
-            Cli::try_parse_from(["smed", "auth", "login", "opeanai"]).is_err(),
+            Cli::try_parse_from(["mjolnr", "auth", "login", "opeanai"]).is_err(),
             "a typo'd provider must be rejected, not stored under a name nothing reads"
         );
     }
@@ -308,12 +308,12 @@ mod tests {
         // The distinction main.rs branches on. `mjolnr init` bare must stay the
         // guided flow — a user reaching for `init` on a fresh machine wants
         // setup, not two YAML files and a prompt about them.
-        let bare = Cli::try_parse_from(["smed", "init"]).expect("parse");
+        let bare = Cli::try_parse_from(["mjolnr", "init"]).expect("parse");
         assert!(matches!(bare.command, Some(Command::Init { yes: false })));
 
         // `--yes` is the scriptable path. If this ever parsed as the wizard, CI
         // would hang on a prompt nothing is there to answer.
-        let scripted = Cli::try_parse_from(["smed", "init", "--yes"]).expect("parse");
+        let scripted = Cli::try_parse_from(["mjolnr", "init", "--yes"]).expect("parse");
         assert!(matches!(
             scripted.command,
             Some(Command::Init { yes: true })
@@ -324,7 +324,7 @@ mod tests {
     fn onboard_still_parses_as_the_hidden_alias() {
         // Hidden from help, not removed: a scripted `mjolnr onboard` must keep
         // working even though `init` is the name we now document.
-        let cli = Cli::try_parse_from(["smed", "onboard"]).expect("parse");
+        let cli = Cli::try_parse_from(["mjolnr", "onboard"]).expect("parse");
         assert!(matches!(cli.command, Some(Command::Onboard)));
     }
 
@@ -332,8 +332,8 @@ mod tests {
     fn a_disposable_data_directory_can_be_selected() {
         // Without this the smoke test in the Phase 4 report would have to write
         // to the developer's real database.
-        let cli = Cli::try_parse_from(["smed", "--data-dir", "/tmp/smed-test"]).expect("parse");
-        assert_eq!(cli.data_dir, Some(PathBuf::from("/tmp/smed-test")));
+        let cli = Cli::try_parse_from(["mjolnr", "--data-dir", "/tmp/mjolnr-test"]).expect("parse");
+        assert_eq!(cli.data_dir, Some(PathBuf::from("/tmp/mjolnr-test")));
     }
 
     #[test]
@@ -344,8 +344,8 @@ mod tests {
         // original test wrote it last and passed while `mjolnr --data-dir /tmp
         // diagnostics` was broken.
         for arguments in [
-            ["smed", "diagnostics", "--data-dir", "/tmp/x"],
-            ["smed", "--data-dir", "/tmp/x", "diagnostics"],
+            ["mjolnr", "diagnostics", "--data-dir", "/tmp/x"],
+            ["mjolnr", "--data-dir", "/tmp/x", "diagnostics"],
         ] {
             let cli = Cli::try_parse_from(arguments).expect("parse");
             assert_eq!(
@@ -360,8 +360,8 @@ mod tests {
     #[test]
     fn the_data_directory_reaches_every_subcommand() {
         for arguments in [
-            vec!["smed", "--data-dir", "/tmp/x", "sessions", "list"],
-            vec!["smed", "--data-dir", "/tmp/x", "auth", "status"],
+            vec!["mjolnr", "--data-dir", "/tmp/x", "sessions", "list"],
+            vec!["mjolnr", "--data-dir", "/tmp/x", "auth", "status"],
         ] {
             let cli = Cli::try_parse_from(&arguments).expect("parse");
             assert_eq!(cli.data_dir, Some(PathBuf::from("/tmp/x")), "{arguments:?}");
@@ -370,14 +370,14 @@ mod tests {
 
     #[test]
     fn resume_takes_a_session_id() {
-        let cli = Cli::try_parse_from(["smed", "--resume", "abc"]).expect("parse");
+        let cli = Cli::try_parse_from(["mjolnr", "--resume", "abc"]).expect("parse");
         assert_eq!(cli.resume.as_deref(), Some("abc"));
     }
 
     #[test]
     fn compact_resume_can_name_a_new_provider_and_model() {
         let cli = Cli::try_parse_from([
-            "smed",
+            "mjolnr",
             "--resume",
             "abc",
             "--compact",
@@ -391,17 +391,17 @@ mod tests {
         assert_eq!(cli.provider.as_deref(), Some("fake"));
         assert!(cli.conflict().is_none());
 
-        let cli = Cli::try_parse_from(["smed", "--compact"]).expect("parse");
+        let cli = Cli::try_parse_from(["mjolnr", "--compact"]).expect("parse");
         assert!(cli.conflict().is_some());
     }
 
     #[test]
     fn full_auto_is_explicit_and_cannot_be_combined_with_resume() {
-        let cli = Cli::try_parse_from(["smed", "--full-auto"]).expect("parse");
+        let cli = Cli::try_parse_from(["mjolnr", "--full-auto"]).expect("parse");
         assert!(cli.full_auto);
         assert!(cli.conflict().is_none());
 
-        let cli = Cli::try_parse_from(["smed", "--resume", "abc", "--full-auto"]).expect("parse");
+        let cli = Cli::try_parse_from(["mjolnr", "--resume", "abc", "--full-auto"]).expect("parse");
         assert!(cli.conflict().is_some());
     }
 
@@ -409,13 +409,13 @@ mod tests {
     fn integrity_is_opt_in() {
         //  forbids running integrity_check on every launch, so it must not
         // be the default for the command either.
-        let cli = Cli::try_parse_from(["smed", "diagnostics"]).expect("parse");
+        let cli = Cli::try_parse_from(["mjolnr", "diagnostics"]).expect("parse");
         assert!(matches!(
             cli.command,
             Some(Command::Diagnostics { integrity: false })
         ));
 
-        let cli = Cli::try_parse_from(["smed", "diagnostics", "--integrity"]).expect("parse");
+        let cli = Cli::try_parse_from(["mjolnr", "diagnostics", "--integrity"]).expect("parse");
         assert!(matches!(
             cli.command,
             Some(Command::Diagnostics { integrity: true })
@@ -425,36 +425,36 @@ mod tests {
     #[test]
     fn sessions_can_be_listed_and_released() {
         assert!(matches!(
-            Cli::try_parse_from(["smed", "sessions", "list"]).map(|cli| cli.command),
+            Cli::try_parse_from(["mjolnr", "sessions", "list"]).map(|cli| cli.command),
             Ok(Some(Command::Sessions(sessions::SessionsCommand::List)))
         ));
-        assert!(Cli::try_parse_from(["smed", "sessions", "release", "abc"]).is_ok());
+        assert!(Cli::try_parse_from(["mjolnr", "sessions", "release", "abc"]).is_ok());
         // Release without a target would be ambiguous about which lease to break.
-        assert!(Cli::try_parse_from(["smed", "sessions", "release"]).is_err());
+        assert!(Cli::try_parse_from(["mjolnr", "sessions", "release"]).is_err());
     }
 
     #[test]
     fn resume_and_a_subcommand_are_reported_as_a_conflict() {
         // One opens a terminal, the other prints and exits. Doing one silently is
         // worse than refusing both.
-        let cli = Cli::try_parse_from(["smed", "--resume", "abc", "diagnostics"]).expect("parse");
+        let cli = Cli::try_parse_from(["mjolnr", "--resume", "abc", "diagnostics"]).expect("parse");
         assert!(cli.conflict().is_some());
 
         // Each alone is fine, and so is neither.
         assert!(
-            Cli::try_parse_from(["smed", "diagnostics"])
+            Cli::try_parse_from(["mjolnr", "diagnostics"])
                 .expect("parse")
                 .conflict()
                 .is_none()
         );
         assert!(
-            Cli::try_parse_from(["smed", "--resume", "abc"])
+            Cli::try_parse_from(["mjolnr", "--resume", "abc"])
                 .expect("parse")
                 .conflict()
                 .is_none()
         );
         assert!(
-            Cli::try_parse_from(["smed"])
+            Cli::try_parse_from(["mjolnr"])
                 .expect("parse")
                 .conflict()
                 .is_none()

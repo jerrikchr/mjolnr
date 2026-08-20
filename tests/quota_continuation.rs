@@ -12,21 +12,21 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use async_trait::async_trait;
-use smed::core::command::SmedCommand;
-use smed::core::continuation::{QuotaReserveBasis, ResumeChoice, ResumeWarning};
-use smed::core::error::{ProviderError, ReasonCode};
-use smed::core::event::{FinishReason, ProviderEvent, SmedEvent};
-use smed::core::model::{
+use mjolnr::core::command::MjolnrCommand;
+use mjolnr::core::continuation::{QuotaReserveBasis, ResumeChoice, ResumeWarning};
+use mjolnr::core::error::{ProviderError, ReasonCode};
+use mjolnr::core::event::{FinishReason, MjolnrEvent, ProviderEvent};
+use mjolnr::core::model::{
     ModelCapabilities, ModelDescriptor, ModelId, ProviderId, QuotaSnapshot, QuotaWindow, Usage,
 };
-use smed::core::policy::PolicyMode;
-use smed::core::provider::{Provider, ProviderCompletion, ProviderRequest};
-use smed::core::runtime::SmedRuntime;
-use smed::core::store::EventStore;
-use smed::runtime::Runtime;
-use smed::runtime::budget::BudgetLimits;
-use smed::store::memory::InMemoryEventStore;
-use smed::tools::ToolRegistry;
+use mjolnr::core::policy::PolicyMode;
+use mjolnr::core::provider::{Provider, ProviderCompletion, ProviderRequest};
+use mjolnr::core::runtime::MjolnrRuntime;
+use mjolnr::core::store::EventStore;
+use mjolnr::runtime::Runtime;
+use mjolnr::runtime::budget::BudgetLimits;
+use mjolnr::store::memory::InMemoryEventStore;
+use mjolnr::tools::ToolRegistry;
 use time::OffsetDateTime;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
@@ -152,13 +152,13 @@ impl Provider for ScriptedProvider {
 
 async fn open(runtime: &Runtime, provider: &str, model: &str) {
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: std::env::current_dir().expect("cwd"),
         })
         .await
         .expect("open project");
     runtime
-        .dispatch(SmedCommand::CreateSession {
+        .dispatch(MjolnrCommand::CreateSession {
             provider: ProviderId::new(provider),
             model: ModelId::new(model),
         })
@@ -166,25 +166,25 @@ async fn open(runtime: &Runtime, provider: &str, model: &str) {
         .expect("create session");
 }
 
-async fn send_and_wait(runtime: &Runtime, text: &str) -> SmedEvent {
+async fn send_and_wait(runtime: &Runtime, text: &str) -> MjolnrEvent {
     let mut events = runtime.subscribe();
     runtime
-        .dispatch(SmedCommand::SendUserMessage {
+        .dispatch(MjolnrCommand::SendUserMessage {
             text: text.to_owned(),
-            source: smed::core::directive::DirectiveSource::Human,
+            source: mjolnr::core::directive::DirectiveSource::Human,
         })
         .await
         .expect("send");
     terminal(&mut events).await
 }
 
-async fn terminal(events: &mut smed::core::runtime::RuntimeSubscription) -> SmedEvent {
+async fn terminal(events: &mut mjolnr::core::runtime::RuntimeSubscription) -> MjolnrEvent {
     tokio::time::timeout(Duration::from_secs(5), async {
         loop {
             let event = events.recv().await.expect("event");
             if matches!(
                 event,
-                SmedEvent::RunFinished { .. } | SmedEvent::RunFailed { .. }
+                MjolnrEvent::RunFinished { .. } | MjolnrEvent::RunFailed { .. }
             ) {
                 return event;
             }
@@ -218,7 +218,7 @@ async fn reported_soft_threshold_drains_once_and_persists_a_handoff() {
 
     assert!(matches!(
         terminal,
-        SmedEvent::RunFinished {
+        MjolnrEvent::RunFinished {
             reason: FinishReason::QuotaDrained,
             ..
         }
@@ -233,12 +233,12 @@ async fn reported_soft_threshold_drains_once_and_persists_a_handoff() {
     assert!(
         history
             .iter()
-            .any(|stored| matches!(stored.event, SmedEvent::QuotaBoundaryReached { .. }))
+            .any(|stored| matches!(stored.event, MjolnrEvent::QuotaBoundaryReached { .. }))
     );
     assert!(
         history
             .iter()
-            .any(|stored| matches!(stored.event, SmedEvent::HandoffCreated { .. }))
+            .any(|stored| matches!(stored.event, MjolnrEvent::HandoffCreated { .. }))
     );
     assert!(runtime.snapshot().handoff.is_some());
     let quota = runtime
@@ -274,7 +274,7 @@ async fn hard_threshold_stops_before_another_provider_turn() {
     let terminal = send_and_wait(&runtime, "work").await;
     assert!(matches!(
         terminal,
-        SmedEvent::RunFailed {
+        MjolnrEvent::RunFailed {
             code: ReasonCode::ProviderPlanQuota,
             ..
         }
@@ -304,17 +304,17 @@ async fn compact_cross_model_resume_sends_bounded_context_but_keeps_full_history
     for index in 0..8 {
         let terminal =
             send_and_wait(&runtime, &format!("prior turn {index} with durable detail")).await;
-        assert!(matches!(terminal, SmedEvent::RunFinished { .. }));
+        assert!(matches!(terminal, MjolnrEvent::RunFinished { .. }));
     }
     let mut events = runtime.subscribe();
     runtime
-        .dispatch(SmedCommand::CreateHandoff { target: None })
+        .dispatch(MjolnrCommand::CreateHandoff { target: None })
         .await
         .expect("handoff");
     let terminal = terminal(&mut events).await;
     assert!(matches!(
         terminal,
-        SmedEvent::RunFinished {
+        MjolnrEvent::RunFinished {
             reason: FinishReason::Handoff,
             ..
         }
@@ -336,7 +336,7 @@ async fn compact_cross_model_resume_sends_bounded_context_but_keeps_full_history
         store.clone() as Arc<dyn EventStore>,
     );
     resumed
-        .dispatch(SmedCommand::ResumeCompact {
+        .dispatch(MjolnrCommand::ResumeCompact {
             session,
             provider: Some(ProviderId::new("second")),
             model: Some(ModelId::new("m2")),
@@ -344,7 +344,7 @@ async fn compact_cross_model_resume_sends_bounded_context_but_keeps_full_history
         .await
         .expect("compact resume");
     let terminal = send_and_wait(&resumed, "continue on the second model").await;
-    assert!(matches!(terminal, SmedEvent::RunFinished { .. }));
+    assert!(matches!(terminal, MjolnrEvent::RunFinished { .. }));
     let requests = second.requests();
     assert_eq!(requests.len(), 1);
     assert!(
@@ -354,7 +354,7 @@ async fn compact_cross_model_resume_sends_bounded_context_but_keeps_full_history
     assert!(
         requests[0].messages[0]
             .text()
-            .contains("SMED COMPACT RESUME")
+            .contains("MJOLNR COMPACT RESUME")
     );
     assert!(
         resumed.snapshot().messages.len() > full_before,
@@ -395,21 +395,21 @@ async fn configured_budget_is_labelled_and_resume_advisor_makes_zero_requests() 
     open(&runtime, "configured", "c1").await;
     assert!(matches!(
         send_and_wait(&runtime, "first").await,
-        SmedEvent::RunFinished { .. }
+        MjolnrEvent::RunFinished { .. }
     ));
     let mut handoff_events = runtime.subscribe();
     runtime
-        .dispatch(SmedCommand::CreateHandoff { target: None })
+        .dispatch(MjolnrCommand::CreateHandoff { target: None })
         .await
         .expect("handoff");
     assert!(matches!(
         terminal(&mut handoff_events).await,
-        SmedEvent::RunFinished { .. }
+        MjolnrEvent::RunFinished { .. }
     ));
     let terminal_event = send_and_wait(&runtime, "second").await;
     assert!(matches!(
         terminal_event,
-        SmedEvent::RunFinished {
+        MjolnrEvent::RunFinished {
             reason: FinishReason::QuotaDrained,
             ..
         }
@@ -428,7 +428,7 @@ async fn configured_budget_is_labelled_and_resume_advisor_makes_zero_requests() 
     );
     let mut snapshots = resumed.snapshots();
     resumed
-        .dispatch(SmedCommand::ResumeSession { session })
+        .dispatch(MjolnrCommand::ResumeSession { session })
         .await
         .expect("resume");
     let advised = tokio::time::timeout(Duration::from_secs(5), async {
@@ -448,7 +448,7 @@ async fn configured_budget_is_labelled_and_resume_advisor_makes_zero_requests() 
     assert_eq!(hard.request_count(), 0);
 
     resumed
-        .dispatch(SmedCommand::ResolveResume {
+        .dispatch(MjolnrCommand::ResolveResume {
             choice: ResumeChoice::Full,
         })
         .await
@@ -471,7 +471,7 @@ async fn a_fresh_recent_session_bypasses_the_resume_advisor() {
     open(&runtime, "fresh", "f1").await;
     assert!(matches!(
         send_and_wait(&runtime, "recent work").await,
-        SmedEvent::RunFinished { .. }
+        MjolnrEvent::RunFinished { .. }
     ));
     let session = runtime.snapshot().session.expect("session");
     runtime.close().await.expect("close");
@@ -483,7 +483,7 @@ async fn a_fresh_recent_session_bypasses_the_resume_advisor() {
     );
     let mut snapshots = resumed.snapshots();
     resumed
-        .dispatch(SmedCommand::ResumeSession { session })
+        .dispatch(MjolnrCommand::ResumeSession { session })
         .await
         .expect("resume");
     let snapshot = tokio::time::timeout(Duration::from_secs(5), snapshots.changed())
@@ -496,7 +496,7 @@ async fn a_fresh_recent_session_bypasses_the_resume_advisor() {
 
 async fn seed_quota_stopped_session(
     store: &Arc<InMemoryEventStore>,
-) -> smed::core::event::SessionId {
+) -> mjolnr::core::event::SessionId {
     let provider = Arc::new(ScriptedProvider::new(
         "advised",
         "a1",
@@ -516,19 +516,19 @@ async fn seed_quota_stopped_session(
     open(&runtime, "advised", "a1").await;
     let mut events = runtime.subscribe();
     runtime
-        .dispatch(SmedCommand::CreateHandoff { target: None })
+        .dispatch(MjolnrCommand::CreateHandoff { target: None })
         .await
         .expect("handoff");
     assert!(matches!(
         terminal(&mut events).await,
-        SmedEvent::RunFinished {
+        MjolnrEvent::RunFinished {
             reason: FinishReason::Handoff,
             ..
         }
     ));
     assert!(matches!(
         send_and_wait(&runtime, "continue").await,
-        SmedEvent::RunFailed {
+        MjolnrEvent::RunFailed {
             code: ReasonCode::ProviderPlanQuota,
             ..
         }
@@ -554,7 +554,7 @@ async fn quota_stopped_resume_is_advised_before_any_request_and_compact_is_expli
     );
     let mut snapshots = resumed.snapshots();
     resumed
-        .dispatch(SmedCommand::ResumeSession { session })
+        .dispatch(MjolnrCommand::ResumeSession { session })
         .await
         .expect("resume");
     let advised = tokio::time::timeout(Duration::from_secs(5), async {
@@ -581,7 +581,7 @@ async fn quota_stopped_resume_is_advised_before_any_request_and_compact_is_expli
 
     let mut snapshots = resumed.snapshots();
     resumed
-        .dispatch(SmedCommand::ResolveResume {
+        .dispatch(MjolnrCommand::ResolveResume {
             choice: ResumeChoice::Compact,
         })
         .await
@@ -603,13 +603,13 @@ async fn quota_stopped_resume_is_advised_before_any_request_and_compact_is_expli
     .expect("compact choice snapshot");
     assert!(matches!(
         send_and_wait(&resumed, "continue compactly").await,
-        SmedEvent::RunFinished { .. }
+        MjolnrEvent::RunFinished { .. }
     ));
     assert_eq!(resumed_provider.request_count(), 1);
     assert!(
         resumed_provider.requests()[0].messages[0]
             .text()
-            .contains("SMED COMPACT RESUME")
+            .contains("MJOLNR COMPACT RESUME")
     );
 }
 
@@ -639,7 +639,7 @@ async fn live_handoff_swaps_to_target_at_landing_records_model_changed_and_bound
     for index in 0..6 {
         assert!(matches!(
             send_and_wait(&runtime, &format!("prior turn {index} with detail")).await,
-            SmedEvent::RunFinished { .. }
+            MjolnrEvent::RunFinished { .. }
         ));
     }
 
@@ -647,14 +647,14 @@ async fn live_handoff_swaps_to_target_at_landing_records_model_changed_and_bound
     // model; the swap is applied only when that run lands — never mid-turn.
     let mut events = runtime.subscribe();
     runtime
-        .dispatch(SmedCommand::CreateHandoff {
+        .dispatch(MjolnrCommand::CreateHandoff {
             target: Some("second/m2".to_owned()),
         })
         .await
         .expect("handoff");
     assert!(matches!(
         terminal(&mut events).await,
-        SmedEvent::RunFinished {
+        MjolnrEvent::RunFinished {
             reason: FinishReason::Handoff,
             ..
         }
@@ -682,7 +682,7 @@ async fn live_handoff_swaps_to_target_at_landing_records_model_changed_and_bound
     let history = store.events(session).await.expect("history");
     assert!(
         history.iter().any(|stored| matches!(&stored.event,
-            SmedEvent::ModelChanged { provider, model, .. }
+            MjolnrEvent::ModelChanged { provider, model, .. }
             if provider.as_str() == "second" && model.as_str() == "m2")),
         "a live handoff swap must persist a ModelChanged event"
     );
@@ -690,7 +690,7 @@ async fn live_handoff_swaps_to_target_at_landing_records_model_changed_and_bound
     // The target model's first turn sends the bounded, compacted context.
     assert!(matches!(
         send_and_wait(&runtime, "continue").await,
-        SmedEvent::RunFinished { .. }
+        MjolnrEvent::RunFinished { .. }
     ));
     let requests = second.requests();
     assert_eq!(requests.len(), 1);
@@ -702,7 +702,7 @@ async fn live_handoff_swaps_to_target_at_landing_records_model_changed_and_bound
         requests[0]
             .messages
             .iter()
-            .any(|message| message.text().contains("SMED COMPACT RESUME"))
+            .any(|message| message.text().contains("MJOLNR COMPACT RESUME"))
     );
 }
 
@@ -722,7 +722,7 @@ async fn live_handoff_to_same_model_resets_full_auto_and_shrinks_context() {
     );
     open(&runtime, "solo", "s1").await;
     runtime
-        .dispatch(SmedCommand::SetPolicy {
+        .dispatch(MjolnrCommand::SetPolicy {
             mode: PolicyMode::FullAuto,
         })
         .await
@@ -730,7 +730,7 @@ async fn live_handoff_to_same_model_resets_full_auto_and_shrinks_context() {
     for index in 0..5 {
         assert!(matches!(
             send_and_wait(&runtime, &format!("turn {index} with durable detail")).await,
-            SmedEvent::RunFinished { .. }
+            MjolnrEvent::RunFinished { .. }
         ));
         assert_eq!(
             runtime.snapshot().policy,
@@ -742,14 +742,14 @@ async fn live_handoff_to_same_model_resets_full_auto_and_shrinks_context() {
     // Handing to the current model is a deliberate window reset, not a no-op.
     let mut events = runtime.subscribe();
     runtime
-        .dispatch(SmedCommand::CreateHandoff {
+        .dispatch(MjolnrCommand::CreateHandoff {
             target: Some("s1".to_owned()),
         })
         .await
         .expect("handoff");
     assert!(matches!(
         terminal(&mut events).await,
-        SmedEvent::RunFinished {
+        MjolnrEvent::RunFinished {
             reason: FinishReason::Handoff,
             ..
         }
@@ -762,7 +762,7 @@ async fn live_handoff_to_same_model_resets_full_auto_and_shrinks_context() {
     // The next turn on the same model is shrunk to the checkpoint.
     assert!(matches!(
         send_and_wait(&runtime, "continue on the same model").await,
-        SmedEvent::RunFinished { .. }
+        MjolnrEvent::RunFinished { .. }
     ));
     let requests = provider.requests();
     assert!(

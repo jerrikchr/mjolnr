@@ -9,17 +9,17 @@
 
 use std::sync::Arc;
 
-use smed::core::error::{ProviderError, ReasonCode};
-use smed::core::event::{FinishReason, ProviderEvent};
-use smed::core::message::{CanonicalMessage, ContentBlock, ToolCall, ToolResult};
-use smed::core::model::{ModelId, ProviderId};
-use smed::core::provider::{Provider, ProviderRequest};
-use smed::core::secrets::{
+use mjolnr::core::error::{ProviderError, ReasonCode};
+use mjolnr::core::event::{FinishReason, ProviderEvent};
+use mjolnr::core::message::{CanonicalMessage, ContentBlock, ToolCall, ToolResult};
+use mjolnr::core::model::{ModelId, ProviderId};
+use mjolnr::core::provider::{Provider, ProviderRequest};
+use mjolnr::core::secrets::{
     Credential, CredentialKind, OAuthCredential, ResolvedCredential, Secret, SecretError,
     SecretSource, SecretStore,
 };
-use smed::core::tool::ToolDefinition;
-use smed::providers::anthropic::{AnthropicProvider, DEFAULT_MODEL};
+use mjolnr::core::tool::ToolDefinition;
+use mjolnr::providers::anthropic::{AnthropicProvider, DEFAULT_MODEL};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use wiremock::matchers::{header, method, path};
@@ -65,7 +65,7 @@ fn request() -> ProviderRequest {
         messages: vec![CanonicalMessage::user("hello")],
         system: Some("guard every effect".to_owned()),
         tools: Vec::new(),
-        images: smed::core::image::ImageSidecar::new(),
+        images: mjolnr::core::image::ImageSidecar::new(),
     }
 }
 
@@ -75,7 +75,7 @@ async fn run(
     request: ProviderRequest,
 ) -> (
     Vec<ProviderEvent>,
-    Result<smed::core::provider::ProviderCompletion, ProviderError>,
+    Result<mjolnr::core::provider::ProviderCompletion, ProviderError>,
 ) {
     let provider =
         AnthropicProvider::new(Arc::new(FakeSecrets(secret))).with_base_url(server.uri());
@@ -147,7 +147,7 @@ async fn headers_and_canonical_tool_history_use_the_messages_contract() {
                 "additionalProperties":false
             }),
         }],
-        images: smed::core::image::ImageSidecar::new(),
+        images: mjolnr::core::image::ImageSidecar::new(),
     };
 
     let (_, outcome) = run(&server, Some("sk-ant-test"), request).await;
@@ -331,8 +331,8 @@ async fn mid_stream_overload_is_classified_without_retrying() {
 
 #[tokio::test]
 async fn an_image_encodes_to_the_documented_base64_block() {
-    use smed::core::image::ImageBytes;
-    use smed::core::message::ContentBlock;
+    use mjolnr::core::image::ImageBytes;
+    use mjolnr::core::message::ContentBlock;
 
     // The shape confirmed against current documentation on 2026-07-25
     // (`docs/provider-contract.md` §5.5). Asserted on the body the adapter
@@ -353,7 +353,7 @@ async fn an_image_encodes_to_the_documented_base64_block() {
         media_type: "image/png".to_owned(),
         source: "shot.png".to_owned(),
     });
-    let mut images = smed::core::image::ImageSidecar::new();
+    let mut images = mjolnr::core::image::ImageSidecar::new();
     images.insert(
         "shot.png".to_owned(),
         ImageBytes {
@@ -383,7 +383,7 @@ async fn an_image_encodes_to_the_documented_base64_block() {
 
 #[tokio::test]
 async fn an_image_whose_bytes_are_absent_is_never_sent_as_an_empty_block() {
-    use smed::core::message::ContentBlock;
+    use mjolnr::core::message::ContentBlock;
 
     // An empty sidecar means the gate already projected this into a placeholder.
     // Encoding it anyway would tell the model a picture is attached when nothing
@@ -408,7 +408,7 @@ async fn an_image_whose_bytes_are_absent_is_never_sent_as_an_empty_block() {
         messages: vec![message],
         system: None,
         tools: Vec::new(),
-        images: smed::core::image::ImageSidecar::new(),
+        images: mjolnr::core::image::ImageSidecar::new(),
     };
 
     let (_, _outcome) = run(&server, Some("sk-ant-test"), request).await;

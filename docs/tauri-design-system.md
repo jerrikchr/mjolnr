@@ -1,4 +1,4 @@
-# smed Tauri design system
+# mjolnr Tauri design system
 
 Status: **Approved contract; implementation belongs to Phase A0**
 
@@ -11,13 +11,13 @@ document governs the desktop client's visual language, interaction primitives,
 accessibility, and component quality. It prevents the Orca-like workspace from
 becoming a collection of locally styled panels.
 
-The Ratatui and Tauri clients share smed's semantic vocabulary, not rendering
+The Ratatui and Tauri clients share mjolnr's semantic vocabulary, not rendering
 code. [`docs/tui-design.md`](./tui-design.md) remains authoritative for the
 terminal.
 
 ## Product character
 
-smed should feel calm, capable, direct, and trustworthy. Density is useful
+mjolnr should feel calm, capable, direct, and trustworthy. Density is useful
 when hierarchy remains obvious. Chrome recedes; work, attention, evidence, and
 human decisions lead.
 
@@ -27,7 +27,7 @@ CSS, exact components, text, or interaction implementations.
 
 ## Visual Identity & Emblem
 
-The primary visual emblem for the desktop client is a **single gate bar**. It symbolises the boundary that every effect must clear without implying that smed provides security beyond its explicit policy gate. The mark is deliberately readable at 16px, where anything more is noise.
+The primary visual emblem for the desktop client is a **single gate bar**. It symbolises the boundary that every effect must clear without implying that mjolnr provides security beyond its explicit policy gate. The mark is deliberately readable at 16px, where anything more is noise.
 
 ## Token layers
 
@@ -133,7 +133,7 @@ Adding a primitive requires:
 Prefer extending or deleting an existing primitive over introducing a near
 duplicate. No product surface may create a private status vocabulary. Bringing
 in shadcn-svelte source is an explicit addition: record provenance, review the
-generated dependencies and styles, delete unused variants, and add smed-owned
+generated dependencies and styles, delete unused variants, and add mjolnr-owned
 behavior tests.
 
 **`components.json`'s `baseColor: "zinc"` is generator metadata, not the live

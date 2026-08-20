@@ -198,7 +198,7 @@ mod tests {
         let contents = std::fs::read_to_string(&soul).expect("a Soul was written");
         assert!(contents.contains("# Soul"));
         assert!(
-            contents.contains("Delete it and smed runs without a Soul"),
+            contents.contains("Delete it and mjolnr runs without a Soul"),
             "the file must tell its owner it is optional"
         );
     }
@@ -206,9 +206,9 @@ mod tests {
     #[test]
     fn an_existing_soul_is_never_overwritten() {
         let temp = tempfile::tempdir().expect("tempdir");
-        let smed = temp.path().join(".mjolnr");
-        std::fs::create_dir_all(&smed).expect("dir");
-        std::fs::write(smed.join("SOUL.md"), "mine, hand-written\n").expect("existing soul");
+        let mjolnr = temp.path().join(".mjolnr");
+        std::fs::create_dir_all(&mjolnr).expect("dir");
+        std::fs::write(mjolnr.join("SOUL.md"), "mine, hand-written\n").expect("existing soul");
 
         let _ = run(
             &[seed("openai", "gpt-5.4")],
@@ -218,7 +218,7 @@ mod tests {
 
         // The Soul is the file most likely to hold work nobody can regenerate.
         assert_eq!(
-            std::fs::read_to_string(smed.join("SOUL.md")).expect("read"),
+            std::fs::read_to_string(mjolnr.join("SOUL.md")).expect("read"),
             "mine, hand-written\n"
         );
     }
@@ -285,9 +285,9 @@ mod tests {
         let temp = tempfile::tempdir().expect("tempdir");
         let files = scaffold::generate(&[seed("openai", "gpt-5.4")]);
         // Pre-create just the routing.yaml; the route file is still missing.
-        let smed = temp.path().join(".mjolnr");
-        std::fs::create_dir_all(&smed).expect("mkdir");
-        std::fs::write(smed.join("routing.yaml"), "task_classes: {}\n").expect("write");
+        let mjolnr = temp.path().join(".mjolnr");
+        std::fs::create_dir_all(&mjolnr).expect("mkdir");
+        std::fs::write(mjolnr.join("routing.yaml"), "task_classes: {}\n").expect("write");
 
         let plan = plan_writes(&files, temp.path());
         assert_eq!(plan.existing, vec![PathBuf::from(".mjolnr/routing.yaml")]);

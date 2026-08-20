@@ -1,4 +1,4 @@
-//! smed-owned `ChatGPT` OAuth lifecycle.
+//! mjolnr-owned `ChatGPT` OAuth lifecycle.
 //!
 //! Refresh tokens rotate and are single-use. The mutex is therefore not a
 //! performance optimisation: it is the ownership boundary that prevents two
@@ -143,7 +143,7 @@ struct TokenResponse {
     expires_in: Option<i64>,
 }
 
-/// Complete the official Codex device-code flow and persist smed's own copy.
+/// Complete the official Codex device-code flow and persist mjolnr's own copy.
 pub async fn device_login<F>(secrets: Arc<dyn SecretStore>, announce: F) -> Result<i64, OAuthError>
 where
     F: FnOnce(DevicePrompt),

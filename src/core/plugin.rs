@@ -1,7 +1,7 @@
 //! The plugin declaration and manifest contract (ADR-0016, Master Implementation Plan §3.1).
 //!
 //! A plugin is third-party code running as a local subprocess speaking JSON-RPC 2.0
-//! over stdio. This module defines the fail-closed manifest (`smed-plugin.yaml`)
+//! over stdio. This module defines the fail-closed manifest (`mjolnr-plugin.yaml`)
 //! format, declared hooks, tool schemas, and data-only view descriptors.
 //!
 //! # Governed Security Properties (ADR-0016 §3, §4, §5)
@@ -18,7 +18,7 @@ use std::collections::BTreeSet;
 
 use serde::{Deserialize, Serialize};
 
-/// The active JSON-RPC stdio plugin protocol version supported by smed.
+/// The active JSON-RPC stdio plugin protocol version supported by mjolnr.
 pub const PLUGIN_PROTOCOL_VERSION: u32 = 1;
 
 /// Maximum number of tools a single plugin may declare.
@@ -82,7 +82,7 @@ pub struct PluginViewDeclaration {
     pub view_type: String,
 }
 
-/// The declarative manifest of a plugin (`smed-plugin.yaml`).
+/// The declarative manifest of a plugin (`mjolnr-plugin.yaml`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PluginManifest {

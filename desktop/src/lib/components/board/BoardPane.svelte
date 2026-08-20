@@ -7,8 +7,8 @@
 
   function provenanceLabel(node: ClientBoardNode): string {
     switch (node.provenance) {
-      case 'smedGoverned':
-        return 'smed-governed';
+      case 'mjolnrGoverned':
+        return 'mjolnr-governed';
       case 'operatorControlled':
         return 'Operator';
       case 'externalUnverified':
@@ -312,7 +312,7 @@
               <h3 class="min-w-0 flex-1 truncate text-sm font-medium">Submit PR for {selectedTask.remoteId}</h3>
               <button type="button" class="text-xs text-muted-foreground underline-offset-2 hover:underline" onclick={() => (selectedTask = null)}>Cancel</button>
             </div>
-            <p class="mb-3 text-xs text-muted-foreground">Pinned to remote revision <span class="font-mono">{selectedTask.fetchedRevision}</span>. smed will recheck it before posting.</p>
+            <p class="mb-3 text-xs text-muted-foreground">Pinned to remote revision <span class="font-mono">{selectedTask.fetchedRevision}</span>. mjolnr will recheck it before posting.</p>
             <div class="flex flex-col gap-2">
               <input class="rounded-md border bg-background px-2 py-1.5 text-xs" aria-label="Pull request title" bind:value={prTitle} maxlength="512" />
               <input class="rounded-md border bg-background px-2 py-1.5 text-xs" aria-label="Base branch" bind:value={prBaseBranch} maxlength="200" />

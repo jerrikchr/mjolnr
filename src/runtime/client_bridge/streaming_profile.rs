@@ -21,8 +21,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crate::core::client::{ClientEvent, ClientUpdate};
-use crate::core::event::{RunId, SessionId, SmedEvent};
-use crate::core::runtime::{RuntimeSnapshot, RuntimeSubscription, SmedRuntime, SnapshotStream};
+use crate::core::event::{MjolnrEvent, RunId, SessionId};
+use crate::core::runtime::{MjolnrRuntime, RuntimeSnapshot, RuntimeSubscription, SnapshotStream};
 use crate::runtime::client_bridge::ClientBridge;
 
 const DELTAS: usize = 2_000;
@@ -31,7 +31,7 @@ const CONSUMER_LAG_BUDGET: Duration = Duration::from_secs(10);
 #[derive(Debug, Clone)]
 struct HarnessRuntime {
     snapshot: Arc<tokio::sync::watch::Sender<RuntimeSnapshot>>,
-    events: tokio::sync::broadcast::Sender<SmedEvent>,
+    events: tokio::sync::broadcast::Sender<MjolnrEvent>,
 }
 
 impl HarnessRuntime {
@@ -46,7 +46,7 @@ impl HarnessRuntime {
 }
 
 #[async_trait::async_trait]
-impl SmedRuntime for HarnessRuntime {
+impl MjolnrRuntime for HarnessRuntime {
     fn snapshot(&self) -> RuntimeSnapshot {
         self.snapshot.borrow().clone()
     }
@@ -58,16 +58,16 @@ impl SmedRuntime for HarnessRuntime {
     }
     async fn dispatch(
         &self,
-        _command: crate::core::command::SmedCommand,
-    ) -> Result<(), crate::core::error::SmedError> {
+        _command: crate::core::command::MjolnrCommand,
+    ) -> Result<(), crate::core::error::MjolnrError> {
         Ok(())
     }
     async fn read_workspace_files(
         &self,
         _request: crate::core::workspace_files::WorkspaceFileRequest,
-    ) -> Result<crate::core::workspace_files::WorkspaceFileAnswer, crate::core::error::SmedError>
+    ) -> Result<crate::core::workspace_files::WorkspaceFileAnswer, crate::core::error::MjolnrError>
     {
-        Err(crate::core::error::SmedError::workspace_refused(
+        Err(crate::core::error::MjolnrError::workspace_refused(
             crate::core::error::ReasonCode::WorkspaceCapabilityUnavailable,
             "this harness runtime opens no project, so there is nothing to read files from",
         ))
@@ -76,16 +76,16 @@ impl SmedRuntime for HarnessRuntime {
     async fn search_workspace(
         &self,
         _filter: crate::core::store::WorkspaceSearchFilter,
-    ) -> Result<crate::core::store::WorkspaceSearchPage, crate::core::error::SmedError> {
-        Err(crate::core::error::SmedError::workspace_refused(
+    ) -> Result<crate::core::store::WorkspaceSearchPage, crate::core::error::MjolnrError> {
+        Err(crate::core::error::MjolnrError::workspace_refused(
             crate::core::error::ReasonCode::WorkspaceCapabilityUnavailable,
             "workspace search is not yet implemented (contract landed in D4)",
         ))
     }
     async fn query_board(
         &self,
-    ) -> Result<crate::core::frontier::BoardOverview, crate::core::error::SmedError> {
-        Err(crate::core::error::SmedError::workspace_refused(
+    ) -> Result<crate::core::frontier::BoardOverview, crate::core::error::MjolnrError> {
+        Err(crate::core::error::MjolnrError::workspace_refused(
             crate::core::error::ReasonCode::WorkspaceCapabilityUnavailable,
             "this harness runtime opens no project, so there is no board to answer from",
         ))
@@ -93,13 +93,13 @@ impl SmedRuntime for HarnessRuntime {
     async fn query_repository_history(
         &self,
         _limit: u32,
-    ) -> Result<crate::core::repository::RepositoryHistory, crate::core::error::SmedError> {
-        Err(crate::core::error::SmedError::workspace_refused(
+    ) -> Result<crate::core::repository::RepositoryHistory, crate::core::error::MjolnrError> {
+        Err(crate::core::error::MjolnrError::workspace_refused(
             crate::core::error::ReasonCode::WorkspaceCapabilityUnavailable,
             "this harness runtime opens no project, so there is no repository history to answer from",
         ))
     }
-    async fn close(&self) -> Result<(), crate::core::error::SmedError> {
+    async fn close(&self) -> Result<(), crate::core::error::MjolnrError> {
         Ok(())
     }
 }
@@ -124,7 +124,7 @@ async fn streaming_update_profile_throughput_and_coalescing() {
     // buffer headroom.
     let producer_start = Instant::now();
     for index in 0..DELTAS {
-        let delta = SmedEvent::TextDelta {
+        let delta = MjolnrEvent::TextDelta {
             session: SessionId::new(),
             run: RunId::new(),
             text: format!("tok{index}"),

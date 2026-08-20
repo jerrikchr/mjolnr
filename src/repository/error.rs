@@ -10,7 +10,7 @@ use crate::core::error::ReasonCode;
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum RepositoryError {
-    /// The root smed was handed cannot be a repository root at all. Checked in
+    /// The root mjolnr was handed cannot be a repository root at all. Checked in
     /// the constructor so a bad path fails before any process starts.
     #[error("{path} cannot be a repository root: {detail}")]
     InvalidRoot { path: String, detail: String },
@@ -18,7 +18,7 @@ pub enum RepositoryError {
     #[error("{path} is not inside a git repository")]
     NotARepository { path: String },
 
-    /// `git` could not be run, or ran and failed for a reason smed does not
+    /// `git` could not be run, or ran and failed for a reason mjolnr does not
     /// classify further. The stderr text is carried verbatim rather than
     /// summarised, because a guess about a failure is worse than the raw fact.
     #[error("git {operation} failed: {detail}")]
@@ -55,7 +55,7 @@ pub enum RepositoryError {
     NoUpstream { branch: String },
 
     /// The current branch is behind its remote-tracking ref. A push now would
-    /// be rejected as non-fast-forward, so smed refuses before the network
+    /// be rejected as non-fast-forward, so mjolnr refuses before the network
     /// call and tells the human to fetch or integrate first. Fail-closed
     /// (AGENTS.md §1.2) and the precondition the `behind > 0` check enforces.
     #[error(
@@ -71,11 +71,11 @@ pub enum RepositoryError {
     #[error("the commit could not be signed: {detail}")]
     SigningFailed { detail: String },
 
-    /// smed cannot prove whether the effect happened. Distinct from every
+    /// mjolnr cannot prove whether the effect happened. Distinct from every
     /// failure above because it is neither success nor clean failure: it needs
     /// a human decision and must never be retried automatically
     /// (AGENTS.md §1.4).
-    #[error("smed cannot prove whether git {operation} took effect: {detail}")]
+    #[error("mjolnr cannot prove whether git {operation} took effect: {detail}")]
     UncertainEffect {
         operation: &'static str,
         detail: String,
@@ -89,7 +89,7 @@ pub enum RepositoryError {
     #[error("nothing is staged, so there is no commit to make")]
     NothingStaged,
 
-    #[error("git {operation} returned more output than smed can retain")]
+    #[error("git {operation} returned more output than mjolnr can retain")]
     OutputTruncated { operation: &'static str },
 }
 

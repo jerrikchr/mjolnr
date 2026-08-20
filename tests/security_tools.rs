@@ -6,12 +6,12 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
+use mjolnr::core::error::ReasonCode;
+use mjolnr::core::message::ToolOutcome;
+use mjolnr::core::tool::{ReadSet, ToolContext};
+use mjolnr::policy::paths;
+use mjolnr::tools::ToolRegistry;
 use proptest::prelude::*;
-use smed::core::error::ReasonCode;
-use smed::core::message::ToolOutcome;
-use smed::core::tool::{ReadSet, ToolContext};
-use smed::policy::paths;
-use smed::tools::ToolRegistry;
 use tempfile::TempDir;
 use tokio_util::sync::CancellationToken;
 
@@ -24,7 +24,7 @@ fn context(root: &Path) -> ToolContext {
     }
 }
 
-fn assert_refused(result: &smed::core::message::ToolResult, expected: ReasonCode) {
+fn assert_refused(result: &mjolnr::core::message::ToolResult, expected: ReasonCode) {
     assert_eq!(
         result.outcome,
         ToolOutcome::Refused(expected),

@@ -28,12 +28,12 @@
 
 use std::sync::Arc;
 
-use smed::core::event::{SessionId, SmedEvent};
-use smed::core::message::CanonicalMessage;
-use smed::core::model::{ModelId, ProviderId};
-use smed::core::store::{EventStore, ProjectId, StoreError, WorkspaceSearchFilter};
-use smed::store::memory::InMemoryEventStore;
-use smed::store::sqlite::SqliteEventStore;
+use mjolnr::core::event::{MjolnrEvent, SessionId};
+use mjolnr::core::message::CanonicalMessage;
+use mjolnr::core::model::{ModelId, ProviderId};
+use mjolnr::core::store::{EventStore, ProjectId, StoreError, WorkspaceSearchFilter};
+use mjolnr::store::memory::InMemoryEventStore;
+use mjolnr::store::sqlite::SqliteEventStore;
 
 fn sample_filter() -> WorkspaceSearchFilter {
     query_filter("System")
@@ -67,7 +67,7 @@ async fn store_with_messages(
     directory: &std::path::Path,
     texts: &[&str],
 ) -> (SqliteEventStore, ProjectId, SessionId) {
-    let store = SqliteEventStore::open(&directory.join("smed.db"))
+    let store = SqliteEventStore::open(&directory.join("mjolnr.db"))
         .await
         .unwrap();
     let project = store.open_project(directory.to_path_buf()).await.unwrap();
@@ -77,7 +77,7 @@ async fn store_with_messages(
         .await
         .unwrap();
     store
-        .append(SmedEvent::SessionCreated {
+        .append(MjolnrEvent::SessionCreated {
             session,
             provider: ProviderId::new("fake"),
             model: ModelId::new("fake-1"),
@@ -86,7 +86,7 @@ async fn store_with_messages(
         .unwrap();
     for text in texts {
         store
-            .append(SmedEvent::MessageAppended {
+            .append(MjolnrEvent::MessageAppended {
                 session,
                 message: Box::new(CanonicalMessage::system(*text)),
             })
@@ -123,7 +123,7 @@ async fn a_store_without_an_index_refuses_rather_than_returning_an_empty_page() 
 #[tokio::test]
 async fn an_indexed_store_answers_rather_than_refusing() {
     let temp_dir = tempfile::tempdir().unwrap();
-    let sqlite = SqliteEventStore::open(&temp_dir.path().join("smed.db"))
+    let sqlite = SqliteEventStore::open(&temp_dir.path().join("mjolnr.db"))
         .await
         .unwrap();
     let page = sqlite
@@ -139,7 +139,7 @@ async fn an_indexed_store_answers_rather_than_refusing() {
 #[tokio::test]
 async fn a_query_too_short_for_the_trigram_index_refuses() {
     let temp_dir = tempfile::tempdir().unwrap();
-    let sqlite = SqliteEventStore::open(&temp_dir.path().join("smed.db"))
+    let sqlite = SqliteEventStore::open(&temp_dir.path().join("mjolnr.db"))
         .await
         .unwrap();
     let error = sqlite
@@ -161,7 +161,7 @@ async fn a_query_too_short_for_the_trigram_index_refuses() {
 #[tokio::test]
 async fn the_index_declares_only_the_columns_the_producer_writes() {
     let temp_dir = tempfile::tempdir().unwrap();
-    let db_path = temp_dir.path().join("smed.db");
+    let db_path = temp_dir.path().join("mjolnr.db");
     let store = SqliteEventStore::open(&db_path).await.unwrap();
     drop(store); // flush schema before opening a raw connection
 
@@ -257,7 +257,7 @@ async fn a_rebuild_reproduces_the_same_documents_in_the_same_order() {
         .await
         .expect("search answers");
 
-    let ids = |page: &smed::core::store::WorkspaceSearchPage| {
+    let ids = |page: &mjolnr::core::store::WorkspaceSearchPage| {
         page.items
             .iter()
             .map(|item| item.event_id.to_string())
@@ -278,7 +278,7 @@ async fn a_rebuild_reproduces_the_same_documents_in_the_same_order() {
 #[tokio::test]
 async fn a_project_scoped_query_cannot_reach_another_project() {
     let temp_dir = tempfile::tempdir().unwrap();
-    let store = SqliteEventStore::open(&temp_dir.path().join("smed.db"))
+    let store = SqliteEventStore::open(&temp_dir.path().join("mjolnr.db"))
         .await
         .unwrap();
 
@@ -293,7 +293,7 @@ async fn a_project_scoped_query_cannot_reach_another_project() {
             .await
             .unwrap();
         store
-            .append(SmedEvent::MessageAppended {
+            .append(MjolnrEvent::MessageAppended {
                 session,
                 message: Box::new(CanonicalMessage::system(format!(
                     "wombat secret for project {name}"
@@ -415,7 +415,7 @@ async fn a_cursor_from_another_filter_is_refused() {
 #[tokio::test]
 async fn find_session_by_dir_reports_not_found_honestly() {
     let temp_dir = tempfile::tempdir().unwrap();
-    let store = SqliteEventStore::open(&temp_dir.path().join("smed.db"))
+    let store = SqliteEventStore::open(&temp_dir.path().join("mjolnr.db"))
         .await
         .unwrap();
 
@@ -456,7 +456,7 @@ async fn measure_search_latency_on_a_hundred_thousand_events() {
     const QUERIES: usize = 100;
 
     let temp_dir = tempfile::tempdir().unwrap();
-    let store = SqliteEventStore::open(&temp_dir.path().join("smed.db"))
+    let store = SqliteEventStore::open(&temp_dir.path().join("mjolnr.db"))
         .await
         .unwrap();
     let project = store
@@ -475,7 +475,7 @@ async fn measure_search_latency_on_a_hundred_thousand_events() {
         // token repeated 100,000 times, which would make every query trivially
         // hot and the measurement meaningless.
         store
-            .append(SmedEvent::MessageAppended {
+            .append(MjolnrEvent::MessageAppended {
                 session,
                 message: Box::new(CanonicalMessage::system(format!(
                     "event {index} touching module_{} with wombat marker {}",

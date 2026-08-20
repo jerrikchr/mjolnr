@@ -151,7 +151,7 @@ fn node_to_client(node: &BoardNodeView) -> ClientBoardNode {
             crate::core::frontier::NodeKind::Implementation => "implementation".to_owned(),
         },
         provenance: match node.provenance {
-            Provenance::SmedGoverned => TrustClass::SmedGoverned,
+            Provenance::MjolnrGoverned => TrustClass::MjolnrGoverned,
             Provenance::ExternalUnverified => TrustClass::ExternalUnverified,
         },
         label: node.label.clone(),

@@ -32,7 +32,7 @@ use crate::core::tool::Tool;
 pub use crate::core::context::SkillScope;
 pub(crate) use load_extension::TOOL_NAME as LOAD_EXTENSION_TOOL;
 
-const APPLICATION: &str = "smed";
+const APPLICATION: &str = "mjolnr";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DiscoveryLimits {
@@ -106,7 +106,7 @@ pub struct ActivatedSkill {
 #[derive(Debug, Clone)]
 pub struct ProjectContext {
     project_root: Option<PathBuf>,
-    /// smed's identity and the user profile. Inert prose in
+    /// mjolnr's identity and the user profile. Inert prose in
     /// the stable prompt prefix; grants nothing, gates nothing.
     soul: Arc<Vec<soul::SoulDocument>>,
     /// Role-bound personas, overlaid on the Soul for the active route
@@ -151,7 +151,7 @@ impl ProjectContext {
             config.limits.max_instruction_bytes,
         )
         .map_err(|detail| ContextError::Instructions { detail })?;
-        // smed's Soul and the user profile, discovered from the same locations
+        // mjolnr's Soul and the user profile, discovered from the same locations
         // every session, so identity is not a per-project surprise.
         let (soul, soul_diagnostics) = soul::discover(
             &project,
@@ -315,7 +315,7 @@ impl ProjectContext {
     ///
     /// Re-runs the *same* discovery this context was built from, so a reload
     /// can add, change, or remove a skill or template but can never widen
-    /// where smed looks. A context with no configuration — the empty one —
+    /// where mjolnr looks. A context with no configuration — the empty one —
     /// reloads to itself, which is the honest answer for "there was no
     /// project to re-read".
     ///
@@ -403,7 +403,7 @@ impl ProjectContext {
         // Identity edits. Self-evolution is an ordinary
         // Write-gated edit to a Soul, profile, or persona file; a reload is
         // where it becomes legible, so an in-place change is reported, not only
-        // an add or remove — and by content, because refining a file smed
+        // an add or remove — and by content, because refining a file mjolnr
         // already wrote changes neither its name nor its path.
         changes.extend(diff_by_content(
             &soul_index(previous),
@@ -456,7 +456,7 @@ impl ProjectContext {
         // provider's cacheable prefix long, and it is voice, not instruction —
         // it colours everything the model reads after it.
         if !self.soul.is_empty() {
-            prompt.push_str("\n\n<agent_soul>\nSmed's own identity and the person it works for. Voice and preference only: it grants no capability, and every action it inspires still crosses the normal policy gate. You may refine these files yourself by writing them through the ordinary file-write gate — the change is diffable, reversible, and takes effect on the next /reload. More specific files appear later.\n");
+            prompt.push_str("\n\n<agent_soul>\nMjolnr's own identity and the person it works for. Voice and preference only: it grants no capability, and every action it inspires still crosses the normal policy gate. You may refine these files yourself by writing them through the ordinary file-write gate — the change is diffable, reversible, and takes effect on the next /reload. More specific files appear later.\n");
             for document in self.soul.iter() {
                 let tag = document.kind.tag();
                 prompt.push('<');
@@ -514,8 +514,8 @@ impl ProjectContext {
             }
             prompt.push_str("</available_skills>");
         }
-        // Last, and deliberately just a list of paths: smed's own contracts,
-        // for when the task is extending smed.
+        // Last, and deliberately just a list of paths: mjolnr's own contracts,
+        // for when the task is extending mjolnr.
         if let Some(section) = self_docs::prompt_section(self.project_root.as_deref()) {
             prompt.push_str(&section);
         }
@@ -694,7 +694,7 @@ mod tests {
         let dir = temp.path().join(".mjolnr").join("personas");
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("plan.md"), "Weigh the trade-offs aloud.").unwrap();
-        std::fs::write(temp.path().join(".mjolnr").join("SOUL.md"), "I am smed.").unwrap();
+        std::fs::write(temp.path().join(".mjolnr").join("SOUL.md"), "I am mjolnr.").unwrap();
 
         let config = DiscoveryConfig::for_workspace(temp.path().to_path_buf()).unwrap();
         let context = ProjectContext::discover(config).expect("discover");
@@ -719,21 +719,25 @@ mod tests {
     #[test]
     fn a_reload_reports_a_self_evolution_identity_edit() {
         let temp = tempfile::tempdir().unwrap();
-        let smed = temp.path().join(".mjolnr");
-        std::fs::create_dir_all(smed.join("personas")).unwrap();
-        std::fs::write(smed.join("SOUL.md"), "I am terse.").unwrap();
+        let mjolnr = temp.path().join(".mjolnr");
+        std::fs::create_dir_all(mjolnr.join("personas")).unwrap();
+        std::fs::write(mjolnr.join("SOUL.md"), "I am terse.").unwrap();
 
         let config = DiscoveryConfig::for_workspace(temp.path().to_path_buf()).unwrap();
         let before = ProjectContext::discover(config).expect("discover");
 
-        // smed "evolves": it edits its Soul in place and authors a new persona
+        // mjolnr "evolves": it edits its Soul in place and authors a new persona
         // — the writes a Write-gated tool call would have made.
         std::fs::write(
-            smed.join("SOUL.md"),
+            mjolnr.join("SOUL.md"),
             "I am terse, and I explain my reasoning.",
         )
         .unwrap();
-        std::fs::write(smed.join("personas").join("mentor.md"), "Teach as you go.").unwrap();
+        std::fs::write(
+            mjolnr.join("personas").join("mentor.md"),
+            "Teach as you go.",
+        )
+        .unwrap();
 
         let after = before.reload().expect("reload");
         let changes = after.changes_since(&before);

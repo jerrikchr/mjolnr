@@ -10,12 +10,12 @@ use std::sync::Arc;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 
-use smed::core::client::types::ClientSnapshot;
-use smed::core::plugin::PluginSummary;
-use smed::core::runtime::RuntimeSnapshot;
-use smed::runtime::client_bridge::convert::snapshot_to_client;
-use smed::tui::commands::COMMANDS;
-use smed::tui::reducer::{Overlay, ViewState};
+use mjolnr::core::client::types::ClientSnapshot;
+use mjolnr::core::plugin::PluginSummary;
+use mjolnr::core::runtime::RuntimeSnapshot;
+use mjolnr::runtime::client_bridge::convert::snapshot_to_client;
+use mjolnr::tui::commands::COMMANDS;
+use mjolnr::tui::reducer::{Overlay, ViewState};
 
 #[test]
 fn plugins_slash_command_exists_in_registry() {
@@ -103,7 +103,7 @@ fn plugins_overlay_renders_cleanly_on_empty_and_populated() {
 
     terminal
         .draw(|f| {
-            smed::tui::layout::render(f, &view);
+            mjolnr::tui::layout::render(f, &view);
         })
         .expect("draw empty plugins overlay");
 
@@ -137,7 +137,7 @@ fn plugins_overlay_renders_cleanly_on_empty_and_populated() {
 
     terminal
         .draw(|f| {
-            smed::tui::layout::render(f, &view);
+            mjolnr::tui::layout::render(f, &view);
         })
         .expect("draw populated plugins overlay");
 }

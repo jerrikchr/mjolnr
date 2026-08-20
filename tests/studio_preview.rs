@@ -5,7 +5,7 @@
     reason = "AGENTS.md §7: tests may index and unwrap freely"
 )]
 
-use smed::core::preview::{PreviewState, PreviewViewport, ViewportPreset};
+use mjolnr::core::preview::{PreviewState, PreviewViewport, ViewportPreset};
 
 #[test]
 fn preview_viewport_presets_and_custom_dimensions() {

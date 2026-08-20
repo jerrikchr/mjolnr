@@ -1,7 +1,7 @@
-//! Anchored review threads and "send to smed" (Phase D3).
+//! Anchored review threads and "send to mjolnr" (Phase D3).
 //!
 //! One reason to change: whether a human's line note is pinned to the diff it
-//! was written against, stays pinned across a restart, and reaches smed as a
+//! was written against, stays pinned across a restart, and reaches mjolnr as a
 //! durable request that claims nothing it has not earned.
 //!
 //! Everything here goes through `ClientBridge`, not the runtime directly, so
@@ -20,16 +20,16 @@ use std::process::Command;
 use std::sync::Arc;
 use std::time::Duration;
 
-use smed::core::client::workspace::ReviewThreadSummary;
-use smed::core::client::{ClientCommand, ClientMessage, ClientReviewSide, ClientSnapshot};
-use smed::core::error::ReasonCode;
-use smed::core::provider::Provider;
-use smed::core::runtime::SmedRuntime;
-use smed::core::store::EventStore;
-use smed::providers::fake::FakeProvider;
-use smed::runtime::Runtime;
-use smed::runtime::client_bridge::ClientBridge;
-use smed::store::memory::InMemoryEventStore;
+use mjolnr::core::client::workspace::ReviewThreadSummary;
+use mjolnr::core::client::{ClientCommand, ClientMessage, ClientReviewSide, ClientSnapshot};
+use mjolnr::core::error::ReasonCode;
+use mjolnr::core::provider::Provider;
+use mjolnr::core::runtime::MjolnrRuntime;
+use mjolnr::core::store::EventStore;
+use mjolnr::providers::fake::FakeProvider;
+use mjolnr::runtime::Runtime;
+use mjolnr::runtime::client_bridge::ClientBridge;
+use mjolnr::store::memory::InMemoryEventStore;
 
 /// A bridge over a live runtime, plus the store both share.
 struct Harness {
@@ -43,7 +43,7 @@ impl Harness {
             vec![Arc::new(FakeProvider::default()) as Arc<dyn Provider>],
             Arc::clone(store) as Arc<dyn EventStore>,
         ));
-        let bridge = ClientBridge::start(Arc::clone(&runtime) as Arc<dyn SmedRuntime>);
+        let bridge = ClientBridge::start(Arc::clone(&runtime) as Arc<dyn MjolnrRuntime>);
         Self { bridge, runtime }
     }
 
@@ -125,14 +125,14 @@ impl Harness {
 }
 
 fn setup_repo(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("smed-d3-review-{name}"));
+    let dir = std::env::temp_dir().join(format!("mjolnr-d3-review-{name}"));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).expect("temp dir");
     let dir = dir.canonicalize().expect("canonical temp dir");
 
     git(&dir, &["init", "--initial-branch=main"]);
-    git(&dir, &["config", "user.email", "test@smed.invalid"]);
-    git(&dir, &["config", "user.name", "smed Test"]);
+    git(&dir, &["config", "user.email", "test@mjolnr.invalid"]);
+    git(&dir, &["config", "user.name", "mjolnr Test"]);
     git(&dir, &["config", "commit.gpgsign", "false"]);
 
     fs::write(dir.join("README.md"), "one\ntwo\nthree\n").expect("write");
@@ -158,7 +158,7 @@ fn git(dir: &Path, arguments: &[&str]) {
 }
 
 #[tokio::test]
-async fn a_note_is_pinned_to_the_line_and_the_hunk_smed_captured() {
+async fn a_note_is_pinned_to_the_line_and_the_hunk_mjolnr_captured() {
     let dir = setup_repo("pinned");
     let store = Arc::new(InMemoryEventStore::new());
     let harness = Harness::start(&store);
@@ -170,7 +170,7 @@ async fn a_note_is_pinned_to_the_line_and_the_hunk_smed_captured() {
     assert_eq!(thread.anchor.path, "README.md");
     assert_eq!(thread.anchor.line, 2);
     assert_eq!(thread.anchor.side, "new");
-    // The hunk context comes from smed's capture, not from the client — which
+    // The hunk context comes from mjolnr's capture, not from the client — which
     // never sent one. That is what stops a note describing a diff that did not
     // exist.
     assert!(
@@ -186,10 +186,10 @@ async fn a_note_is_pinned_to_the_line_and_the_hunk_smed_captured() {
         thread.comments.first().map(|c| c.body.as_str()),
         Some("this line needs a comment")
     );
-    // A human's remark about code, not a smed-governed observation.
+    // A human's remark about code, not a mjolnr-governed observation.
     assert_eq!(
         thread.trust,
-        smed::core::client::workspace::TrustClass::OperatorControlled
+        mjolnr::core::client::workspace::TrustClass::OperatorControlled
     );
     assert!(thread.response_message_id.is_none());
 
@@ -299,7 +299,7 @@ async fn a_line_the_diff_never_printed_is_refused() {
 }
 
 /// §D3: "notes survive restart, keep their original anchor, and link to the
-/// resulting smed response." This covers the first two; the send test below
+/// resulting mjolnr response." This covers the first two; the send test below
 /// covers the third.
 #[tokio::test]
 async fn notes_survive_a_restart_with_their_original_anchor() {
@@ -357,8 +357,8 @@ async fn notes_survive_a_restart_with_their_original_anchor() {
     second.close().await;
 }
 
-/// "Send to smed" is a durable human message referencing the thread ids, and
-/// the thread links back to what smed answered with.
+/// "Send to mjolnr" is a durable human message referencing the thread ids, and
+/// the thread links back to what mjolnr answered with.
 #[tokio::test]
 async fn sending_notes_produces_a_durable_request_and_links_the_answer() {
     let dir = setup_repo("send");
@@ -393,7 +393,7 @@ async fn sending_notes_produces_a_durable_request_and_links_the_answer() {
         }
     })
     .await
-    .expect("smed answers the request");
+    .expect("mjolnr answers the request");
 
     assert_eq!(answered.status, "sent");
 
@@ -458,7 +458,7 @@ async fn an_unknown_thread_in_a_send_refuses_and_marks_nothing() {
 
 /// §D3 asks for negative tests against false promotion. A review thread may say
 /// it was written and that a request naming it was sent; nothing on the wire may
-/// suggest smed applied, imported, or verified the change.
+/// suggest mjolnr applied, imported, or verified the change.
 #[tokio::test]
 async fn nothing_a_thread_projects_claims_the_change_was_addressed() {
     let dir = setup_repo("no-promotion");
@@ -498,7 +498,7 @@ async fn an_over_long_note_is_refused_at_the_wire() {
     harness.open_session(&dir).await;
     let digest = harness.digest();
 
-    let body = "x".repeat(smed::core::client::MAX_REVIEW_NOTE_BYTES + 1);
+    let body = "x".repeat(mjolnr::core::client::MAX_REVIEW_NOTE_BYTES + 1);
     assert_eq!(
         harness
             .note_at(2, ClientReviewSide::New, &digest, &body)

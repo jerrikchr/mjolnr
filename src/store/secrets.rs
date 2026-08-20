@@ -7,7 +7,7 @@
 //!
 //! # Why not the OS keyring
 //!
-//! smed used the platform keychain until it became clear what that costs. The
+//! mjolnr used the platform keychain until it became clear what that costs. The
 //! keychain binds each item's ACL to the *code signature* of the binary that
 //! created it, so every rebuild or upgrade reads as a different application and
 //! challenges the user for their login password. Worse, on Linux it resolves to
@@ -20,11 +20,11 @@
 //! ledger of the price — refresh races clobbering fresh tokens, locked keychains
 //! surfacing as "Not logged in", `security -i` buffer overflows corrupting
 //! entries, per-turn UI stalls, and parallel sessions all logging out together
-//! after wake-from-sleep. That last one is aimed at smed specifically, which
+//! after wake-from-sleep. That last one is aimed at mjolnr specifically, which
 //! runs concurrent leased sessions by design.
 //!
 //! What is given up is real but narrow: an owner-only file is readable by any
-//! process already running as this user. Such a process can also read smed's
+//! process already running as this user. Such a process can also read mjolnr's
 //! memory, so the keychain's marginal protection did not survive the trade.
 
 use std::path::{Path, PathBuf};
@@ -39,7 +39,7 @@ use zeroize::{Zeroize, ZeroizeOnDrop, Zeroizing};
 
 /// The keyring service name, retained only so the one-shot migration can find
 /// credentials written by earlier versions.
-const SERVICE: &str = "dev.smed";
+const SERVICE: &str = "dev.mjolnr";
 
 /// Credentials live in their own file per provider, each owner-only.
 ///
@@ -176,13 +176,13 @@ impl StoredCredential {
 /// Move any credentials still in the OS keyring into the file store.
 ///
 /// Runs once at startup and is a no-op for anyone who never used a keychain
-/// build — which is everyone installing smed from here on. Kept deliberately
+/// build — which is everyone installing mjolnr from here on. Kept deliberately
 /// small: when enough time has passed that no keychain-era install is plausible,
 /// this function and the `keyring` dependency come out together.
 ///
 /// Best-effort by construction. A keychain read may prompt for the login
 /// password (that is the very friction being removed, one last time) and the
-/// user may cancel it. A cancelled or failed migration must not stop smed from
+/// user may cancel it. A cancelled or failed migration must not stop mjolnr from
 /// starting — the credential is simply still in the keychain, and `mjolnr auth
 /// login` remains the way out. The keychain entry is left in place rather than
 /// deleted, so a failure part-way cannot lose a credential.
@@ -215,7 +215,7 @@ pub fn migrate_from_keyring(store: &OsSecretStore, providers: &[ProviderId]) -> 
 /// Force `path` to owner-only, and report what it was.
 ///
 /// Applied on read as well as write, so a file some other tool (or a careless
-/// `chmod -R`) loosened is tightened the next time smed touches it rather than
+/// `chmod -R`) loosened is tightened the next time mjolnr touches it rather than
 /// staying world-readable until someone notices.
 #[cfg(unix)]
 fn ensure_owner_only(path: &Path) -> std::io::Result<()> {
@@ -706,7 +706,7 @@ mod tests {
         // Regression guard for the ordering: a stored key silently winning over
         // an explicit export is the confusing half hour SecretSource exists for.
         let (_guard, store) = temporary_store();
-        let provider = ProviderId::new("smed-test-env-provider");
+        let provider = ProviderId::new("mjolnr-test-env-provider");
         store
             .store(
                 &provider,

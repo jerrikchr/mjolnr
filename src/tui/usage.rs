@@ -173,7 +173,7 @@ fn render_session_usage(lines: &mut Vec<Line<'static>>, view: &ViewState) {
 
 /// Every other quota producer reads response headers already sent for a
 /// request the owner asked for; `gemini_cli`'s `fetchAvailableModels` is
-/// smed's one deliberate side request (E1, `providers::gemini_cli`), and the
+/// mjolnr's one deliberate side request (E1, `providers::gemini_cli`), and the
 /// overlay says so rather than implying it rode along on the last turn. The
 /// TUI may not depend on `providers` (AGENTS.md §2.1), so the two ids are
 /// literals here rather than imported constants — same pattern `chrome.rs`'s

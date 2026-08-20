@@ -260,7 +260,7 @@ impl FakeProvider {
 
 /// Text fragments, split mid-word on purpose.
 const TEXT_FRAGMENTS: &[&str] = &[
-    "smed ", "streams ", "text ", "incre", "mentally", ", so a ", "decoder ", "bug ", "cannot ",
+    "mjolnr ", "streams ", "text ", "incre", "mentally", ", so a ", "decoder ", "bug ", "cannot ",
     "hide.",
 ];
 
@@ -380,7 +380,7 @@ fn plan_response(user_text: &str) -> String {
         return r#"{"title":"Deliver the governed planning flow","summary":"Persist the interview PRD, review it through council, and expose the approved plan lifecycle.","steps":[{"title":"Persist the interview","description":"Record bounded questions, answers, and the generated PRD in the session event log."},{"title":"Review the PRD","description":"Run the durable PRD through the advisory council and retain dissent."},{"title":"Hand off the plan","description":"Propose a reviewed implementation plan for human approval and handoff."}]}"#.to_owned();
     }
     if user_text.contains("INTERVIEW_ANSWER") {
-        return r#"{"kind":"prd","title":"Governed planning","problem":"Owners need a durable path from an initial idea to a reviewed implementation plan.","users":["repository owner"],"requirements":[{"id":"REQ-1","title":"Record the PRD","description":"Persist the generated product requirements document before review."},{"id":"REQ-2","title":"Retain council dissent","description":"Link the PRD to a durable council review without authorizing execution."}],"acceptance_criteria":["A restart preserves the PRD and its council link","The resulting plan remains human-approvable"],"non_goals":["Automatic code execution"],"constraints":["All side effects remain behind smed policy gates"]}"#.to_owned();
+        return r#"{"kind":"prd","title":"Governed planning","problem":"Owners need a durable path from an initial idea to a reviewed implementation plan.","users":["repository owner"],"requirements":[{"id":"REQ-1","title":"Record the PRD","description":"Persist the generated product requirements document before review."},{"id":"REQ-2","title":"Retain council dissent","description":"Link the PRD to a durable council review without authorizing execution."}],"acceptance_criteria":["A restart preserves the PRD and its council link","The resulting plan remains human-approvable"],"non_goals":["Automatic code execution"],"constraints":["All side effects remain behind mjolnr policy gates"]}"#.to_owned();
     }
     r#"{"kind":"question","prompt":"What is the smallest useful scope for this plan?","options":["Narrow vertical slice","Broad platform change"],"is_multi_select":false}"#.to_owned()
 }

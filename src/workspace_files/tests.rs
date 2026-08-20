@@ -183,7 +183,7 @@ fn binary_oversized_and_undecodable_files_all_open_in_bounded_preview() {
         "huge.txt",
         vec![b'a'; usize::try_from(MAX_EDITABLE_FILE_BYTES).unwrap() + 1],
     );
-    // No NUL byte, so not binary — just an encoding smed does not decode.
+    // No NUL byte, so not binary — just an encoding mjolnr does not decode.
     workspace.write("latin1.txt", b"caf\xe9 au lait");
 
     let binary = read_file(&workspace.root, "image.png").expect("read");

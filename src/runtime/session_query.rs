@@ -13,7 +13,7 @@
 //! other's transcript.
 
 use crate::core::error::ReasonCode;
-use crate::core::event::{RunId, SmedEvent, StoredEvent};
+use crate::core::event::{MjolnrEvent, RunId, StoredEvent};
 use crate::core::message::{ContentBlock, ToolResult};
 use crate::tools::session_query::{DEFAULT_ENTRIES, MAX_ENTRIES, MAX_SUMMARY_CHARS};
 
@@ -112,33 +112,35 @@ fn render_window(events: &[StoredEvent], kind: Option<&str>, limit: usize) -> St
 /// One event's kind and summary, or `None` for events that say nothing useful
 /// to the model.
 ///
-/// Deliberately not exhaustive over `SmedEvent`: this is a view for a reader,
+/// Deliberately not exhaustive over `MjolnrEvent`: this is a view for a reader,
 /// not a serialisation. A new event kind that nobody projected is absent from
 /// the window rather than rendered as a debug blob.
-fn project(event: &SmedEvent) -> Option<(&'static str, String)> {
+fn project(event: &MjolnrEvent) -> Option<(&'static str, String)> {
     match event {
-        SmedEvent::MessageAppended { message, .. } => {
+        MjolnrEvent::MessageAppended { message, .. } => {
             Some(("message_appended", message_summary(message)))
         }
-        SmedEvent::ToolProposed { call, tier, .. } => Some((
+        MjolnrEvent::ToolProposed { call, tier, .. } => Some((
             "tool_proposed",
             format!("{} [{tier:?}] {}", call.name, call.arguments),
         )),
-        SmedEvent::ToolCompleted { name, result, .. } => Some((
+        MjolnrEvent::ToolCompleted { name, result, .. } => Some((
             "tool_completed",
             format!("{name} — {:?}: {}", result.outcome, result.content),
         )),
-        SmedEvent::ToolFailed { name, code, .. } => {
+        MjolnrEvent::ToolFailed { name, code, .. } => {
             Some(("tool_failed", format!("{name} — {code}")))
         }
-        SmedEvent::ApprovalResolved { decision, .. } => {
+        MjolnrEvent::ApprovalResolved { decision, .. } => {
             Some(("approval_resolved", format!("{decision:?}")))
         }
-        SmedEvent::PolicyChanged { mode, .. } => Some(("policy_changed", mode.label().to_owned())),
-        SmedEvent::ModelChanged {
+        MjolnrEvent::PolicyChanged { mode, .. } => {
+            Some(("policy_changed", mode.label().to_owned()))
+        }
+        MjolnrEvent::ModelChanged {
             provider, model, ..
         } => Some(("model_changed", format!("{provider}/{model}"))),
-        SmedEvent::FileSaved {
+        MjolnrEvent::FileSaved {
             path,
             observed_digest,
             new_digest,
@@ -147,17 +149,17 @@ fn project(event: &SmedEvent) -> Option<(&'static str, String)> {
             "file_saved",
             format!("{path} {observed_digest} -> {new_digest}"),
         )),
-        SmedEvent::RunFinished { reason, .. } => Some(("run_finished", format!("{reason:?}"))),
-        SmedEvent::RunFailed { code, detail, .. } => {
+        MjolnrEvent::RunFinished { reason, .. } => Some(("run_finished", format!("{reason:?}"))),
+        MjolnrEvent::RunFailed { code, detail, .. } => {
             Some(("run_failed", format!("{code}: {detail}")))
         }
-        SmedEvent::HandoffCreated { handoff, .. } => {
+        MjolnrEvent::HandoffCreated { handoff, .. } => {
             Some(("handoff_created", handoff.status.clone()))
         }
-        SmedEvent::SubagentSpawned { directive, .. } => {
+        MjolnrEvent::SubagentSpawned { directive, .. } => {
             Some(("subagent_spawned", directive.clone()))
         }
-        SmedEvent::ReadSetCollision {
+        MjolnrEvent::ReadSetCollision {
             reader,
             writer,
             path,
@@ -166,10 +168,10 @@ fn project(event: &SmedEvent) -> Option<(&'static str, String)> {
             "read_set_collision",
             format!("{path} (read by {reader}, written by {writer})"),
         )),
-        SmedEvent::BudgetExhausted { .. } => {
+        MjolnrEvent::BudgetExhausted { .. } => {
             Some(("budget_exhausted", "the run's budget ran out".to_owned()))
         }
-        SmedEvent::RecoveryRequired { work, .. } => {
+        MjolnrEvent::RecoveryRequired { work, .. } => {
             Some(("recovery_required", format!("{work:?}")))
         }
         _ => None,
@@ -223,7 +225,7 @@ mod tests {
     use crate::core::message::CanonicalMessage;
     use time::OffsetDateTime;
 
-    fn stored(sequence: u64, event: SmedEvent) -> StoredEvent {
+    fn stored(sequence: u64, event: MjolnrEvent) -> StoredEvent {
         StoredEvent {
             id: EventId::new(),
             sequence,
@@ -232,8 +234,8 @@ mod tests {
         }
     }
 
-    fn message(session: SessionId, text: &str) -> SmedEvent {
-        SmedEvent::MessageAppended {
+    fn message(session: SessionId, text: &str) -> MjolnrEvent {
+        MjolnrEvent::MessageAppended {
             session,
             message: Box::new(CanonicalMessage::user(text)),
         }
@@ -250,7 +252,7 @@ mod tests {
         let session = SessionId::new();
         let events = vec![stored(
             1,
-            SmedEvent::ToolCompleted {
+            MjolnrEvent::ToolCompleted {
                 session,
                 run: RunId::new(),
                 call_id: "call_1".to_owned(),
@@ -297,7 +299,7 @@ mod tests {
             stored(1, message(session, "hello")),
             stored(
                 2,
-                SmedEvent::PolicyChanged {
+                MjolnrEvent::PolicyChanged {
                     session,
                     mode: crate::core::policy::PolicyMode::ReadOnly,
                 },

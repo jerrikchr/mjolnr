@@ -19,15 +19,15 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
 
-use smed::core::client::workspace::{RepositoryFreshness, TrustClass};
-use smed::core::command::SmedCommand;
-use smed::core::provider::Provider;
-use smed::core::runtime::SmedRuntime;
-use smed::core::store::EventStore;
-use smed::providers::fake::FakeProvider;
-use smed::runtime::Runtime;
-use smed::runtime::client_bridge::snapshot_to_client;
-use smed::store::memory::InMemoryEventStore;
+use mjolnr::core::client::workspace::{RepositoryFreshness, TrustClass};
+use mjolnr::core::command::MjolnrCommand;
+use mjolnr::core::provider::Provider;
+use mjolnr::core::runtime::MjolnrRuntime;
+use mjolnr::core::store::EventStore;
+use mjolnr::providers::fake::FakeProvider;
+use mjolnr::runtime::Runtime;
+use mjolnr::runtime::client_bridge::snapshot_to_client;
+use mjolnr::store::memory::InMemoryEventStore;
 
 fn spawn_runtime() -> Runtime {
     Runtime::spawn(
@@ -40,14 +40,14 @@ fn spawn_runtime() -> Runtime {
 /// a developer's global git config cannot make these fail for the wrong reason
 /// — the lesson `a_signing_failure_never_becomes_an_unsigned_commit` taught.
 fn setup_repo(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("smed-d5-producer-{name}"));
+    let dir = std::env::temp_dir().join(format!("mjolnr-d5-producer-{name}"));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).expect("temp dir");
     let dir = dir.canonicalize().expect("canonical temp dir");
 
     git(&dir, &["init", "--initial-branch=main"]);
-    git(&dir, &["config", "user.email", "test@smed.invalid"]);
-    git(&dir, &["config", "user.name", "smed Test"]);
+    git(&dir, &["config", "user.email", "test@mjolnr.invalid"]);
+    git(&dir, &["config", "user.name", "mjolnr Test"]);
     git(&dir, &["config", "commit.gpgsign", "false"]);
 
     fs::write(dir.join("README.md"), "hello\n").expect("write");
@@ -72,13 +72,13 @@ fn git(dir: &Path, arguments: &[&str]) {
 /// What a client would actually receive. Every assertion goes through this
 /// rather than the runtime snapshot, because the projection is where the
 /// previous gap lived.
-fn client_repository(runtime: &Runtime) -> smed::core::client::workspace::RepositoryState {
+fn client_repository(runtime: &Runtime) -> mjolnr::core::client::workspace::RepositoryState {
     snapshot_to_client(1, &runtime.snapshot()).repository
 }
 
 async fn open(runtime: &Runtime, root: &Path) {
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: root.to_path_buf(),
         })
         .await
@@ -105,7 +105,7 @@ async fn opening_a_repository_puts_live_status_on_the_client_snapshot() {
         state.head.is_some(),
         "an opened repository must report its HEAD"
     );
-    assert_eq!(state.trust, TrustClass::SmedGoverned);
+    assert_eq!(state.trust, TrustClass::MjolnrGoverned);
     match state.freshness {
         RepositoryFreshness::CapturedAt { trigger, sequence } => {
             assert_eq!(trigger, "projectOpened");
@@ -248,7 +248,7 @@ async fn a_repository_command_refreshes_the_projection_and_advances_the_capture(
     let before_sequence = capture_sequence(&before);
 
     runtime
-        .dispatch(SmedCommand::StagePaths {
+        .dispatch(MjolnrCommand::StagePaths {
             paths: vec!["new.rs".to_owned()],
         })
         .await
@@ -284,7 +284,7 @@ async fn a_refused_repository_command_still_refreshes_rather_than_leaving_a_stal
 
     // Nothing staged, so this is refused.
     let refused = runtime
-        .dispatch(SmedCommand::Commit {
+        .dispatch(MjolnrCommand::Commit {
             message: "nothing to commit".to_owned(),
             expected_index_revision: "0000000000000000000000000000000000000000".to_owned(),
         })
@@ -305,7 +305,7 @@ async fn an_explicit_refresh_is_refused_when_no_project_is_open() {
     // the caller asked a question.
     let runtime = spawn_runtime();
 
-    let refused = runtime.dispatch(SmedCommand::RefreshRepository).await;
+    let refused = runtime.dispatch(MjolnrCommand::RefreshRepository).await;
     assert!(
         refused.is_err(),
         "a refresh with no project open must refuse, not report an empty repository"
@@ -319,7 +319,7 @@ async fn an_explicit_refresh_is_refused_when_no_project_is_open() {
 }
 
 #[tokio::test]
-async fn an_explicit_refresh_picks_up_a_change_made_outside_smed() {
+async fn an_explicit_refresh_picks_up_a_change_made_outside_mjolnr() {
     // The honest limit of the whole design: between triggers, work done in a
     // terminal is invisible. This proves the manual trigger is the remedy, and
     // that the projection before it was stale rather than wrong about itself.
@@ -339,7 +339,7 @@ async fn an_explicit_refresh_picks_up_a_change_made_outside_smed() {
     assert_eq!(capture_sequence(&stale), capture_sequence(&before));
 
     runtime
-        .dispatch(SmedCommand::RefreshRepository)
+        .dispatch(MjolnrCommand::RefreshRepository)
         .await
         .expect("refresh");
 
@@ -372,7 +372,7 @@ async fn the_projection_carries_an_index_revision_a_commit_can_be_armed_with() {
         .expect("a staged index must offer an expected revision");
 
     runtime
-        .dispatch(SmedCommand::Commit {
+        .dispatch(MjolnrCommand::Commit {
             message: "armed with the projected revision".to_owned(),
             expected_index_revision: revision,
         })
@@ -401,7 +401,7 @@ async fn a_stale_index_revision_from_an_old_projection_is_still_refused() {
     git(&dir, &["add", "second.rs"]);
 
     let refused = runtime
-        .dispatch(SmedCommand::Commit {
+        .dispatch(MjolnrCommand::Commit {
             message: "armed with a revision that has since moved".to_owned(),
             expected_index_revision: captured,
         })
@@ -425,9 +425,9 @@ async fn ending_a_session_keeps_the_project_repository_visible() {
     let before = client_repository(&runtime);
 
     runtime
-        .dispatch(SmedCommand::CreateSession {
-            provider: smed::core::model::ProviderId::new("fake"),
-            model: smed::core::model::ModelId::new("fake-1"),
+        .dispatch(MjolnrCommand::CreateSession {
+            provider: mjolnr::core::model::ProviderId::new("fake"),
+            model: mjolnr::core::model::ModelId::new("fake-1"),
         })
         .await
         .expect("create session");
@@ -449,11 +449,11 @@ async fn ending_a_session_keeps_the_project_repository_visible() {
 async fn a_governed_tool_write_refreshes_the_projection() {
     // The fourth trigger. An agent edit that does not move the repository
     // surface is the same defect as a stale status after a commit, just harder
-    // to notice: the user watches smed change a file and the Changes panel
+    // to notice: the user watches mjolnr change a file and the Changes panel
     // keeps insisting the tree is clean.
-    use smed::core::command::ApprovalDecision;
-    use smed::core::event::SmedEvent;
-    use smed::providers::fake::FakeScript;
+    use mjolnr::core::command::ApprovalDecision;
+    use mjolnr::core::event::MjolnrEvent;
+    use mjolnr::providers::fake::FakeScript;
 
     let dir = setup_repo("tool-write");
     fs::write(dir.join("fixture.txt"), "before\n").expect("fixture");
@@ -475,16 +475,16 @@ async fn a_governed_tool_write_refreshes_the_projection() {
     );
 
     runtime
-        .dispatch(SmedCommand::CreateSession {
-            provider: smed::core::model::ProviderId::new(FakeProvider::ID),
-            model: smed::core::model::ModelId::new(FakeProvider::MODEL),
+        .dispatch(MjolnrCommand::CreateSession {
+            provider: mjolnr::core::model::ProviderId::new(FakeProvider::ID),
+            model: mjolnr::core::model::ModelId::new(FakeProvider::MODEL),
         })
         .await
         .expect("create session");
     runtime
-        .dispatch(SmedCommand::SendUserMessage {
+        .dispatch(MjolnrCommand::SendUserMessage {
             text: "update the fixture and verify it".to_owned(),
-            source: smed::core::directive::DirectiveSource::Human,
+            source: mjolnr::core::directive::DirectiveSource::Human,
         })
         .await
         .expect("start run");
@@ -493,7 +493,7 @@ async fn a_governed_tool_write_refreshes_the_projection() {
     let proposed = tokio::time::timeout(std::time::Duration::from_secs(5), async {
         loop {
             match events.recv().await {
-                Ok(SmedEvent::ToolProposed {
+                Ok(MjolnrEvent::ToolProposed {
                     approval: Some(approval),
                     call,
                     ..
@@ -507,7 +507,7 @@ async fn a_governed_tool_write_refreshes_the_projection() {
     .expect("an edit was proposed");
 
     runtime
-        .dispatch(SmedCommand::ResolveApproval {
+        .dispatch(MjolnrCommand::ResolveApproval {
             approval: proposed,
             decision: ApprovalDecision::ApproveOnce,
         })
@@ -545,7 +545,7 @@ async fn a_governed_tool_write_refreshes_the_projection() {
     runtime.close().await.expect("close");
 }
 
-fn capture_sequence(state: &smed::core::client::workspace::RepositoryState) -> u32 {
+fn capture_sequence(state: &mjolnr::core::client::workspace::RepositoryState) -> u32 {
     match &state.freshness {
         RepositoryFreshness::CapturedAt { sequence, .. } => *sequence,
         other => panic!("expected a capture, got {other:?}"),
@@ -560,8 +560,8 @@ fn capture_sequence(state: &smed::core::client::workspace::RepositoryState) -> u
 /// a local path is a perfectly good git remote, which is exactly what makes the
 /// no-network property testable rather than merely asserted.
 fn setup_repo_with_upstream(name: &str) -> PathBuf {
-    let origin = std::env::temp_dir().join(format!("smed-d5-origin-{name}.git"));
-    let clone = std::env::temp_dir().join(format!("smed-d5-clone-{name}"));
+    let origin = std::env::temp_dir().join(format!("mjolnr-d5-origin-{name}.git"));
+    let clone = std::env::temp_dir().join(format!("mjolnr-d5-clone-{name}"));
     let _ = fs::remove_dir_all(&origin);
     let _ = fs::remove_dir_all(&clone);
 
@@ -596,8 +596,8 @@ fn setup_repo_with_upstream(name: &str) -> PathBuf {
         &["clone", origin.to_str().unwrap(), clone.to_str().unwrap()],
     );
     let clone = clone.canonicalize().expect("canonical clone");
-    git(&clone, &["config", "user.email", "test@smed.invalid"]);
-    git(&clone, &["config", "user.name", "smed Test"]);
+    git(&clone, &["config", "user.email", "test@mjolnr.invalid"]);
+    git(&clone, &["config", "user.name", "mjolnr Test"]);
     git(&clone, &["config", "commit.gpgsign", "false"]);
     clone
 }
@@ -612,7 +612,7 @@ async fn a_branch_level_with_its_upstream_reports_synced() {
 
     assert_eq!(
         state.remote_sync,
-        smed::core::client::workspace::RepositorySyncState::Synced
+        mjolnr::core::client::workspace::RepositorySyncState::Synced
     );
     // `remote_sync_as_of` is deliberately NOT asserted present. A fresh clone
     // writes its tracking ref without a reflog entry — measured, not assumed —
@@ -640,7 +640,7 @@ async fn a_local_commit_reports_ahead_not_behind() {
 
     assert_eq!(
         client_repository(&runtime).remote_sync,
-        smed::core::client::workspace::RepositorySyncState::Ahead { count: 1 },
+        mjolnr::core::client::workspace::RepositorySyncState::Ahead { count: 1 },
         "one unpushed commit is one ahead, never one behind"
     );
 
@@ -648,7 +648,7 @@ async fn a_local_commit_reports_ahead_not_behind() {
 }
 
 /// A repository with no upstream reports `Unknown` — which now means exactly
-/// "nothing to compare against", not "smed did not look".
+/// "nothing to compare against", not "mjolnr did not look".
 #[tokio::test]
 async fn no_upstream_reports_unknown_rather_than_a_fabricated_position() {
     let dir = setup_repo("no-upstream");
@@ -658,7 +658,7 @@ async fn no_upstream_reports_unknown_rather_than_a_fabricated_position() {
     let state = client_repository(&runtime);
     assert_eq!(
         state.remote_sync,
-        smed::core::client::workspace::RepositorySyncState::Unknown
+        mjolnr::core::client::workspace::RepositorySyncState::Unknown
     );
     assert_eq!(state.remote_sync_as_of, None);
 
@@ -678,7 +678,7 @@ async fn sync_position_is_computed_without_contacting_the_remote() {
     git(&dir, &["commit", "-m", "local work"]);
 
     // Remove the remote repository from disk. Nothing reachable remains.
-    let origin = std::env::temp_dir().join("smed-d5-origin-offline.git");
+    let origin = std::env::temp_dir().join("mjolnr-d5-origin-offline.git");
     fs::remove_dir_all(&origin).expect("remove origin");
 
     let runtime = spawn_runtime();
@@ -686,7 +686,7 @@ async fn sync_position_is_computed_without_contacting_the_remote() {
 
     assert_eq!(
         client_repository(&runtime).remote_sync,
-        smed::core::client::workspace::RepositorySyncState::Ahead { count: 1 },
+        mjolnr::core::client::workspace::RepositorySyncState::Ahead { count: 1 },
         "the comparison must use the local tracking ref, not the remote"
     );
 

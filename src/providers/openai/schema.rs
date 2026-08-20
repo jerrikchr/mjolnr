@@ -42,9 +42,9 @@ pub(crate) fn strict_parameters(schema: &serde_json::Value) -> serde_json::Value
 /// Remove JSON Schema dialect markers without changing optionality.
 ///
 /// The `ChatGPT` subscription endpoint accepts ordinary function schemas but
-/// cannot use strict mode for smed's `spawn_subagent.result_schema`: that
+/// cannot use strict mode for mjolnr's `spawn_subagent.result_schema`: that
 /// field intentionally accepts a user-declared schema whose properties are
-/// not known when smed publishes the tool definition.
+/// not known when mjolnr publishes the tool definition.
 pub(crate) fn compatible_parameters(schema: &serde_json::Value) -> serde_json::Value {
     match schema {
         serde_json::Value::Array(items) => {

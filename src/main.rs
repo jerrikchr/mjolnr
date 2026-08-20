@@ -21,25 +21,25 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use clap::Parser;
-use smed::cli::{self, Cli, Command, ExecArgs, triggers::TriggersCommand};
-use smed::context::{DiscoveryConfig, ProjectContext};
-use smed::core::command::SmedCommand;
-use smed::core::event::SessionId;
-use smed::core::model::{ModelId, ProviderId};
-use smed::core::provider::Provider;
-use smed::core::runtime::SmedRuntime;
-use smed::core::secrets::{CredentialKind, SecretStore};
-use smed::core::store::{EventStore, SessionStatus, StoreError};
-use smed::mcp;
-use smed::providers::anthropic::{self, AnthropicProvider};
-use smed::providers::openai::{self, OpenAiProvider};
-use smed::providers::openai_codex::{self, OpenAiCodexProvider};
-use smed::providers::{gemini, ollama, openrouter};
-use smed::routing::scaffold::ProviderSeed;
-use smed::runtime::Runtime;
-use smed::store::secrets::OsSecretStore;
-use smed::store::sqlite::SqliteEventStore;
-use smed::tui::app;
+use mjolnr::cli::{self, Cli, Command, ExecArgs, triggers::TriggersCommand};
+use mjolnr::context::{DiscoveryConfig, ProjectContext};
+use mjolnr::core::command::MjolnrCommand;
+use mjolnr::core::event::SessionId;
+use mjolnr::core::model::{ModelId, ProviderId};
+use mjolnr::core::provider::Provider;
+use mjolnr::core::runtime::MjolnrRuntime;
+use mjolnr::core::secrets::{CredentialKind, SecretStore};
+use mjolnr::core::store::{EventStore, SessionStatus, StoreError};
+use mjolnr::mcp;
+use mjolnr::providers::anthropic::{self, AnthropicProvider};
+use mjolnr::providers::openai::{self, OpenAiProvider};
+use mjolnr::providers::openai_codex::{self, OpenAiCodexProvider};
+use mjolnr::providers::{gemini, ollama, openrouter};
+use mjolnr::routing::scaffold::ProviderSeed;
+use mjolnr::runtime::Runtime;
+use mjolnr::store::secrets::OsSecretStore;
+use mjolnr::store::sqlite::SqliteEventStore;
+use mjolnr::tui::app;
 
 /// The model a configured OpenAI session opens on. Cheapest of the offered set,
 /// so an accidental session is not an expensive one.
@@ -89,7 +89,8 @@ fn main() -> ExitCode {
     let file_secrets = OsSecretStore::new();
     // One-shot, and a no-op for anyone who never ran a keychain build. Before
     // the auth subcommands so `mjolnr auth list` reflects the move immediately.
-    let migrated = smed::store::secrets::migrate_from_keyring(&file_secrets, &keyring_providers());
+    let migrated =
+        mjolnr::store::secrets::migrate_from_keyring(&file_secrets, &keyring_providers());
     if !migrated.is_empty() {
         let names: Vec<&str> = migrated.iter().map(ProviderId::as_str).collect();
         eprintln!(
@@ -113,10 +114,10 @@ fn main() -> ExitCode {
     if let Some(Command::Plugin(command)) = cli.command.take_if(is_plugin) {
         let project_root = std::env::current_dir().unwrap_or_default();
         let code = match command {
-            smed::cli::plugin::PluginCommand::Create(args) => {
-                smed::cli::plugin::run_create(args, &project_root)
+            mjolnr::cli::plugin::PluginCommand::Create(args) => {
+                mjolnr::cli::plugin::run_create(args, &project_root)
             }
-            smed::cli::plugin::PluginCommand::List => {
+            mjolnr::cli::plugin::PluginCommand::List => {
                 print_plugin_list(&project_root);
                 0
             }
@@ -254,9 +255,9 @@ fn install_panic_reporter(database_path: &Path) {
 /// composition root so the flow itself never imports `tui` (AGENTS.md §2.1).
 fn onboarding_theme_step() -> cli::onboard::ThemeStep {
     cli::onboard::ThemeStep {
-        options: smed::tui::theme::preference_options(),
-        active: smed::tui::theme::active_preference_name(),
-        persist: smed::tui::theme::persist_preference,
+        options: mjolnr::tui::theme::preference_options(),
+        active: mjolnr::tui::theme::active_preference_name(),
+        persist: mjolnr::tui::theme::persist_preference,
     }
 }
 
@@ -268,7 +269,7 @@ fn is_plugin(command: &mut Command) -> bool {
     matches!(command, Command::Plugin(_))
 }
 
-/// The two spellings of "set smed up". `onboard` is kept as a hidden alias so
+/// The two spellings of "set mjolnr up". `onboard` is kept as a hidden alias so
 /// existing muscle memory and any scripted invocation keep working.
 fn is_setup(command: &mut Command) -> bool {
     matches!(command, Command::Init { .. } | Command::Onboard)
@@ -383,7 +384,7 @@ async fn run_exec(
     let mcp = match mcp::connect_project(&workspace_root).await {
         Ok(catalog) => catalog,
         Err(error) => {
-            return print_headless_report(&smed::headless::HeadlessReport::setup_failure(
+            return print_headless_report(&mjolnr::headless::HeadlessReport::setup_failure(
                 error.reason_code(),
             ));
         }
@@ -392,17 +393,17 @@ async fn run_exec(
         (Some(provider), Some(model)) => (ProviderId::new(provider), ModelId::new(model)),
         (None, None) => default_model(configured),
         _ => {
-            return print_headless_report(&smed::headless::HeadlessReport::setup_failure(
-                smed::core::error::ReasonCode::SchemaInvalid,
+            return print_headless_report(&mjolnr::headless::HeadlessReport::setup_failure(
+                mjolnr::core::error::ReasonCode::SchemaInvalid,
             ));
         }
     };
-    let (route_table, _routing_diagnostics) = smed::routing::load_dir(&workspace_root);
+    let (route_table, _routing_diagnostics) = mjolnr::routing::load_dir(&workspace_root);
     let route_table = Arc::new(route_table);
     let providers = provider_registry(secrets, &workspace_root);
     if !providers.iter().any(|candidate| candidate.id() == provider) {
-        return print_headless_report(&smed::headless::HeadlessReport::setup_failure(
-            smed::core::error::ReasonCode::ProviderIncompatibleModel,
+        return print_headless_report(&mjolnr::headless::HeadlessReport::setup_failure(
+            mjolnr::core::error::ReasonCode::ProviderIncompatibleModel,
         ));
     }
     let runtime = Runtime::spawn_with_tools_and_project_context(
@@ -415,19 +416,19 @@ async fn run_exec(
     );
     let setup = async {
         runtime
-            .dispatch(SmedCommand::OpenProject {
+            .dispatch(MjolnrCommand::OpenProject {
                 root: workspace_root,
             })
             .await?;
         runtime
-            .dispatch(SmedCommand::CreateSession { provider, model })
+            .dispatch(MjolnrCommand::CreateSession { provider, model })
             .await?;
         // A headless run is a "turn" too : it may open on a
         // route's first hop rather than the requested provider/model. A
         // no-op whenever no `default` task class resolves.
         if !route_table.is_empty() {
             runtime
-                .dispatch(SmedCommand::AttachRoute {
+                .dispatch(MjolnrCommand::AttachRoute {
                     route: None,
                     role: None,
                     task_class: "default".to_owned(),
@@ -435,33 +436,33 @@ async fn run_exec(
                 .await?;
         }
         runtime
-            .dispatch(SmedCommand::SetPolicy {
+            .dispatch(MjolnrCommand::SetPolicy {
                 mode: args.policy.into(),
             })
             .await
     };
     if setup.await.is_err() {
         let _ = runtime.close().await;
-        return print_headless_report(&smed::headless::HeadlessReport::setup_failure(
-            smed::core::error::ReasonCode::ToolExecution,
+        return print_headless_report(&mjolnr::headless::HeadlessReport::setup_failure(
+            mjolnr::core::error::ReasonCode::ToolExecution,
         ));
     }
     let expected_policy = args.policy.into();
     if !wait_headless_ready(&runtime, expected_policy).await {
         let _ = runtime.close().await;
-        return print_headless_report(&smed::headless::HeadlessReport::setup_failure(
-            smed::core::error::ReasonCode::ProviderIncompatibleModel,
+        return print_headless_report(&mjolnr::headless::HeadlessReport::setup_failure(
+            mjolnr::core::error::ReasonCode::ProviderIncompatibleModel,
         ));
     }
-    let report = match smed::headless::run(&runtime, args.directive).await {
+    let report = match mjolnr::headless::run(&runtime, args.directive).await {
         Ok(report) => report,
-        Err(_) => smed::headless::HeadlessReport::setup_failure(
-            smed::core::error::ReasonCode::ToolExecution,
+        Err(_) => mjolnr::headless::HeadlessReport::setup_failure(
+            mjolnr::core::error::ReasonCode::ToolExecution,
         ),
     };
     if runtime.close().await.is_err() {
-        return print_headless_report(&smed::headless::HeadlessReport::setup_failure(
-            smed::core::error::ReasonCode::ToolExecution,
+        return print_headless_report(&mjolnr::headless::HeadlessReport::setup_failure(
+            mjolnr::core::error::ReasonCode::ToolExecution,
         ));
     }
     print_headless_report(&report)
@@ -471,7 +472,7 @@ async fn run_exec(
 ///
 /// The composition-root twin of [`run_exec`] — same providers, same project
 /// context, same MCP catalogue — handed to
-/// [`smed::triggers::scheduler::run`] instead of one directive. Runs until
+/// [`mjolnr::triggers::scheduler::run`] instead of one directive. Runs until
 /// SIGINT/SIGTERM.
 async fn run_triggers(
     secrets: &Arc<dyn SecretStore>,
@@ -492,8 +493,8 @@ async fn run_triggers(
         }
     };
 
-    let (route_table, _routing_diagnostics) = smed::routing::load_dir(&workspace_root);
-    let deps = smed::triggers::SchedulerDeps {
+    let (route_table, _routing_diagnostics) = mjolnr::routing::load_dir(&workspace_root);
+    let deps = mjolnr::triggers::SchedulerDeps {
         providers: provider_registry(secrets, &workspace_root),
         store: Arc::clone(&store) as Arc<dyn EventStore>,
         workspace_root,
@@ -511,7 +512,7 @@ async fn run_triggers(
     });
 
     println!("mjolnr: scheduler running // Ctrl-C to stop");
-    match smed::triggers::scheduler::run(deps, cancel).await {
+    match mjolnr::triggers::scheduler::run(deps, cancel).await {
         Ok(()) => Ok(0),
         Err(error) => {
             eprintln!("mjolnr: scheduler stopped: {error}");
@@ -522,7 +523,7 @@ async fn run_triggers(
 
 async fn wait_headless_ready(
     runtime: &Runtime,
-    expected_policy: smed::core::policy::PolicyMode,
+    expected_policy: mjolnr::core::policy::PolicyMode,
 ) -> bool {
     if runtime.snapshot().session.is_some() && runtime.snapshot().policy == expected_policy {
         return true;
@@ -543,7 +544,7 @@ async fn wait_headless_ready(
 }
 
 fn print_plugin_list(project_root: &Path) {
-    use smed::context::{DiscoveryConfig, ProjectContext};
+    use mjolnr::context::{DiscoveryConfig, ProjectContext};
     let discovery = match DiscoveryConfig::for_workspace(project_root.to_owned()) {
         Ok(c) => c,
         Err(e) => {
@@ -580,7 +581,7 @@ fn print_plugin_list(project_root: &Path) {
     }
 }
 
-fn print_headless_report(report: &smed::headless::HeadlessReport) -> io::Result<i32> {
+fn print_headless_report(report: &mjolnr::headless::HeadlessReport) -> io::Result<i32> {
     let line = serde_json::to_string(report).map_err(io::Error::other)?;
     println!("{line}");
     Ok(report.exit_code)
@@ -598,13 +599,13 @@ struct OAuthLogins;
 #[async_trait::async_trait]
 impl app::AuthFlows for OAuthLogins {
     async fn oauth_login(&self, provider: &str) -> Result<i64, String> {
-        let secrets: Arc<dyn smed::core::secrets::SecretStore> =
-            Arc::new(smed::store::secrets::OsSecretStore::new());
+        let secrets: Arc<dyn mjolnr::core::secrets::SecretStore> =
+            Arc::new(mjolnr::store::secrets::OsSecretStore::new());
         match provider {
-            "anthropic" => smed::providers::anthropic::paste_login(
+            "anthropic" => mjolnr::providers::anthropic::paste_login(
                 secrets,
                 |prompt| {
-                    println!("Open this URL in your browser and authorize smed:");
+                    println!("Open this URL in your browser and authorize mjolnr:");
                     println!("{}", prompt.authorize_url);
                     open_browser(&prompt.authorize_url);
                     println!("The final page displays an authorization code.");
@@ -614,7 +615,7 @@ impl app::AuthFlows for OAuthLogins {
                     let _ = std::io::Write::flush(&mut std::io::stdout());
                     let mut pasted = String::new();
                     std::io::stdin().read_line(&mut pasted).map_err(|error| {
-                        smed::providers::anthropic::OAuthError::Protocol {
+                        mjolnr::providers::anthropic::OAuthError::Protocol {
                             detail: format!("could not read the pasted code: {error}"),
                         }
                     })?;
@@ -623,7 +624,7 @@ impl app::AuthFlows for OAuthLogins {
             )
             .await
             .map_err(|error| error.to_string()),
-            "openai-codex" => smed::providers::openai_codex::device_login(secrets, |prompt| {
+            "openai-codex" => mjolnr::providers::openai_codex::device_login(secrets, |prompt| {
                 println!("Open {} in your browser.", prompt.verification_url);
                 open_browser(&prompt.verification_url);
                 println!("Enter this one-time code: {}", prompt.user_code);
@@ -633,12 +634,12 @@ impl app::AuthFlows for OAuthLogins {
             .map_err(|error| error.to_string()),
             "gemini-cli" | "antigravity" => {
                 let config = if provider == "gemini-cli" {
-                    &smed::providers::gemini_cli::GEMINI_CLI
+                    &mjolnr::providers::gemini_cli::GEMINI_CLI
                 } else {
-                    &smed::providers::gemini_cli::ANTIGRAVITY
+                    &mjolnr::providers::gemini_cli::ANTIGRAVITY
                 };
-                smed::providers::gemini_cli::browser_login(config, secrets, |prompt| {
-                    println!("Open this URL in your browser and authorize smed:");
+                mjolnr::providers::gemini_cli::browser_login(config, secrets, |prompt| {
+                    println!("Open this URL in your browser and authorize mjolnr:");
                     println!("{}", prompt.authorize_url);
                     open_browser(&prompt.authorize_url);
                     println!("Waiting for the browser callback (up to 15 minutes)…");
@@ -654,14 +655,14 @@ impl app::AuthFlows for OAuthLogins {
         let workspace = std::env::current_dir()
             .map_err(|error| format!("could not resolve project: {error}"))?;
         if address.is_empty() {
-            smed::providers::openai_compat::configured_lm_studio_base_url(&workspace)
+            mjolnr::providers::openai_compat::configured_lm_studio_base_url(&workspace)
         } else {
-            smed::providers::openai_compat::persist_lm_studio_base_url(&workspace, address)
+            mjolnr::providers::openai_compat::persist_lm_studio_base_url(&workspace, address)
         }
     }
 
     fn clear_lm_studio_token(&self) -> Result<bool, String> {
-        let secrets = smed::store::secrets::OsSecretStore::new();
+        let secrets = mjolnr::store::secrets::OsSecretStore::new();
         secrets
             .delete(&ProviderId::new("lm-studio"))
             .map_err(|error| error.to_string())?;
@@ -688,20 +689,20 @@ fn provider_registry(
         Arc::new(AnthropicProvider::new(Arc::clone(secrets))),
         Arc::new(OpenAiCodexProvider::new(Arc::clone(secrets))),
         Arc::new(gemini::GeminiProvider::new(Arc::clone(secrets))),
-        Arc::new(smed::providers::gemini_cli::GeminiCliProvider::new(
-            &smed::providers::gemini_cli::GEMINI_CLI,
+        Arc::new(mjolnr::providers::gemini_cli::GeminiCliProvider::new(
+            &mjolnr::providers::gemini_cli::GEMINI_CLI,
             Arc::clone(secrets),
         )),
-        Arc::new(smed::providers::gemini_cli::GeminiCliProvider::new(
-            &smed::providers::gemini_cli::ANTIGRAVITY,
+        Arc::new(mjolnr::providers::gemini_cli::GeminiCliProvider::new(
+            &mjolnr::providers::gemini_cli::ANTIGRAVITY,
             Arc::clone(secrets),
         )),
         Arc::new(openrouter::OpenRouterProvider::new(Arc::clone(secrets))),
         Arc::new(ollama::OllamaProvider::new()),
     ];
-    for descriptor in smed::providers::openai_compat::CATALOG {
+    for descriptor in mjolnr::providers::openai_compat::CATALOG {
         providers.push(Arc::new(
-            smed::providers::openai_compat::OpenAiCompatProvider::for_workspace(
+            mjolnr::providers::openai_compat::OpenAiCompatProvider::for_workspace(
                 descriptor,
                 Arc::clone(secrets),
                 workspace_root,
@@ -722,7 +723,7 @@ fn provider_registry(
 async fn remembered_model(
     store: &SqliteEventStore,
     workspace_root: &std::path::Path,
-    providers: &[Arc<dyn smed::core::provider::Provider>],
+    providers: &[Arc<dyn mjolnr::core::provider::Provider>],
 ) -> Option<(ProviderId, ModelId)> {
     // Sessions record the project's *realpath*. Comparing a raw `current_dir()`
     // against it never matches wherever the path crosses a symlink (`/tmp` on
@@ -735,7 +736,7 @@ async fn remembered_model(
         .max_by_key(|session| session.updated_at)
         .and_then(|session| Some((session.provider?, session.model?)))
         .filter(|(provider, model)| {
-            smed::core::provider::find_model(providers.iter(), provider, model).is_some()
+            mjolnr::core::provider::find_model(providers.iter(), provider, model).is_some()
         })
 }
 
@@ -752,11 +753,11 @@ fn keyring_providers() -> Vec<ProviderId> {
         ProviderId::new(openai_codex::PROVIDER_ID),
         ProviderId::new(gemini::PROVIDER_ID),
         ProviderId::new(openrouter::PROVIDER_ID),
-        ProviderId::new(smed::providers::gemini_cli::GEMINI_CLI_PROVIDER_ID),
-        ProviderId::new(smed::providers::gemini_cli::ANTIGRAVITY_PROVIDER_ID),
+        ProviderId::new(mjolnr::providers::gemini_cli::GEMINI_CLI_PROVIDER_ID),
+        ProviderId::new(mjolnr::providers::gemini_cli::ANTIGRAVITY_PROVIDER_ID),
     ];
     providers.extend(
-        smed::providers::openai_compat::CATALOG
+        mjolnr::providers::openai_compat::CATALOG
             .iter()
             .map(|descriptor| ProviderId::new(descriptor.id)),
     );
@@ -853,9 +854,9 @@ async fn run_tui(
     // below: a bad or missing `.mjolnr/triggers/` must never keep the TUI from
     // opening, so a read failure here degrades to "no triggers shown", not an
     // error.
-    let triggers = match smed::triggers::control::root_realpath(&workspace_root) {
+    let triggers = match mjolnr::triggers::control::root_realpath(&workspace_root) {
         Ok(root_realpath) => {
-            smed::triggers::status::collect(store.as_ref(), &workspace_root, &root_realpath)
+            mjolnr::triggers::status::collect(store.as_ref(), &workspace_root, &root_realpath)
                 .await
                 .map(|(statuses, _diagnostics)| statuses)
                 .unwrap_or_default()
@@ -867,7 +868,7 @@ async fn run_tui(
     // a missing or malformed `.mjolnr/routes/` must never keep the TUI from
     // opening. An empty table restores present-day behaviour exactly (plan
     // §Phase 15).
-    let (route_table, _routing_diagnostics) = smed::routing::load_dir(&workspace_root);
+    let (route_table, _routing_diagnostics) = mjolnr::routing::load_dir(&workspace_root);
     let route_table = Arc::new(route_table);
 
     let runtime = Runtime::spawn_with_tools_project_context_and_triggers(
@@ -885,14 +886,14 @@ async fn run_tui(
     // work, rather than showing an empty screen.
     let setup = async {
         runtime
-            .dispatch(SmedCommand::OpenProject {
+            .dispatch(MjolnrCommand::OpenProject {
                 root: workspace_root,
             })
             .await?;
         if let Some(session) = resume {
             if cli.compact {
                 runtime
-                    .dispatch(SmedCommand::ResumeCompact {
+                    .dispatch(MjolnrCommand::ResumeCompact {
                         session,
                         provider: cli.provider.as_deref().map(ProviderId::new),
                         model: cli.model.as_deref().map(ModelId::new),
@@ -900,12 +901,12 @@ async fn run_tui(
                     .await?;
             } else {
                 runtime
-                    .dispatch(SmedCommand::ResumeSession { session })
+                    .dispatch(MjolnrCommand::ResumeSession { session })
                     .await?;
             }
         } else {
             runtime
-                .dispatch(SmedCommand::CreateSession { provider, model })
+                .dispatch(MjolnrCommand::CreateSession { provider, model })
                 .await?;
             // A brand-new session may open on a route's first hop rather than
             // the configured default. A no-op whenever no
@@ -913,7 +914,7 @@ async fn run_tui(
             // has no routing config at all.
             if !route_table.is_empty() {
                 runtime
-                    .dispatch(SmedCommand::AttachRoute {
+                    .dispatch(MjolnrCommand::AttachRoute {
                         route: None,
                         role: None,
                         task_class: "default".to_owned(),
@@ -923,12 +924,12 @@ async fn run_tui(
         }
         if cli.full_auto {
             runtime
-                .dispatch(SmedCommand::SetPolicy {
-                    mode: smed::core::policy::PolicyMode::FullAuto,
+                .dispatch(MjolnrCommand::SetPolicy {
+                    mode: mjolnr::core::policy::PolicyMode::FullAuto,
                 })
                 .await?;
         }
-        Ok::<(), smed::core::error::SmedError>(())
+        Ok::<(), mjolnr::core::error::MjolnrError>(())
     };
 
     if let Err(error) = setup.await {
@@ -1061,7 +1062,7 @@ async fn resolve_resume(cli: &Cli, store: &SqliteEventStore) -> Result<Option<Se
 
     if summary.leased {
         return Err(format!(
-            "session {session} is already open in another smed process.\n       \
+            "session {session} is already open in another mjolnr process.\n       \
              If that process is gone, `mjolnr sessions release {session}` reclaims it."
         ));
     }
@@ -1072,7 +1073,7 @@ async fn resolve_resume(cli: &Cli, store: &SqliteEventStore) -> Result<Option<Se
 #[cfg(test)]
 mod tests {
     use super::*;
-    use smed::core::secrets::{Credential, ResolvedCredential, SecretError};
+    use mjolnr::core::secrets::{Credential, ResolvedCredential, SecretError};
 
     #[derive(Debug)]
     struct EmptySecrets;

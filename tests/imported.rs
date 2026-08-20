@@ -5,7 +5,7 @@
 //! the E5 contract records:
 //!
 //! - (a) Revision-pinning — a stale tab is refused, not recorded.
-//! - (b) A remote gate is not smed's gate — only observed terminal outcomes
+//! - (b) A remote gate is not mjolnr's gate — only observed terminal outcomes
 //!   settle; no enforcement-shaped field exists.
 //! - (c) Unknown is not zero — `Unknown != Open`, never settled, never cached.
 //! - (d) Intersection containment — the frontier's imported nodes are exactly
@@ -23,8 +23,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use smed::core::frontier::{NodeId, NodeKind, Provenance, compute_frontier};
-use smed::core::imported::{ImportedItem, ImportedItemId, ImportedItemRecord, ImportedItemState};
+use mjolnr::core::frontier::{NodeId, NodeKind, Provenance, compute_frontier};
+use mjolnr::core::imported::{ImportedItem, ImportedItemId, ImportedItemRecord, ImportedItemState};
 
 fn imported(
     id: ImportedItemId,
@@ -81,7 +81,7 @@ fn contract_a_revision_pinning_projects_latest_state_not_cached_forward() {
         .expect_err("stale tab must refuse, not record");
     assert_eq!(
         refusal,
-        smed::core::imported::RefreshRefusal::StaleRevision {
+        mjolnr::core::imported::RefreshRefusal::StaleRevision {
             expected: "not-rev1".to_owned(),
             current: "rev1".to_owned()
         }
@@ -89,7 +89,7 @@ fn contract_a_revision_pinning_projects_latest_state_not_cached_forward() {
 }
 
 // ---------------------------------------------------------------------------
-// (b) A remote gate is not smed's gate — only observed terminal outcomes
+// (b) A remote gate is not mjolnr's gate — only observed terminal outcomes
 // settle; no enforcement-shaped field exists on the type.
 // ---------------------------------------------------------------------------
 
@@ -264,7 +264,7 @@ fn imported_edges_can_form_cycles_the_frontier_surfaces() {
 
 // ---------------------------------------------------------------------------
 // Provenance survives into every imported set — ExternalUnverified, never
-// elided, exactly as `property_provenance_survives` asserts SmedGoverned.
+// elided, exactly as `property_provenance_survives` asserts MjolnrGoverned.
 // ---------------------------------------------------------------------------
 
 #[test]

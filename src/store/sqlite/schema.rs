@@ -240,7 +240,7 @@ pub(super) fn migrate(
 ) -> Result<MigrationOutcome, tokio_rusqlite::rusqlite::Error> {
     // Read the compatibility gate before any persistent pragma or schema
     // change. `journal_mode = WAL` modifies the database file, so issuing it
-    // before this check would mutate a newer database even though smed then
+    // before this check would mutate a newer database even though mjolnr then
     // refused to open it.
     let found = user_version(connection)?;
     if found > SCHEMA_VERSION {
@@ -269,7 +269,7 @@ pub(super) enum MigrationOutcome {
     /// The database is at [`SCHEMA_VERSION`]. `from` is the version it started
     /// at — equal to the target when nothing was applied.
     Ready { from: u32 },
-    /// Written by a newer smed. The caller refuses.
+    /// Written by a newer mjolnr. The caller refuses.
     TooNew { found: u32 },
 }
 
@@ -371,7 +371,7 @@ mod tests {
             MigrationOutcome::TooNew {
                 found: SCHEMA_VERSION + 5
             },
-            "a database from a newer smed must not be touched"
+            "a database from a newer mjolnr must not be touched"
         );
     }
 

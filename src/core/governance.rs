@@ -15,7 +15,7 @@
 //! reasons. A governance level that moves with last week's traffic is not a
 //! rule, it is a mood. And a level the *model* can move is a level the model
 //! can farm: a policy that widens after a clean streak turns compliance into a
-//! strategy for acquiring authority, which is precisely the property smed
+//! strategy for acquiring authority, which is precisely the property mjolnr
 //! exists to deny. Research, maybe. Not a mechanism to ship.
 //!
 //! So a tier is the owner's standing judgement, read from
@@ -57,7 +57,7 @@ const DEFAULT_FAN_OUT: u32 = 4;
 pub enum GovernanceTier {
     /// The fail-closed default, and where every unmatched model lands.
     ///
-    /// Not a judgement about an unknown model — an admission that smed has
+    /// Not a judgement about an unknown model — an admission that mjolnr has
     /// none. An unknown capability is absent rather than present
     /// (`core::model`), and an unknown model is supervised rather than trusted,
     /// for the same reason: the wrong guess in this direction is visible and
@@ -205,7 +205,7 @@ impl GovernanceRule {
 /// The declared table, in file order.
 ///
 /// First match wins and there is no scoring, no specificity ranking, and no
-/// most-recently-used. A reader resolving a model by hand and smed resolving
+/// most-recently-used. A reader resolving a model by hand and mjolnr resolving
 /// it in code must reach the same row by the same argument, or the file has
 /// stopped being the record of what was decided.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -238,7 +238,7 @@ impl GovernanceTable {
     ///
     /// What a *present but unreadable* declaration resolves to. Distinct from
     /// [`Default`], which is the absence of one: someone wrote a file saying
-    /// models differ, and smed cannot read what they said. Resolving that to
+    /// models differ, and mjolnr cannot read what they said. Resolving that to
     /// the permissive table would let a typo restore exactly the authority the
     /// file was written to withhold.
     #[must_use]

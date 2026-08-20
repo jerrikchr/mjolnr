@@ -100,7 +100,7 @@ impl fmt::Debug for Secret {
     }
 }
 
-/// A smed-owned OAuth token chain.
+/// A mjolnr-owned OAuth token chain.
 ///
 /// Both tokens are secret types and the account id is deliberately omitted
 /// from `Debug`: it is an authenticated account identifier, not UI copy.
@@ -220,7 +220,7 @@ impl fmt::Debug for Credential {
 
 /// Where a credential came from.
 ///
-/// Surfaced in the UI so a user can tell why smed is using a key they did not
+/// Surfaced in the UI so a user can tell why mjolnr is using a key they did not
 /// expect — an environment override silently beating a stored key is a genuinely
 /// confusing half hour.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -232,7 +232,7 @@ pub enum SecretSource {
     /// Only reachable through the one-shot migration off the keychain; nothing
     /// writes here any more.
     Keyring,
-    /// An owner-only file in smed's data directory.
+    /// An owner-only file in mjolnr's data directory.
     File,
 }
 
@@ -300,7 +300,7 @@ pub trait SecretStore: Send + Sync + std::fmt::Debug {
 /// The environment variable a provider's key may be supplied through.
 ///
 /// Uses each provider's conventional name (`OPENAI_API_KEY`) rather than a
-/// smed-specific one: a user who already exports it expects it to work, and
+/// mjolnr-specific one: a user who already exports it expects it to work, and
 /// inventing `MJOLNR_OPENAI_KEY` would be a papercut with no benefit.
 #[must_use]
 pub fn environment_variable(provider: &ProviderId) -> String {

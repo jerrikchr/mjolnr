@@ -8,12 +8,12 @@
 
 use std::sync::Arc;
 
-use smed::core::model::{ModelId, ProviderId};
-use smed::core::provider::{Provider, ProviderRequest};
-use smed::core::secrets::{
+use mjolnr::core::model::{ModelId, ProviderId};
+use mjolnr::core::provider::{Provider, ProviderRequest};
+use mjolnr::core::secrets::{
     Credential, CredentialKind, ResolvedCredential, Secret, SecretError, SecretSource, SecretStore,
 };
-use smed::providers::anthropic::{AnthropicProvider, DEFAULT_MODEL};
+use mjolnr::providers::anthropic::{AnthropicProvider, DEFAULT_MODEL};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
@@ -60,23 +60,26 @@ async fn live_anthropic_text_stream_completes() {
     let provider = AnthropicProvider::new(Arc::new(EnvironmentOnly));
     let request = ProviderRequest {
         model: ModelId::new(DEFAULT_MODEL),
-        messages: vec![smed::core::message::CanonicalMessage::user(
-            "Reply with exactly: smed-anthropic-live-ok",
+        messages: vec![mjolnr::core::message::CanonicalMessage::user(
+            "Reply with exactly: mjolnr-anthropic-live-ok",
         )],
         system: None,
         tools: Vec::new(),
-        images: smed::core::image::ImageSidecar::new(),
+        images: mjolnr::core::image::ImageSidecar::new(),
     };
     let (tx, mut rx) = mpsc::channel(64);
     let task =
         tokio::spawn(async move { provider.stream(request, tx, CancellationToken::new()).await });
     let mut text = String::new();
     while let Some(event) = rx.recv().await {
-        if let smed::core::event::ProviderEvent::TextDelta { text: delta } = event {
+        if let mjolnr::core::event::ProviderEvent::TextDelta { text: delta } = event {
             text.push_str(&delta);
         }
     }
     let completion = task.await.expect("task").expect("live request");
-    assert_eq!(completion.reason, smed::core::event::FinishReason::Stop);
-    assert!(text.contains("smed-anthropic-live-ok"), "response: {text}");
+    assert_eq!(completion.reason, mjolnr::core::event::FinishReason::Stop);
+    assert!(
+        text.contains("mjolnr-anthropic-live-ok"),
+        "response: {text}"
+    );
 }

@@ -18,7 +18,7 @@ must not be allowed to blur.
 
 Saying it three times does not make it structural. This ADR makes it structural.
 
-smed already has a working precedent: `CouncilFindingDisposition` in
+mjolnr already has a working precedent: `CouncilFindingDisposition` in
 `src/core/council.rs`. A human records
 accept, reject, or defer on one council finding; it is durable, replayable, and
 provably not an approval, because the disposition type and the approval types

@@ -27,7 +27,7 @@ use std::sync::Arc;
 use crate::core::checkpoint::SessionCheckpoint;
 use crate::core::command::{ApprovalDecision, ApprovalId};
 use crate::core::error::ToolError;
-use crate::core::event::{RunId, SmedEvent, StoredEvent};
+use crate::core::event::{MjolnrEvent, RunId, StoredEvent};
 use crate::core::message::{ToolCall, ToolEffect, ToolResult};
 use crate::core::recovery::{Authority, InterruptedKind, InterruptedWork, RecoveryState};
 use crate::core::store::SessionStatus;
@@ -165,7 +165,7 @@ fn apply(
         return Ok(());
     }
     match &stored.event {
-        SmedEvent::SessionCreated {
+        MjolnrEvent::SessionCreated {
             session,
             provider,
             model,
@@ -174,29 +174,29 @@ fn apply(
             state.provider = Some(provider.clone());
             state.model = Some(model.clone());
         }
-        SmedEvent::ModelChanged {
+        MjolnrEvent::ModelChanged {
             provider, model, ..
         } => {
             state.provider = Some(provider.clone());
             state.model = Some(model.clone());
         }
-        SmedEvent::MessageAppended { message, .. } => {
+        MjolnrEvent::MessageAppended { message, .. } => {
             state.push_message(Some(stored.sequence), (**message).clone());
         }
-        SmedEvent::UsageReported { usage, .. } => {
+        MjolnrEvent::UsageReported { usage, .. } => {
             // The same rule the live path applies as it emits the event.
             state.usage.input_tokens += usage.input_tokens;
             state.usage.output_tokens += usage.output_tokens;
         }
-        SmedEvent::PolicyChanged { mode, .. } => state.policy = *mode,
-        SmedEvent::QuotaBoundaryReached { reserve, .. } => {
+        MjolnrEvent::PolicyChanged { mode, .. } => state.policy = *mode,
+        MjolnrEvent::QuotaBoundaryReached { reserve, .. } => {
             state.quota_reserve = reserve.clone();
         }
-        SmedEvent::HandoffCreated { handoff, .. } => {
+        MjolnrEvent::HandoffCreated { handoff, .. } => {
             state.handoff = Some((**handoff).clone());
         }
-        SmedEvent::RunStarted { run, .. } => tracker.open_run(*run),
-        SmedEvent::ToolProposed {
+        MjolnrEvent::RunStarted { run, .. } => tracker.open_run(*run),
+        MjolnrEvent::ToolProposed {
             run,
             approval,
             call,
@@ -204,13 +204,13 @@ fn apply(
             preview,
             ..
         } => tracker.propose(*run, approval.as_ref(), call, *tier, preview),
-        SmedEvent::ApprovalResolved {
+        MjolnrEvent::ApprovalResolved {
             run,
             approval,
             decision,
             ..
         } => tracker.resolve_approval(*run, *approval, *decision),
-        SmedEvent::ToolCompleted {
+        MjolnrEvent::ToolCompleted {
             run,
             call_id,
             name,
@@ -226,7 +226,7 @@ fn apply(
                 crate::core::message::CanonicalMessage::tool_result(call_id, name, restored),
             );
         }
-        SmedEvent::ToolFailed {
+        MjolnrEvent::ToolFailed {
             run,
             call_id,
             name,
@@ -247,23 +247,23 @@ fn apply(
         // Three ways a run stops being in flight: it ended, it failed, or a human
         // resolved what the crash left of it. All three mean the same thing to
         // the tracker — there is no interrupted work here any more.
-        SmedEvent::RunFinished { run, .. } | SmedEvent::RunFailed { run, .. } => {
+        MjolnrEvent::RunFinished { run, .. } | MjolnrEvent::RunFailed { run, .. } => {
             tracker.close_run(*run);
         }
-        SmedEvent::RecoveryResolved { decision, .. } => {
+        MjolnrEvent::RecoveryResolved { decision, .. } => {
             tracker.clear();
             if *decision == crate::core::recovery::RecoveryDecision::EndSession {
                 *status = SessionStatus::Ended;
             }
         }
-        SmedEvent::SessionEnded { .. } => {
+        MjolnrEvent::SessionEnded { .. } => {
             *status = SessionStatus::Ended;
             tracker.clear();
         }
         // A resumed session keeps its route position  — the
         // same replay `ModelChanged` gets, since a selection or advance is
         // itself a provider/model change with a route name attached.
-        SmedEvent::RouteSelected {
+        MjolnrEvent::RouteSelected {
             child: None,
             route,
             position,
@@ -278,7 +278,7 @@ fn apply(
             state.provider = Some(provider.clone());
             state.model = Some(model.clone());
         }
-        SmedEvent::RouteAdvanced {
+        MjolnrEvent::RouteAdvanced {
             route,
             to_position,
             provider,
@@ -295,10 +295,10 @@ fn apply(
         // Review threads replay through the same reducer the live path uses, so
         // a resumed session and a live one cannot hold different notes (plan
         // §Phase D3).
-        event @ (SmedEvent::ReviewNoteRecorded { .. }
-        | SmedEvent::ReviewCommentAdded { .. }
-        | SmedEvent::ReviewRequestSent { .. }
-        | SmedEvent::ReviewRequestAnswered { .. }) => {
+        event @ (MjolnrEvent::ReviewNoteRecorded { .. }
+        | MjolnrEvent::ReviewCommentAdded { .. }
+        | MjolnrEvent::ReviewRequestSent { .. }
+        | MjolnrEvent::ReviewRequestAnswered { .. }) => {
             super::review::apply_event(&mut state.review_threads, event);
         }
         // Every remaining variant is a projection no-op, filtered by
@@ -322,34 +322,34 @@ fn apply(
 ///   them.
 /// - The trigger boundaries  narrate a trigger's *control*
 ///   session, a different session from the one being replayed here.
-const fn is_projection_noop(event: &SmedEvent) -> bool {
+const fn is_projection_noop(event: &MjolnrEvent) -> bool {
     matches!(
         event,
-        SmedEvent::BudgetExhausted { .. }
-            | SmedEvent::ModelChangeRefused { .. }
-            | SmedEvent::FileSaved { .. }
-            | SmedEvent::RecoveryRequired { .. }
-            | SmedEvent::TextDelta { .. }
-            | SmedEvent::ReasoningDelta { .. }
-            | SmedEvent::ToolAssembling { .. }
-            | SmedEvent::QuotaReported { .. }
-            | SmedEvent::SubagentSpawned { .. }
-            | SmedEvent::SubagentResultLate { .. }
-            | SmedEvent::ReadSetCollision { .. }
-            | SmedEvent::SubagentActivity { .. }
-            | SmedEvent::TriggerFired { .. }
-            | SmedEvent::TriggerSettled { .. }
-            | SmedEvent::TriggerSkipped { .. }
-            | SmedEvent::TriggerQueued { .. }
-            | SmedEvent::TriggerReplaced { .. }
-            | SmedEvent::TriggerDisabled { .. }
-            | SmedEvent::TriggerRearmed { .. }
+        MjolnrEvent::BudgetExhausted { .. }
+            | MjolnrEvent::ModelChangeRefused { .. }
+            | MjolnrEvent::FileSaved { .. }
+            | MjolnrEvent::RecoveryRequired { .. }
+            | MjolnrEvent::TextDelta { .. }
+            | MjolnrEvent::ReasoningDelta { .. }
+            | MjolnrEvent::ToolAssembling { .. }
+            | MjolnrEvent::QuotaReported { .. }
+            | MjolnrEvent::SubagentSpawned { .. }
+            | MjolnrEvent::SubagentResultLate { .. }
+            | MjolnrEvent::ReadSetCollision { .. }
+            | MjolnrEvent::SubagentActivity { .. }
+            | MjolnrEvent::TriggerFired { .. }
+            | MjolnrEvent::TriggerSettled { .. }
+            | MjolnrEvent::TriggerSkipped { .. }
+            | MjolnrEvent::TriggerQueued { .. }
+            | MjolnrEvent::TriggerReplaced { .. }
+            | MjolnrEvent::TriggerDisabled { .. }
+            | MjolnrEvent::TriggerRearmed { .. }
             // A child's route selection narrates the parent's transcript,
             // exactly as `SubagentSpawned` does; the child is its own
             // session with its own projection.
-            | SmedEvent::RouteSelected { child: Some(_), .. }
-            | SmedEvent::RouteExhausted { .. }
-            | SmedEvent::BreakerStateChanged { .. }
+            | MjolnrEvent::RouteSelected { child: Some(_), .. }
+            | MjolnrEvent::RouteExhausted { .. }
+            | MjolnrEvent::BreakerStateChanged { .. }
     )
 }
 

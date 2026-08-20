@@ -85,7 +85,7 @@ enum Part {
     },
     /// Confirmed against current documentation 2026-07-25
     /// (`provider-contract.md` §5.5). camelCase to match `functionCall` and
-    /// `thoughtSignature` above: smed targets the camelCase JSON surface, and
+    /// `thoughtSignature` above: mjolnr targets the camelCase JSON surface, and
     /// mixing spellings in one `parts` array is a request that half-decodes.
     InlineData {
         #[serde(rename = "inlineData")]

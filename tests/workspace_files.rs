@@ -25,19 +25,19 @@ use std::process::Command;
 use std::sync::Arc;
 use std::time::Duration;
 
-use smed::core::client::ClientCommand;
-use smed::core::client::workspace::{
+use mjolnr::core::client::ClientCommand;
+use mjolnr::core::client::workspace::{
     DirectoryEntryView, DirectoryPage, FileContentView, FileModeView, FileOpenView, TrustClass,
 };
-use smed::core::error::ReasonCode;
-use smed::core::provider::Provider;
-use smed::core::runtime::SmedRuntime;
-use smed::core::store::EventStore;
-use smed::core::workspace_files::MAX_EDITABLE_FILE_BYTES;
-use smed::providers::fake::FakeProvider;
-use smed::runtime::Runtime;
-use smed::runtime::client_bridge::ClientBridge;
-use smed::store::memory::InMemoryEventStore;
+use mjolnr::core::error::ReasonCode;
+use mjolnr::core::provider::Provider;
+use mjolnr::core::runtime::MjolnrRuntime;
+use mjolnr::core::store::EventStore;
+use mjolnr::core::workspace_files::MAX_EDITABLE_FILE_BYTES;
+use mjolnr::providers::fake::FakeProvider;
+use mjolnr::runtime::Runtime;
+use mjolnr::runtime::client_bridge::ClientBridge;
+use mjolnr::store::memory::InMemoryEventStore;
 
 struct Harness {
     bridge: ClientBridge,
@@ -52,7 +52,7 @@ impl Harness {
             vec![Arc::new(FakeProvider::default()) as Arc<dyn Provider>],
             Arc::clone(&store) as Arc<dyn EventStore>,
         ));
-        let bridge = ClientBridge::start(Arc::clone(&runtime) as Arc<dyn SmedRuntime>);
+        let bridge = ClientBridge::start(Arc::clone(&runtime) as Arc<dyn MjolnrRuntime>);
         Self {
             bridge,
             runtime,
@@ -140,14 +140,14 @@ fn entry<'a>(page: &'a DirectoryPage, name: &str) -> &'a DirectoryEntryView {
 }
 
 fn setup_repo(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("smed-d7-files-{name}"));
+    let dir = std::env::temp_dir().join(format!("mjolnr-d7-files-{name}"));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).expect("temp dir");
     let dir = dir.canonicalize().expect("canonical temp dir");
 
     git(&dir, &["init", "--initial-branch=main"]);
-    git(&dir, &["config", "user.email", "test@smed.invalid"]);
-    git(&dir, &["config", "user.name", "smed Test"]);
+    git(&dir, &["config", "user.email", "test@mjolnr.invalid"]);
+    git(&dir, &["config", "user.name", "mjolnr Test"]);
     git(&dir, &["config", "commit.gpgsign", "false"]);
 
     fs::create_dir_all(dir.join("src")).expect("src");
@@ -230,7 +230,7 @@ async fn a_client_save_refuses_stale_bytes_records_the_effect_and_refreshes_chan
     assert!(changes.read_evidence.is_empty());
     assert!(matches!(
         snapshot.repository.freshness,
-        smed::core::client::workspace::RepositoryFreshness::CapturedAt {
+        mjolnr::core::client::workspace::RepositoryFreshness::CapturedAt {
             ref trigger,
             ..
         } if trigger == "fileSave"
@@ -239,10 +239,10 @@ async fn a_client_save_refuses_stale_bytes_records_the_effect_and_refreshes_chan
     let events = harness.store.events(session).await.expect("events");
     assert!(events.iter().any(|stored| matches!(
         &stored.event,
-        smed::core::event::SmedEvent::FileSaved { path, .. } if path == "README.md"
+        mjolnr::core::event::MjolnrEvent::FileSaved { path, .. } if path == "README.md"
     )));
 
-    fs::write(dir.join("README.md"), "changed outside smed\n").expect("external edit");
+    fs::write(dir.join("README.md"), "changed outside mjolnr\n").expect("external edit");
     let error = harness
         .bridge
         .dispatch(ClientCommand::SaveFile {
@@ -255,7 +255,7 @@ async fn a_client_save_refuses_stale_bytes_records_the_effect_and_refreshes_chan
     assert_eq!(error.reason_code(), Some(ReasonCode::StaleFileVersion));
     assert_eq!(
         fs::read_to_string(dir.join("README.md")).expect("newer file"),
-        "changed outside smed\n"
+        "changed outside mjolnr\n"
     );
 
     harness.close().await;
@@ -485,7 +485,7 @@ async fn binary_and_over_limit_files_reach_a_client_as_bounded_previews() {
     assert!(excerpt_truncated);
     assert!(
         excerpt.len()
-            <= smed::core::client::workspace::MAX_FILE_PREVIEW_BYTES
+            <= mjolnr::core::client::workspace::MAX_FILE_PREVIEW_BYTES
                 .try_into()
                 .unwrap(),
         "the preview crossed the wire bound"
@@ -509,7 +509,7 @@ async fn binary_and_over_limit_files_reach_a_client_as_bounded_previews() {
 
 /// An oversized entry in a *listing* is `oversized`, not a binary/text verdict
 /// it never looked for. The two send a reader to different remedies, and one
-/// `false` for both would say smed looked when it did not.
+/// `false` for both would say mjolnr looked when it did not.
 #[tokio::test]
 async fn a_listing_marks_binary_generated_and_oversized_entries_apart() {
     let dir = setup_repo("classify");
@@ -589,7 +589,7 @@ async fn git_decides_what_is_ignored_and_the_producer_never_guesses() {
 /// project.
 #[tokio::test]
 async fn a_project_that_is_not_a_repository_still_lists_its_files() {
-    let dir = std::env::temp_dir().join("smed-d7-files-no-git");
+    let dir = std::env::temp_dir().join("mjolnr-d7-files-no-git");
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(dir.join("src")).expect("temp dir");
     let dir = dir.canonicalize().expect("canonical");

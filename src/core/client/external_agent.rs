@@ -2,7 +2,7 @@
 //!
 //! The frontend sees an isolated worktree, a resolved absolute executable, and
 //! a trust label it cannot promote. It never receives a PTY handle, raw
-//! environment, or a claim that the work was smed-governed.
+//! environment, or a claim that the work was mjolnr-governed.
 
 use serde::{Deserialize, Serialize};
 

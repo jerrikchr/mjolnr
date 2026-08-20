@@ -56,11 +56,11 @@ use tokio_util::sync::CancellationToken;
 
 use crate::context::ProjectContext;
 use crate::core::change_capture::ChangeView;
-use crate::core::command::{ApprovalId, SmedCommand};
+use crate::core::command::{ApprovalId, MjolnrCommand};
 use crate::core::continuation::QuotaReserveStatus;
 use crate::core::directive::DirectiveSource;
-use crate::core::error::{ProviderError, ReasonCode, SmedError, ToolError};
-use crate::core::event::{FinishReason, ProviderEvent, RunId, SessionId, SmedEvent};
+use crate::core::error::{MjolnrError, ProviderError, ReasonCode, ToolError};
+use crate::core::event::{FinishReason, MjolnrEvent, ProviderEvent, RunId, SessionId};
 use crate::core::mcp::McpServerSummary;
 use crate::core::message::{CanonicalMessage, ToolCall, ToolResult};
 use crate::core::model::{ModelId, ProviderId};
@@ -108,35 +108,35 @@ type ToolTaskOutcome = Result<Result<ToolResult, ToolError>, tokio::task::JoinEr
 /// Messages the actor processes. Commands and stream traffic are deliberately
 /// the same queue so neither can starve the other.
 enum Mail {
-    Command(SmedCommand),
+    Command(MjolnrCommand),
     /// Plan commands are acknowledged after fail-closed validation and durable
     /// append. Other commands retain the runtime contract's accepted-not-
     /// completed dispatch semantics.
     PlanCommand {
-        command: SmedCommand,
-        reply: oneshot::Sender<Result<(), SmedError>>,
+        command: MjolnrCommand,
+        reply: oneshot::Sender<Result<(), MjolnrError>>,
     },
     /// Child-run commands (Phase D2) are acknowledged with the same
     /// fail-closed semantics as plan commands: the reply carries the typed
     /// refusal while execution is not yet implemented.
     ChildRunCommand {
-        command: SmedCommand,
-        reply: oneshot::Sender<Result<(), SmedError>>,
+        command: MjolnrCommand,
+        reply: oneshot::Sender<Result<(), MjolnrError>>,
     },
     /// Repository commands (Phase D5) are acknowledged so the caller learns
     /// the exact outcome of a git side effect — success, typed refusal, or an
     /// uncertain partial effect — rather than discovering it from a later
     /// snapshot poll.
     RepositoryCommand {
-        command: SmedCommand,
-        reply: oneshot::Sender<Result<(), SmedError>>,
+        command: MjolnrCommand,
+        reply: oneshot::Sender<Result<(), MjolnrError>>,
     },
     /// Integration commands (Phase D6) are acknowledged with the same
     /// fail-closed semantics: the reply carries the typed refusal while no
     /// integration performs network I/O.
     IntegrationCommand {
-        command: SmedCommand,
-        reply: oneshot::Sender<Result<(), SmedError>>,
+        command: MjolnrCommand,
+        reply: oneshot::Sender<Result<(), MjolnrError>>,
     },
     /// Supply the integration producer (Phase D6). Sent once, immediately after
     /// spawn, by [`Runtime::spawn_with_task_source`](crate::runtime::Runtime::spawn_with_task_source);
@@ -151,28 +151,28 @@ enum Mail {
     /// A refusal the client never learns of is a review note that silently was
     /// not taken.
     ReviewCommand {
-        command: SmedCommand,
-        reply: oneshot::Sender<Result<(), SmedError>>,
+        command: MjolnrCommand,
+        reply: oneshot::Sender<Result<(), MjolnrError>>,
     },
     /// Board commands (Phase E5) are acknowledged for the same shape of
     /// reason: an unknown ticket, a dangling blocker, or an unrecorded option
     /// are refusals the human must hear about — silently not recording a
     /// decision is the worst thing a decision record can do.
     BoardCommand {
-        command: SmedCommand,
-        reply: oneshot::Sender<Result<(), SmedError>>,
+        command: MjolnrCommand,
+        reply: oneshot::Sender<Result<(), MjolnrError>>,
     },
     ExternalAgentCommand {
-        command: SmedCommand,
-        reply: oneshot::Sender<Result<(), SmedError>>,
+        command: MjolnrCommand,
+        reply: oneshot::Sender<Result<(), MjolnrError>>,
     },
     /// Workspace commands are acknowledged because refusing one is the normal
     /// case: a run in flight, a session already open on the root, or a path
     /// that is not a directory. Unacknowledged, each of those reached the
     /// client as a button that did nothing.
     WorkspaceCommand {
-        command: SmedCommand,
-        reply: oneshot::Sender<Result<(), SmedError>>,
+        command: MjolnrCommand,
+        reply: oneshot::Sender<Result<(), MjolnrError>>,
     },
     /// File reads (Phase D7) are acknowledged because the answer *is* the
     /// point: a listing or a file, or the typed refusal that containment,
@@ -181,12 +181,12 @@ enum Mail {
     WorkspaceFileQuery {
         request: crate::core::workspace_files::WorkspaceFileRequest,
         reply:
-            oneshot::Sender<Result<crate::core::workspace_files::WorkspaceFileAnswer, SmedError>>,
+            oneshot::Sender<Result<crate::core::workspace_files::WorkspaceFileAnswer, MjolnrError>>,
     },
     /// Discovery writes a new bounded OKF bundle and therefore reports its
     /// completion or refusal to the human who requested it.
     DiscoveryCommand {
-        reply: oneshot::Sender<Result<(), SmedError>>,
+        reply: oneshot::Sender<Result<(), MjolnrError>>,
     },
     CatalogDiscovered {
         generation: u64,
@@ -387,7 +387,7 @@ struct Actor {
     limits: BudgetLimits,
     store: Arc<dyn EventStore>,
     state: SessionState,
-    events: broadcast::Sender<SmedEvent>,
+    events: broadcast::Sender<MjolnrEvent>,
     snapshot: watch::Sender<RuntimeSnapshot>,
     mailbox: mpsc::Sender<Mail>,
     run: Option<ActiveRun>,
@@ -426,7 +426,7 @@ struct Actor {
     ///
     /// Once one command is deferred, later commands queue behind it so a
     /// `SendUserMessage` cannot overtake a compact resume or model switch.
-    pending_catalog_commands: VecDeque<SmedCommand>,
+    pending_catalog_commands: VecDeque<MjolnrCommand>,
     /// Most recent discovery result. The bundle itself is durable; this is a
     /// bounded client projection only.
     last_discovery: Option<crate::core::discovery::DiscoveryReport>,
@@ -618,33 +618,33 @@ impl Actor {
         clippy::too_many_lines,
         reason = "one flat command dispatch;  added the AttachRoute arm alongside the existing ones"
     )]
-    async fn handle_command(&mut self, command: SmedCommand) {
+    async fn handle_command(&mut self, command: MjolnrCommand) {
         match command {
-            SmedCommand::RegisterCredential { provider, secret } => {
+            MjolnrCommand::RegisterCredential { provider, secret } => {
                 use crate::core::secrets::{Credential, Secret, SecretStore};
                 use crate::store::secrets::OsSecretStore;
                 let secrets = OsSecretStore::new();
                 let _ = secrets.store(&provider, Credential::ApiKey(Secret::new(secret.0)));
                 self.refresh_provider_catalogs();
             }
-            SmedCommand::RefreshCredentials => self.refresh_provider_catalogs(),
-            SmedCommand::CreateSession { provider, model } => {
+            MjolnrCommand::RefreshCredentials => self.refresh_provider_catalogs(),
+            MjolnrCommand::CreateSession { provider, model } => {
                 self.create_session(provider, model).await;
             }
-            SmedCommand::SelectModel { provider, model } => {
+            MjolnrCommand::SelectModel { provider, model } => {
                 let _ = self.select_model(provider, model).await;
             }
-            SmedCommand::AttachRoute {
+            MjolnrCommand::AttachRoute {
                 route,
                 role,
                 task_class,
             } => {
                 self.attach_route(route, role, task_class).await;
             }
-            SmedCommand::BindRoutePersona { route, persona } => {
+            MjolnrCommand::BindRoutePersona { route, persona } => {
                 self.bind_route_persona(&route, persona.as_deref());
             }
-            SmedCommand::SelectPersona { persona } => {
+            MjolnrCommand::SelectPersona { persona } => {
                 // Voice only: it changes the next turn's system prompt and
                 // nothing else. The client has already validated the name
                 // against the offered personas, so an unknown one never reaches
@@ -652,39 +652,39 @@ impl Actor {
                 self.state.persona_override = persona;
                 self.publish_snapshot();
             }
-            SmedCommand::SetPolicy { mode } => {
+            MjolnrCommand::SetPolicy { mode } => {
                 self.set_policy(mode).await;
                 // An envelope the new policy no longer justifies must not
                 // survive the narrowing that invalidated it.
                 self.reconcile_envelope_with_policy(mode).await;
             }
-            SmedCommand::ArmSpawnEnvelope { envelope } => {
+            MjolnrCommand::ArmSpawnEnvelope { envelope } => {
                 self.arm_spawn_envelope(*envelope).await;
             }
-            SmedCommand::ClearSpawnEnvelope => {
+            MjolnrCommand::ClearSpawnEnvelope => {
                 self.clear_spawn_envelope(crate::core::event::EnvelopeEnd::Withdrawn)
                     .await;
             }
-            SmedCommand::SendUserMessage { text, source } => {
+            MjolnrCommand::SendUserMessage { text, source } => {
                 self.start_run(source.frame(&text), &source).await;
             }
-            SmedCommand::SendPromptTemplate { name, arguments } => {
+            MjolnrCommand::SendPromptTemplate { name, arguments } => {
                 self.send_prompt_template(name, arguments).await;
             }
-            SmedCommand::ReloadResources => self.reload_resources(),
-            SmedCommand::LoadExtension { name } => self.load_extension(name).await,
-            SmedCommand::RewindTo { sequence } => self.rewind_to(sequence).await,
-            SmedCommand::RollbackToCheckpoint {
+            MjolnrCommand::ReloadResources => self.reload_resources(),
+            MjolnrCommand::LoadExtension { name } => self.load_extension(name).await,
+            MjolnrCommand::RewindTo { sequence } => self.rewind_to(sequence).await,
+            MjolnrCommand::RollbackToCheckpoint {
                 target_sequence,
                 expected_head,
             } => {
                 self.rollback_to_checkpoint(target_sequence, expected_head)
                     .await;
             }
-            SmedCommand::LoadSessionTree => self.load_session_tree().await,
-            SmedCommand::ForkSession { before } => self.fork_session(before).await,
-            SmedCommand::FollowBranch { sequence } => self.follow_branch(sequence).await,
-            SmedCommand::QueueSteeringMessage { text } => {
+            MjolnrCommand::LoadSessionTree => self.load_session_tree().await,
+            MjolnrCommand::ForkSession { before } => self.fork_session(before).await,
+            MjolnrCommand::FollowBranch { sequence } => self.follow_branch(sequence).await,
+            MjolnrCommand::QueueSteeringMessage { text } => {
                 // With nothing in flight there is nothing to steer, so the
                 // message is simply the next thing said. That keeps one key
                 // meaning one thing whether or not a run happens to be active.
@@ -695,76 +695,76 @@ impl Actor {
                     self.start_run(text, &DirectiveSource::Human).await;
                 }
             }
-            SmedCommand::CreateHandoff { target } => self.start_handoff(target).await,
-            SmedCommand::StartPlanInterview { goal } => {
+            MjolnrCommand::CreateHandoff { target } => self.start_handoff(target).await,
+            MjolnrCommand::StartPlanInterview { goal } => {
                 let _ = self.start_plan_interview(goal).await;
             }
-            SmedCommand::ConveneCouncil {
+            MjolnrCommand::ConveneCouncil {
                 question,
                 plan_file,
             } => {
                 self.convene_council(question, plan_file).await;
             }
-            SmedCommand::ResolveResume { choice } => self.resolve_resume(choice).await,
-            SmedCommand::ResolveApproval { approval, decision } => {
+            MjolnrCommand::ResolveResume { choice } => self.resolve_resume(choice).await,
+            MjolnrCommand::ResolveApproval { approval, decision } => {
                 self.resolve_approval(approval, decision).await;
             }
-            SmedCommand::ResolveRecovery { decision } => self.resolve_recovery(decision).await,
-            SmedCommand::CancelRun => self.cancel_run().await,
-            SmedCommand::EndSession => self.end_session().await,
-            SmedCommand::ResumeSession { session } => self.resume_session(session).await,
-            SmedCommand::ResumeCompact {
+            MjolnrCommand::ResolveRecovery { decision } => self.resolve_recovery(decision).await,
+            MjolnrCommand::CancelRun => self.cancel_run().await,
+            MjolnrCommand::EndSession => self.end_session().await,
+            MjolnrCommand::ResumeSession { session } => self.resume_session(session).await,
+            MjolnrCommand::ResumeCompact {
                 session,
                 provider,
                 model,
             } => {
                 self.resume_compact(session, provider, model).await;
             }
-            SmedCommand::RunDiscovery
-            | SmedCommand::AskPlanQuestion { .. }
-            | SmedCommand::AnswerPlanQuestion { .. }
-            | SmedCommand::ProposePlan { .. }
-            | SmedCommand::ReviewPlan { .. }
-            | SmedCommand::ApprovePlan { .. }
-            | SmedCommand::HandoffPlan { .. }
-            | SmedCommand::CreateWorktree { .. }
-            | SmedCommand::ForkWork { .. }
-            | SmedCommand::StartChild { .. }
-            | SmedCommand::CancelChild { .. }
-            | SmedCommand::PreserveBranch { .. }
-            | SmedCommand::SettleChild { .. }
-            | SmedCommand::DiscardSettledWorktree { .. }
-            | SmedCommand::StagePaths { .. }
-            | SmedCommand::StageHunks { .. }
-            | SmedCommand::Unstage { .. }
-            | SmedCommand::CreateBranch { .. }
-            | SmedCommand::Commit { .. }
-            | SmedCommand::IntegrateChildBranch { .. }
-            | SmedCommand::Fetch
-            | SmedCommand::Push { .. }
-            | SmedCommand::IntegrateUpstream { .. }
-            | SmedCommand::CloneProject { .. }
-            | SmedCommand::Rebase { .. }
-            | SmedCommand::AbortRebase
-            | SmedCommand::FetchTask { .. }
-            | SmedCommand::FetchTasks { .. }
-            | SmedCommand::SubmitChange { .. }
-            | SmedCommand::SubmitImportedComment { .. }
-            | SmedCommand::AddReviewNote { .. }
-            | SmedCommand::AddReviewComment { .. }
-            | SmedCommand::SendReviewNotes { .. }
-            | SmedCommand::ResolveCouncilFinding { .. }
-            | SmedCommand::ProposeCouncilAmendment { .. }
-            | SmedCommand::OpenDecisionTicket { .. }
-            | SmedCommand::ResolveDecisionTicket { .. }
-            | SmedCommand::ImportWorkItem { .. }
-            | SmedCommand::RefreshImportedItem { .. }
-            | SmedCommand::LaunchExternalAgent { .. }
-            | SmedCommand::StopExternalAgent { .. }
-            | SmedCommand::ImportExternalAgentChanges { .. }
-            | SmedCommand::OpenProject { .. }
-            | SmedCommand::RefreshRepository
-            | SmedCommand::SaveFile { .. } => {
+            MjolnrCommand::RunDiscovery
+            | MjolnrCommand::AskPlanQuestion { .. }
+            | MjolnrCommand::AnswerPlanQuestion { .. }
+            | MjolnrCommand::ProposePlan { .. }
+            | MjolnrCommand::ReviewPlan { .. }
+            | MjolnrCommand::ApprovePlan { .. }
+            | MjolnrCommand::HandoffPlan { .. }
+            | MjolnrCommand::CreateWorktree { .. }
+            | MjolnrCommand::ForkWork { .. }
+            | MjolnrCommand::StartChild { .. }
+            | MjolnrCommand::CancelChild { .. }
+            | MjolnrCommand::PreserveBranch { .. }
+            | MjolnrCommand::SettleChild { .. }
+            | MjolnrCommand::DiscardSettledWorktree { .. }
+            | MjolnrCommand::StagePaths { .. }
+            | MjolnrCommand::StageHunks { .. }
+            | MjolnrCommand::Unstage { .. }
+            | MjolnrCommand::CreateBranch { .. }
+            | MjolnrCommand::Commit { .. }
+            | MjolnrCommand::IntegrateChildBranch { .. }
+            | MjolnrCommand::Fetch
+            | MjolnrCommand::Push { .. }
+            | MjolnrCommand::IntegrateUpstream { .. }
+            | MjolnrCommand::CloneProject { .. }
+            | MjolnrCommand::Rebase { .. }
+            | MjolnrCommand::AbortRebase
+            | MjolnrCommand::FetchTask { .. }
+            | MjolnrCommand::FetchTasks { .. }
+            | MjolnrCommand::SubmitChange { .. }
+            | MjolnrCommand::SubmitImportedComment { .. }
+            | MjolnrCommand::AddReviewNote { .. }
+            | MjolnrCommand::AddReviewComment { .. }
+            | MjolnrCommand::SendReviewNotes { .. }
+            | MjolnrCommand::ResolveCouncilFinding { .. }
+            | MjolnrCommand::ProposeCouncilAmendment { .. }
+            | MjolnrCommand::OpenDecisionTicket { .. }
+            | MjolnrCommand::ResolveDecisionTicket { .. }
+            | MjolnrCommand::ImportWorkItem { .. }
+            | MjolnrCommand::RefreshImportedItem { .. }
+            | MjolnrCommand::LaunchExternalAgent { .. }
+            | MjolnrCommand::StopExternalAgent { .. }
+            | MjolnrCommand::ImportExternalAgentChanges { .. }
+            | MjolnrCommand::OpenProject { .. }
+            | MjolnrCommand::RefreshRepository
+            | MjolnrCommand::SaveFile { .. } => {
                 // All six families are routed through acknowledged mail:
                 // `Runtime::dispatch` sends plan commands via
                 // `Mail::PlanCommand`, child-run commands via
@@ -786,22 +786,22 @@ impl Actor {
     /// bridge renders, not a panic and not a fabricated success (AGENTS.md §2,
     /// §3). Execution lands in the phase that wires `subagent::worktree` to
     /// this handler; until then this is deliberately the only behaviour.
-    fn handle_child_run_command(command: &SmedCommand) -> Result<(), SmedError> {
+    fn handle_child_run_command(command: &MjolnrCommand) -> Result<(), MjolnrError> {
         Err(Self::child_run_unavailable(command))
     }
 
-    fn child_run_unavailable(command: &SmedCommand) -> SmedError {
+    fn child_run_unavailable(command: &MjolnrCommand) -> MjolnrError {
         let capability = match command {
-            SmedCommand::CreateWorktree { .. } => "createWorktree",
-            SmedCommand::ForkWork { .. } => "forkWork",
-            SmedCommand::StartChild { .. } => "startChild",
-            SmedCommand::CancelChild { .. } => "cancelChild",
-            SmedCommand::PreserveBranch { .. } => "preserveBranch",
-            SmedCommand::SettleChild { .. } => "settleChild",
-            SmedCommand::DiscardSettledWorktree { .. } => "discardSettledWorktree",
+            MjolnrCommand::CreateWorktree { .. } => "createWorktree",
+            MjolnrCommand::ForkWork { .. } => "forkWork",
+            MjolnrCommand::StartChild { .. } => "startChild",
+            MjolnrCommand::CancelChild { .. } => "cancelChild",
+            MjolnrCommand::PreserveBranch { .. } => "preserveBranch",
+            MjolnrCommand::SettleChild { .. } => "settleChild",
+            MjolnrCommand::DiscardSettledWorktree { .. } => "discardSettledWorktree",
             _ => "childRun",
         };
-        SmedError::workspace_refused(
+        MjolnrError::workspace_refused(
             ReasonCode::WorkspaceCapabilityUnavailable,
             format!(
                 "Capability '{capability}' is unavailable: child-run execution is not yet \
@@ -822,8 +822,11 @@ impl Actor {
     ///   never stalls the actor's mailbox (AGENTS.md §4).
     /// - **The caller learns the outcome.** The reply carries success, a typed
     ///   refusal, or an uncertain effect — the last of which is neither.
-    async fn handle_repository_command(&mut self, command: SmedCommand) -> Result<(), SmedError> {
-        if let SmedCommand::CloneProject {
+    async fn handle_repository_command(
+        &mut self,
+        command: MjolnrCommand,
+    ) -> Result<(), MjolnrError> {
+        if let MjolnrCommand::CloneProject {
             source,
             destination,
         } = command
@@ -832,7 +835,7 @@ impl Actor {
         }
 
         let Some(root) = self.state.workspace_root.clone() else {
-            return Err(SmedError::workspace_refused(
+            return Err(MjolnrError::workspace_refused(
                 ReasonCode::WorkspaceCapabilityUnavailable,
                 "No project is open, so there is no repository to act on; the command was \
                  refused and nothing ran",
@@ -842,41 +845,41 @@ impl Actor {
         let outcome = tokio::task::spawn_blocking(move || {
             let repository = crate::repository::Repository::open(root)?;
             match command {
-                SmedCommand::StagePaths { paths } => repository.stage_paths(&paths),
-                SmedCommand::Unstage { paths } => repository.unstage_paths(&paths),
-                SmedCommand::StageHunks { path, hunk_indices } => {
+                MjolnrCommand::StagePaths { paths } => repository.stage_paths(&paths),
+                MjolnrCommand::Unstage { paths } => repository.unstage_paths(&paths),
+                MjolnrCommand::StageHunks { path, hunk_indices } => {
                     repository.stage_hunks(&path, &hunk_indices)
                 }
-                SmedCommand::CreateBranch {
+                MjolnrCommand::CreateBranch {
                     name,
                     base_revision,
                 } => repository.create_branch(&name, &base_revision),
-                SmedCommand::Commit {
+                MjolnrCommand::Commit {
                     message,
                     expected_index_revision,
                 } => repository
                     .commit(&message, &expected_index_revision)
                     .map(drop),
-                SmedCommand::IntegrateChildBranch {
+                MjolnrCommand::IntegrateChildBranch {
                     name,
                     message,
                     expected_head,
                 } => repository
                     .integrate_child_branch(&name, &message, &expected_head)
                     .map(drop),
-                SmedCommand::Fetch => repository.fetch(),
-                SmedCommand::Push { expected_head } => repository.push(&expected_head),
-                SmedCommand::IntegrateUpstream {
+                MjolnrCommand::Fetch => repository.fetch(),
+                MjolnrCommand::Push { expected_head } => repository.push(&expected_head),
+                MjolnrCommand::IntegrateUpstream {
                     message,
                     expected_head,
                 } => repository
                     .integrate_upstream(&message, &expected_head)
                     .map(drop),
-                SmedCommand::Rebase {
+                MjolnrCommand::Rebase {
                     onto,
                     expected_head,
                 } => repository.rebase(&onto, &expected_head).map(drop),
-                SmedCommand::AbortRebase => repository.abort_rebase(),
+                MjolnrCommand::AbortRebase => repository.abort_rebase(),
                 // `Runtime::dispatch` routes only the repository variants
                 // here. A routing bug becomes a typed refusal, not a panic.
                 _ => Err(crate::repository::RepositoryError::CapabilityUnavailable {
@@ -896,18 +899,18 @@ impl Actor {
 
         match outcome {
             Ok(Ok(())) => Ok(()),
-            Ok(Err(error)) => Err(SmedError::workspace_refused(
+            Ok(Err(error)) => Err(MjolnrError::workspace_refused(
                 error.reason_code(),
                 error.to_string(),
             )),
-            // The blocking task died mid-git. smed cannot prove the operation
+            // The blocking task died mid-git. mjolnr cannot prove the operation
             // did not happen, so this is an uncertain effect requiring a human
             // decision — never a retry (AGENTS.md §1.4).
-            Err(join_error) => Err(SmedError::workspace_refused(
+            Err(join_error) => Err(MjolnrError::workspace_refused(
                 ReasonCode::RepositoryUncertainEffect,
                 format!(
                     "The repository task ended before reporting an outcome ({join_error}); \
-                     smed cannot prove whether the operation took effect"
+                     mjolnr cannot prove whether the operation took effect"
                 ),
             )),
         }
@@ -917,15 +920,15 @@ impl Actor {
         &mut self,
         source: String,
         destination: std::path::PathBuf,
-    ) -> Result<(), SmedError> {
+    ) -> Result<(), MjolnrError> {
         if self.run.is_some() {
-            return Err(SmedError::workspace_refused(
+            return Err(MjolnrError::workspace_refused(
                 ReasonCode::RunActive,
                 "the project cannot change while a run is active; cancel the run first",
             ));
         }
         if self.state.session.is_some() {
-            return Err(SmedError::workspace_refused(
+            return Err(MjolnrError::workspace_refused(
                 ReasonCode::WorkspaceRootLocked,
                 "the project cannot change while a session is open; end the session first",
             ));
@@ -937,16 +940,16 @@ impl Actor {
         let destination = match outcome {
             Ok(Ok(destination)) => destination,
             Ok(Err(error)) => {
-                return Err(SmedError::workspace_refused(
+                return Err(MjolnrError::workspace_refused(
                     error.reason_code(),
                     error.to_string(),
                 ));
             }
             Err(join_error) => {
-                return Err(SmedError::workspace_refused(
+                return Err(MjolnrError::workspace_refused(
                     ReasonCode::RepositoryUncertainEffect,
                     format!(
-                        "the clone task ended before reporting an outcome ({join_error}); smed cannot prove whether the clone took effect"
+                        "the clone task ended before reporting an outcome ({join_error}); mjolnr cannot prove whether the clone took effect"
                     ),
                 ));
             }
@@ -999,7 +1002,7 @@ impl Actor {
             // A failed read leaves no capture to pair with the refusal, and the
             // change view carries the same refusal rather than an empty list —
             // an empty change set renders as "nothing has changed", which is a
-            // claim smed did not earn.
+            // claim mjolnr did not earn.
             Ok(Err(error)) => {
                 self.state.changes = ChangeView::Unavailable {
                     code: error.reason_code(),
@@ -1074,11 +1077,11 @@ impl Actor {
     async fn read_workspace_files(
         &mut self,
         request: crate::core::workspace_files::WorkspaceFileRequest,
-    ) -> Result<crate::core::workspace_files::WorkspaceFileAnswer, SmedError> {
+    ) -> Result<crate::core::workspace_files::WorkspaceFileAnswer, MjolnrError> {
         use crate::core::workspace_files::{WorkspaceFileAnswer, WorkspaceFileRequest};
 
         let Some(root) = self.state.workspace_root.clone() else {
-            return Err(SmedError::workspace_refused(
+            return Err(MjolnrError::workspace_refused(
                 ReasonCode::WorkspaceCapabilityUnavailable,
                 "No project is open, so there is no workspace to read files from; the request \
                  was refused and nothing was read",
@@ -1110,7 +1113,7 @@ impl Actor {
 
         match outcome {
             Ok(Ok(answer)) => Ok(answer),
-            Ok(Err(error)) => Err(SmedError::workspace_refused(
+            Ok(Err(error)) => Err(MjolnrError::workspace_refused(
                 error.reason_code(),
                 error.to_string(),
             )),
@@ -1118,7 +1121,7 @@ impl Actor {
             // read and never an uncertain effect. The distinction matters:
             // `RepositoryUncertainEffect` asks a human to decide, and there is
             // nothing here for them to decide about.
-            Err(join_error) => Err(SmedError::workspace_refused(
+            Err(join_error) => Err(MjolnrError::workspace_refused(
                 ReasonCode::ToolExecution,
                 format!("the file read did not complete: {join_error}"),
             )),
@@ -1131,8 +1134,8 @@ impl Actor {
         remote_id: &str,
         expected_revision: &str,
         body: &str,
-    ) -> Result<(), SmedError> {
-        let session = self.state.session.ok_or(SmedError::NoSession)?;
+    ) -> Result<(), MjolnrError> {
+        let session = self.state.session.ok_or(MjolnrError::NoSession)?;
         let producer = self.resolve_comment_producer(integration)?;
         let item_id = *self
             .state
@@ -1141,7 +1144,7 @@ impl Actor {
             .find(|item| item.integration == integration && item.remote_id == remote_id)
             .map(|item| &item.id)
             .ok_or_else(|| {
-                SmedError::workspace_refused(
+                MjolnrError::workspace_refused(
                     ReasonCode::SchemaInvalid,
                     format!("no imported item {integration}/{remote_id} in this session"),
                 )
@@ -1151,9 +1154,9 @@ impl Actor {
             .await
             .map_err(|error| {
                 let code = error.reason_code();
-                SmedError::workspace_refused(code, error.to_string())
+                MjolnrError::workspace_refused(code, error.to_string())
             })?;
-        let event = SmedEvent::ImportedCommentRecorded {
+        let event = MjolnrEvent::ImportedCommentRecorded {
             session,
             item_id,
             comment_id,
@@ -1163,7 +1166,7 @@ impl Actor {
         self.persist(event)
             .await
             .map(|_| ())
-            .map_err(|error| SmedError::Store {
+            .map_err(|error| MjolnrError::Store {
                 detail: error.to_string(),
             })
     }
@@ -1171,9 +1174,9 @@ impl Actor {
     fn resolve_comment_producer(
         &self,
         source: &str,
-    ) -> Result<Arc<dyn crate::integrations::TaskSource>, SmedError> {
+    ) -> Result<Arc<dyn crate::integrations::TaskSource>, MjolnrError> {
         if !matches!(source, "github" | "linear") {
-            return Err(SmedError::workspace_refused(
+            return Err(MjolnrError::workspace_refused(
                 ReasonCode::WorkspaceCapabilityUnavailable,
                 format!("integration '{source}' has no comment producer"),
             ));
@@ -1185,28 +1188,31 @@ impl Actor {
             "github" => crate::integrations::github::GitHubSource::from_environment()
                 .map(|producer| Arc::new(producer) as Arc<dyn crate::integrations::TaskSource>)
                 .map_err(|error| {
-                    SmedError::workspace_refused(error.reason_code(), error.to_string())
+                    MjolnrError::workspace_refused(error.reason_code(), error.to_string())
                 }),
             "linear" => crate::integrations::linear::LinearSource::from_environment()
                 .map(|producer| Arc::new(producer) as Arc<dyn crate::integrations::TaskSource>)
                 .map_err(|error| {
-                    SmedError::workspace_refused(error.reason_code(), error.to_string())
+                    MjolnrError::workspace_refused(error.reason_code(), error.to_string())
                 }),
-            _ => Err(SmedError::workspace_refused(
+            _ => Err(MjolnrError::workspace_refused(
                 ReasonCode::WorkspaceCapabilityUnavailable,
                 format!("integration '{source}' has no comment producer"),
             )),
         }
     }
 
-    async fn handle_integration_command(&mut self, command: &SmedCommand) -> Result<(), SmedError> {
-        if let SmedCommand::FetchTask { source, task_id } = command {
+    async fn handle_integration_command(
+        &mut self,
+        command: &MjolnrCommand,
+    ) -> Result<(), MjolnrError> {
+        if let MjolnrCommand::FetchTask { source, task_id } = command {
             return self.fetch_and_record_task(source, task_id).await;
         }
-        if let SmedCommand::FetchTasks { source, task_ids } = command {
+        if let MjolnrCommand::FetchTasks { source, task_ids } = command {
             return self.fetch_and_record_tasks(source, task_ids).await;
         }
-        if let SmedCommand::SubmitChange {
+        if let MjolnrCommand::SubmitChange {
             source,
             remote_id,
             expected_revision,
@@ -1232,7 +1238,7 @@ impl Actor {
                         ReasonCode::SchemaInvalid
                     }
                 };
-                SmedError::workspace_refused(code, refusal.to_string())
+                MjolnrError::workspace_refused(code, refusal.to_string())
             })?;
             let request = crate::integrations::RemoteChangeRequest::new(
                 remote_id,
@@ -1244,11 +1250,11 @@ impl Actor {
                 base_branch,
             )
             .map_err(|error| {
-                SmedError::workspace_refused(ReasonCode::SchemaInvalid, error.to_string())
+                MjolnrError::workspace_refused(ReasonCode::SchemaInvalid, error.to_string())
             })?;
             return self.submit_change(source, request).await;
         }
-        if let SmedCommand::SubmitImportedComment {
+        if let MjolnrCommand::SubmitImportedComment {
             integration,
             remote_id,
             expected_revision,
@@ -1270,10 +1276,10 @@ impl Actor {
                         ReasonCode::SchemaInvalid
                     }
                 };
-                SmedError::workspace_refused(code, refusal.to_string())
+                MjolnrError::workspace_refused(code, refusal.to_string())
             })?;
             if body.len() > crate::integrations::MAX_REMOTE_BODY_BYTES {
-                return Err(SmedError::workspace_refused(
+                return Err(MjolnrError::workspace_refused(
                     ReasonCode::SchemaInvalid,
                     format!(
                         "comment body may not exceed {} bytes",
@@ -1285,7 +1291,7 @@ impl Actor {
                 .chars()
                 .any(|c| c.is_control() && !matches!(c, '\n' | '\r' | '\t'))
             {
-                return Err(SmedError::workspace_refused(
+                return Err(MjolnrError::workspace_refused(
                     ReasonCode::SchemaInvalid,
                     "comment body may not contain control characters other than newline and tab",
                 ));
@@ -1294,7 +1300,7 @@ impl Actor {
                 .submit_imported_comment(integration, remote_id, expected_revision, body)
                 .await;
         }
-        Err(SmedError::workspace_refused(
+        Err(MjolnrError::workspace_refused(
             ReasonCode::WorkspaceCapabilityUnavailable,
             "integration command is unavailable",
         ))
@@ -1304,15 +1310,15 @@ impl Actor {
         &mut self,
         source: &str,
         request: crate::integrations::RemoteChangeRequest,
-    ) -> Result<(), SmedError> {
+    ) -> Result<(), MjolnrError> {
         if source != "github" {
-            return Err(SmedError::workspace_refused(
+            return Err(MjolnrError::workspace_refused(
                 ReasonCode::WorkspaceCapabilityUnavailable,
                 format!("integration '{source}' has no submit producer"),
             ));
         }
         let producer = self.resolve_submission_producer(source)?;
-        let session = self.state.session.ok_or(SmedError::NoSession)?;
+        let session = self.state.session.ok_or(MjolnrError::NoSession)?;
         let run = RunId::new();
         let call = ToolCall {
             id: format!("submit_change_{run}"),
@@ -1324,12 +1330,12 @@ impl Actor {
             "create GitHub pull request for {}: {} ({}) -> {}",
             request.remote_id, request.head_branch, request.head_commit, request.base_branch
         );
-        self.persist(SmedEvent::RunStarted { session, run })
+        self.persist(MjolnrEvent::RunStarted { session, run })
             .await
-            .map_err(|error| SmedError::Store {
+            .map_err(|error| MjolnrError::Store {
                 detail: error.to_string(),
             })?;
-        self.persist(SmedEvent::ToolProposed {
+        self.persist(MjolnrEvent::ToolProposed {
             session,
             run,
             approval: None,
@@ -1338,7 +1344,7 @@ impl Actor {
             preview,
         })
         .await
-        .map_err(|error| SmedError::Store {
+        .map_err(|error| MjolnrError::Store {
             detail: error.to_string(),
         })?;
 
@@ -1360,9 +1366,9 @@ impl Actor {
     fn resolve_submission_producer(
         &self,
         source: &str,
-    ) -> Result<Arc<dyn crate::integrations::TaskSource>, SmedError> {
+    ) -> Result<Arc<dyn crate::integrations::TaskSource>, MjolnrError> {
         if source != "github" {
-            return Err(SmedError::workspace_refused(
+            return Err(MjolnrError::workspace_refused(
                 ReasonCode::WorkspaceCapabilityUnavailable,
                 format!("integration '{source}' has no submit producer"),
             ));
@@ -1372,18 +1378,18 @@ impl Actor {
         }
         crate::integrations::github::GitHubSource::from_environment()
             .map(|producer| Arc::new(producer) as Arc<dyn crate::integrations::TaskSource>)
-            .map_err(|error| SmedError::workspace_refused(error.reason_code(), error.to_string()))
+            .map_err(|error| MjolnrError::workspace_refused(error.reason_code(), error.to_string()))
     }
 
     async fn verify_submission_head(
         &self,
         request: &crate::integrations::RemoteChangeRequest,
-    ) -> Result<(), SmedError> {
+    ) -> Result<(), MjolnrError> {
         let root = self
             .state
             .workspace_root
             .clone()
-            .ok_or(SmedError::NoSession)?;
+            .ok_or(MjolnrError::NoSession)?;
         let expected_head = request.head_commit.clone();
         let expected_branch = request.head_branch.clone();
         tokio::task::spawn_blocking(move || {
@@ -1393,9 +1399,9 @@ impl Actor {
         })
         .await
         .map_err(|error| {
-            SmedError::workspace_refused(ReasonCode::ToolExecution, error.to_string())
+            MjolnrError::workspace_refused(ReasonCode::ToolExecution, error.to_string())
         })?
-        .map_err(|error| SmedError::workspace_refused(error.reason_code(), error.to_string()))
+        .map_err(|error| MjolnrError::workspace_refused(error.reason_code(), error.to_string()))
     }
 
     #[allow(
@@ -1409,7 +1415,7 @@ impl Actor {
         session: SessionId,
         run: RunId,
         call: ToolCall,
-    ) -> Result<(), SmedError> {
+    ) -> Result<(), MjolnrError> {
         match producer.submit_change(&request).await {
             Ok(remote_url) => {
                 let item_id = self
@@ -1431,17 +1437,17 @@ impl Actor {
                         remote_url: remote_url.clone(),
                     },
                 };
-                let act_event = SmedEvent::ImportedActRecorded { session, act };
+                let act_event = MjolnrEvent::ImportedActRecorded { session, act };
                 if self.state.validate_event(&act_event).is_ok() {
                     let _ = self
                         .persist(act_event)
                         .await
-                        .map_err(|error| SmedError::Store {
+                        .map_err(|error| MjolnrError::Store {
                             detail: error.to_string(),
                         });
                 }
                 let result = crate::core::message::ToolResult::ok(remote_url);
-                self.persist(SmedEvent::ToolCompleted {
+                self.persist(MjolnrEvent::ToolCompleted {
                     session,
                     run,
                     call_id: call.id.clone(),
@@ -1449,16 +1455,16 @@ impl Actor {
                     result,
                 })
                 .await
-                .map_err(|error| SmedError::Store {
+                .map_err(|error| MjolnrError::Store {
                     detail: error.to_string(),
                 })?;
-                self.persist(SmedEvent::RunFinished {
+                self.persist(MjolnrEvent::RunFinished {
                     session,
                     run,
                     reason: FinishReason::Stop,
                 })
                 .await
-                .map_err(|error| SmedError::Store {
+                .map_err(|error| MjolnrError::Store {
                     detail: error.to_string(),
                 })?;
                 Ok(())
@@ -1482,12 +1488,12 @@ impl Actor {
                         base_branch: request.base_branch.clone(),
                         outcome: crate::core::imported::ImportedActOutcome::Uncertain,
                     };
-                    let act_event = SmedEvent::ImportedActRecorded { session, act };
+                    let act_event = MjolnrEvent::ImportedActRecorded { session, act };
                     if self.state.validate_event(&act_event).is_ok() {
                         let _ = self
                             .persist(act_event)
                             .await
-                            .map_err(|error| SmedError::Store {
+                            .map_err(|error| MjolnrError::Store {
                                 detail: error.to_string(),
                             });
                     }
@@ -1504,7 +1510,7 @@ impl Actor {
                     },
                 );
                 self.publish_snapshot();
-                Err(SmedError::workspace_refused(
+                Err(MjolnrError::workspace_refused(
                     ReasonCode::RecoveryRequiresDecision,
                     error.to_string(),
                 ))
@@ -1529,8 +1535,8 @@ impl Actor {
         call: &ToolCall,
         code: ReasonCode,
         detail: String,
-    ) -> Result<(), SmedError> {
-        self.persist(SmedEvent::ToolFailed {
+    ) -> Result<(), MjolnrError> {
+        self.persist(MjolnrEvent::ToolFailed {
             session,
             run,
             call_id: call.id.clone(),
@@ -1539,20 +1545,20 @@ impl Actor {
             detail: detail.clone(),
         })
         .await
-        .map_err(|error| SmedError::Store {
+        .map_err(|error| MjolnrError::Store {
             detail: error.to_string(),
         })?;
-        self.persist(SmedEvent::RunFailed {
+        self.persist(MjolnrEvent::RunFailed {
             session,
             run,
             code,
             detail: detail.clone(),
         })
         .await
-        .map_err(|error| SmedError::Store {
+        .map_err(|error| MjolnrError::Store {
             detail: error.to_string(),
         })?;
-        Err(SmedError::workspace_refused(code, detail))
+        Err(MjolnrError::workspace_refused(code, detail))
     }
 
     /// Read one item from an integration and record it — as a fetch the first
@@ -1581,8 +1587,8 @@ impl Actor {
         &mut self,
         source: &str,
         task_id: &str,
-    ) -> Result<(), SmedError> {
-        let session = self.state.session.ok_or(SmedError::NoSession)?;
+    ) -> Result<(), MjolnrError> {
+        let session = self.state.session.ok_or(MjolnrError::NoSession)?;
 
         let injected = self.task_sources.get(source).cloned();
 
@@ -1591,7 +1597,7 @@ impl Actor {
         // the remote says now. `apply_refresh` is the guard that decides whether
         // that is allowed — reached through `validate_event`, so the live path
         // and the replay path apply it — and the recorded `fetched_revision` is
-        // the pin. `blocked_by` is smed's own ordering and is preserved: a
+        // the pin. `blocked_by` is mjolnr's own ordering and is preserved: a
         // refresh is about the remote's content, and must not let a remote wipe
         // the blocking graph a human recorded.
         let existing = self
@@ -1621,7 +1627,7 @@ impl Actor {
                         .map_err(|error| integration_refusal(&error))?,
                 ),
                 _ => {
-                    return Err(SmedError::workspace_refused(
+                    return Err(MjolnrError::workspace_refused(
                         ReasonCode::WorkspaceCapabilityUnavailable,
                         format!(
                             "Capability 'fetchTask' is unavailable for integration '{source}': only \
@@ -1640,7 +1646,7 @@ impl Actor {
         let event = if let Some(record) = existing {
             let expected_revision = record.fetched_revision.clone();
             let item = task.into_imported_item(record.id, record.blocked_by);
-            SmedEvent::ImportedItemRefreshed {
+            MjolnrEvent::ImportedItemRefreshed {
                 session,
                 expected_revision,
                 item,
@@ -1648,14 +1654,14 @@ impl Actor {
         } else {
             let item =
                 task.into_imported_item(crate::core::imported::ImportedItemId::new(), Vec::new());
-            SmedEvent::ImportedItemFetched { session, item }
+            MjolnrEvent::ImportedItemFetched { session, item }
         };
 
         self.state.validate_event(&event)?;
         self.persist(event)
             .await
             .map(|_| ())
-            .map_err(|error| SmedError::Store {
+            .map_err(|error| MjolnrError::Store {
                 detail: error.to_string(),
             })
     }
@@ -1668,9 +1674,9 @@ impl Actor {
         &mut self,
         source: &str,
         task_ids: &[String],
-    ) -> Result<(), SmedError> {
+    ) -> Result<(), MjolnrError> {
         if task_ids.is_empty() || task_ids.len() > crate::core::client::MAX_FETCH_BATCH_SIZE {
-            return Err(SmedError::workspace_refused(
+            return Err(MjolnrError::workspace_refused(
                 ReasonCode::SchemaInvalid,
                 format!(
                     "a task batch must contain 1-{} ids",
@@ -1683,7 +1689,7 @@ impl Actor {
                 if index == 0 {
                     return Err(error);
                 }
-                return Err(SmedError::workspace_refused(
+                return Err(MjolnrError::workspace_refused(
                     error
                         .reason_code()
                         .unwrap_or(ReasonCode::WorkspaceCapabilityUnavailable),
@@ -1697,16 +1703,16 @@ impl Actor {
     }
 
     /// One Phase D3 review command: pin a note, add a remark, or send the
-    /// selection to smed.
+    /// selection to mjolnr.
     ///
     /// Every arm persists before it changes state, and the state change is the
     /// single reducer in `runtime::review` — the same one recovery replays
     /// through, so a note taken live and a note replayed after a restart are
     /// built by the same code.
-    async fn handle_review_command(&mut self, command: SmedCommand) -> Result<(), SmedError> {
-        let session = self.state.session.ok_or(SmedError::NoSession)?;
+    async fn handle_review_command(&mut self, command: MjolnrCommand) -> Result<(), MjolnrError> {
+        let session = self.state.session.ok_or(MjolnrError::NoSession)?;
         match command {
-            SmedCommand::AddReviewNote {
+            MjolnrCommand::AddReviewNote {
                 path,
                 side,
                 line,
@@ -1715,7 +1721,7 @@ impl Actor {
             } => {
                 let anchor =
                     review::anchor_note(&self.state.changes, &path, side, line, &capture_digest)?;
-                self.record_review_event(SmedEvent::ReviewNoteRecorded {
+                self.record_review_event(MjolnrEvent::ReviewNoteRecorded {
                     session,
                     thread: crate::core::review::ReviewThreadId::new(),
                     anchor,
@@ -1723,9 +1729,9 @@ impl Actor {
                 })
                 .await
             }
-            SmedCommand::AddReviewComment { thread, body } => {
+            MjolnrCommand::AddReviewComment { thread, body } => {
                 if !self.state.review_threads.contains_key(&thread) {
-                    return Err(SmedError::workspace_refused(
+                    return Err(MjolnrError::workspace_refused(
                         ReasonCode::SchemaInvalid,
                         format!(
                             "There is no review thread {thread} in this session, so there is \
@@ -1733,17 +1739,17 @@ impl Actor {
                         ),
                     ));
                 }
-                self.record_review_event(SmedEvent::ReviewCommentAdded {
+                self.record_review_event(MjolnrEvent::ReviewCommentAdded {
                     session,
                     thread,
                     comment: review::comment(body),
                 })
                 .await
             }
-            SmedCommand::SendReviewNotes { threads } => {
+            MjolnrCommand::SendReviewNotes { threads } => {
                 self.send_review_notes(session, threads).await
             }
-            SmedCommand::ResolveCouncilFinding {
+            MjolnrCommand::ResolveCouncilFinding {
                 review_id,
                 finding_id,
                 disposition,
@@ -1753,19 +1759,19 @@ impl Actor {
                     .as_ref()
                     .is_some_and(|note| note.len() > crate::core::client::MAX_COUNCIL_NOTE_BYTES)
                 {
-                    return Err(SmedError::workspace_refused(
+                    return Err(MjolnrError::workspace_refused(
                         ReasonCode::SchemaInvalid,
                         "a council disposition note may not exceed 2048 bytes",
                     ));
                 }
                 let Some(review) = self.state.last_council.as_ref() else {
-                    return Err(SmedError::workspace_refused(
+                    return Err(MjolnrError::workspace_refused(
                         ReasonCode::SchemaInvalid,
                         "there is no completed council review in this session",
                     ));
                 };
                 if review.review_id != review_id {
-                    return Err(SmedError::workspace_refused(
+                    return Err(MjolnrError::workspace_refused(
                         ReasonCode::SchemaInvalid,
                         "the council review changed; refresh before choosing a finding",
                     ));
@@ -1775,12 +1781,12 @@ impl Actor {
                     .iter()
                     .any(|finding| finding.id == finding_id)
                 {
-                    return Err(SmedError::workspace_refused(
+                    return Err(MjolnrError::workspace_refused(
                         ReasonCode::SchemaInvalid,
                         "the council finding does not exist in the current review",
                     ));
                 }
-                self.record_review_event(SmedEvent::CouncilFindingDispositionRecorded {
+                self.record_review_event(MjolnrEvent::CouncilFindingDispositionRecorded {
                     session,
                     disposition: crate::core::council::CouncilFindingDisposition {
                         review_id,
@@ -1792,12 +1798,12 @@ impl Actor {
                 })
                 .await
             }
-            SmedCommand::ProposeCouncilAmendment { review_id } => {
+            MjolnrCommand::ProposeCouncilAmendment { review_id } => {
                 self.propose_council_amendment(session, review_id).await
             }
             // `Runtime::dispatch` routes the review and council variants here.
             // A routing bug becomes a typed refusal, not a panic.
-            _ => Err(SmedError::workspace_refused(
+            _ => Err(MjolnrError::workspace_refused(
                 ReasonCode::WorkspaceCapabilityUnavailable,
                 "a command was routed as a review command but no review handler claims it; \
                  nothing was recorded",
@@ -1811,15 +1817,15 @@ impl Actor {
     /// against current state, then append — so an event that refuses
     /// validation can never enter durable history, and a live fold and a
     /// replay fold are the same reduction.
-    async fn handle_board_command(&mut self, command: SmedCommand) -> Result<(), SmedError> {
-        let session = self.state.session.ok_or(SmedError::NoSession)?;
+    async fn handle_board_command(&mut self, command: MjolnrCommand) -> Result<(), MjolnrError> {
+        let session = self.state.session.ok_or(MjolnrError::NoSession)?;
         let event = match command {
-            SmedCommand::OpenDecisionTicket {
+            MjolnrCommand::OpenDecisionTicket {
                 question,
                 kind,
                 options,
                 blocked_by,
-            } => SmedEvent::DecisionTicketOpened {
+            } => MjolnrEvent::DecisionTicketOpened {
                 session,
                 ticket: crate::core::board::DecisionTicket {
                     id: crate::core::board::DecisionTicketId::new(),
@@ -1829,13 +1835,13 @@ impl Actor {
                     blocked_by,
                 },
             },
-            SmedCommand::ResolveDecisionTicket {
+            MjolnrCommand::ResolveDecisionTicket {
                 ticket,
                 chosen_option,
                 note,
             } => {
                 let Some(record) = self.state.decision_tickets.get(&ticket) else {
-                    return Err(SmedError::workspace_refused(
+                    return Err(MjolnrError::workspace_refused(
                         ReasonCode::SchemaInvalid,
                         format!(
                             "There is no decision ticket {ticket} in this session; resolving \
@@ -1847,7 +1853,7 @@ impl Actor {
                 // caller receives the typed refusal before any event exists,
                 // after `validate_event` would otherwise make it only internal.
                 if chosen_option >= record.ticket.options.len() {
-                    return Err(SmedError::workspace_refused(
+                    return Err(MjolnrError::workspace_refused(
                         ReasonCode::SchemaInvalid,
                         format!(
                             "Option {chosen_option} is not one of the {} recorded options on \
@@ -1857,7 +1863,7 @@ impl Actor {
                         ),
                     ));
                 }
-                SmedEvent::DecisionTicketResolved {
+                MjolnrEvent::DecisionTicketResolved {
                     session,
                     resolution: crate::core::board::DecisionResolution {
                         id: crate::core::board::DecisionResolutionId::new(),
@@ -1879,23 +1885,23 @@ impl Actor {
                     },
                 }
             }
-            SmedCommand::ImportWorkItem { item } => {
-                SmedEvent::ImportedItemFetched { session, item }
+            MjolnrCommand::ImportWorkItem { item } => {
+                MjolnrEvent::ImportedItemFetched { session, item }
             }
-            SmedCommand::RefreshImportedItem {
+            MjolnrCommand::RefreshImportedItem {
                 expected_revision,
                 item,
-            } => SmedEvent::ImportedItemRefreshed {
+            } => MjolnrEvent::ImportedItemRefreshed {
                 session,
                 expected_revision,
                 item,
             },
-            SmedCommand::SubmitImportedComment { .. } => {
+            MjolnrCommand::SubmitImportedComment { .. } => {
                 // Board-acknowledged, not persisted here: comment durability is
                 // `ImportedCommentRecorded` after the network effect, via the
                 // integration path. Handle the board command as no-op so it
                 // does not refuse as unknown while the runtime owns the type.
-                return Err(SmedError::workspace_refused(
+                return Err(MjolnrError::workspace_refused(
                     ReasonCode::WorkspaceCapabilityUnavailable,
                     "use the integration path for imported comments; this board path records only imported items",
                 ));
@@ -1903,7 +1909,7 @@ impl Actor {
             // `Runtime::dispatch` routes only the board variants here. A
             // routing bug becomes a typed refusal, not a panic.
             _ => {
-                return Err(SmedError::workspace_refused(
+                return Err(MjolnrError::workspace_refused(
                     ReasonCode::WorkspaceCapabilityUnavailable,
                     "a command was routed as a board command but no board handler claims it; \
                      nothing was recorded",
@@ -1914,7 +1920,7 @@ impl Actor {
         self.persist(event)
             .await
             .map(|_| ())
-            .map_err(|error| SmedError::Store {
+            .map_err(|error| MjolnrError::Store {
                 detail: error.to_string(),
             })
     }
@@ -1927,27 +1933,27 @@ impl Actor {
         &mut self,
         session: SessionId,
         review_id: crate::core::council::CouncilReviewId,
-    ) -> Result<(), SmedError> {
+    ) -> Result<(), MjolnrError> {
         let Some(review) = self.state.last_council.clone() else {
-            return Err(SmedError::workspace_refused(
+            return Err(MjolnrError::workspace_refused(
                 ReasonCode::SchemaInvalid,
                 "there is no completed council review in this session",
             ));
         };
         if review.review_id != review_id {
-            return Err(SmedError::workspace_refused(
+            return Err(MjolnrError::workspace_refused(
                 ReasonCode::SchemaInvalid,
                 "the council review changed; refresh before composing an amendment",
             ));
         }
         let Some(artifact) = review.artifact.clone() else {
-            return Err(SmedError::workspace_refused(
+            return Err(MjolnrError::workspace_refused(
                 ReasonCode::SchemaInvalid,
                 "this council reviewed a question rather than an artifact, so there is nothing to amend",
             ));
         };
         let Some(root) = self.state.workspace_root.clone() else {
-            return Err(SmedError::workspace_refused(
+            return Err(MjolnrError::workspace_refused(
                 ReasonCode::WorkspaceCapabilityUnavailable,
                 "No project is open, so the amendment was not composed",
             ));
@@ -1962,20 +1968,20 @@ impl Actor {
         let read = match read {
             Ok(Ok(read)) => read,
             Ok(Err(error)) => {
-                return Err(SmedError::workspace_refused(
+                return Err(MjolnrError::workspace_refused(
                     error.reason_code(),
                     error.to_string(),
                 ));
             }
             Err(error) => {
-                return Err(SmedError::workspace_refused(
+                return Err(MjolnrError::workspace_refused(
                     ReasonCode::WorkspaceCapabilityUnavailable,
                     format!("The artifact read ended before reporting an outcome ({error})"),
                 ));
             }
         };
         let crate::core::workspace_files::FileMode::Editable { text } = read.mode else {
-            return Err(SmedError::workspace_refused(
+            return Err(MjolnrError::workspace_refused(
                 ReasonCode::SchemaInvalid,
                 format!(
                     "`{}` is preview-only, so no amendment was composed",
@@ -1986,9 +1992,9 @@ impl Actor {
 
         let amendment = review
             .propose_amendment(&text, &read.digest)
-            .map_err(|error| SmedError::workspace_refused(ReasonCode::SchemaInvalid, error))?;
+            .map_err(|error| MjolnrError::workspace_refused(ReasonCode::SchemaInvalid, error))?;
 
-        self.record_review_event(SmedEvent::CouncilAmendmentProposed {
+        self.record_review_event(MjolnrEvent::CouncilAmendmentProposed {
             session,
             amendment: Box::new(amendment),
         })
@@ -1997,10 +2003,10 @@ impl Actor {
 
     /// Append a review event, then fold it in. Persist-then-project, so a
     /// thread a client can see is a thread the store already accepted.
-    async fn record_review_event(&mut self, event: SmedEvent) -> Result<(), SmedError> {
+    async fn record_review_event(&mut self, event: MjolnrEvent) -> Result<(), MjolnrError> {
         self.persist(event.clone())
             .await
-            .map_err(|error| SmedError::Store {
+            .map_err(|error| MjolnrError::Store {
                 detail: error.to_string(),
             })?;
         review::apply_event(&mut self.state.review_threads, &event);
@@ -2025,11 +2031,11 @@ impl Actor {
         &mut self,
         session: SessionId,
         threads: Vec<crate::core::review::ReviewThreadId>,
-    ) -> Result<(), SmedError> {
+    ) -> Result<(), MjolnrError> {
         let mut selected = Vec::with_capacity(threads.len());
         for id in &threads {
             let thread = self.state.review_threads.get(id).ok_or_else(|| {
-                SmedError::workspace_refused(
+                MjolnrError::workspace_refused(
                     ReasonCode::SchemaInvalid,
                     format!(
                         "There is no review thread {id} in this session; nothing was sent and \
@@ -2040,7 +2046,7 @@ impl Actor {
             selected.push(thread);
         }
         if self.run.is_some() {
-            return Err(SmedError::workspace_refused(
+            return Err(MjolnrError::workspace_refused(
                 ReasonCode::WorkspaceCapabilityUnavailable,
                 "A run is already in flight, so the review request was not sent; wait for it to \
                  settle or cancel it first",
@@ -2055,14 +2061,14 @@ impl Actor {
             // unavailable provider. Nothing was sent, so nothing is recorded:
             // a `sent` thread with no request behind it is exactly the false
             // claim §D3's negative tests exist for.
-            return Err(SmedError::workspace_refused(
+            return Err(MjolnrError::workspace_refused(
                 ReasonCode::WorkspaceCapabilityUnavailable,
                 "The session could not start a run, so the review request was not sent and no \
                  thread was marked sent",
             ));
         };
 
-        self.record_review_event(SmedEvent::ReviewRequestSent {
+        self.record_review_event(MjolnrEvent::ReviewRequestSent {
             session,
             threads: threads.clone(),
             run,
@@ -2081,26 +2087,26 @@ impl Actor {
 
     async fn handle_external_agent_command(
         &mut self,
-        command: SmedCommand,
-    ) -> Result<(), SmedError> {
+        command: MjolnrCommand,
+    ) -> Result<(), MjolnrError> {
         match command {
-            SmedCommand::LaunchExternalAgent { profile } => {
+            MjolnrCommand::LaunchExternalAgent { profile } => {
                 self.launch_external_agent(profile).await
             }
-            SmedCommand::StopExternalAgent { id } => self.stop_external_agent(&id).await,
-            SmedCommand::ImportExternalAgentChanges { id } => {
+            MjolnrCommand::StopExternalAgent { id } => self.stop_external_agent(&id).await,
+            MjolnrCommand::ImportExternalAgentChanges { id } => {
                 self.import_external_agent_changes(&id).await
             }
-            _ => Err(SmedError::workspace_refused(
+            _ => Err(MjolnrError::workspace_refused(
                 ReasonCode::SchemaInvalid,
                 "not an external-agent command",
             )),
         }
     }
 
-    async fn launch_external_agent(&mut self, profile: String) -> Result<(), SmedError> {
+    async fn launch_external_agent(&mut self, profile: String) -> Result<(), MjolnrError> {
         let workspace_root = self.state.workspace_root.clone().ok_or_else(|| {
-            SmedError::workspace_refused(
+            MjolnrError::workspace_refused(
                 ReasonCode::WorkspaceCapabilityUnavailable,
                 "no project is open — open a project before launching an external agent",
             )
@@ -2108,7 +2114,7 @@ impl Actor {
         let project_context = self.context.clone();
         let catalog = project_context.external_agents();
         let discovered = catalog.get(&profile).cloned().ok_or_else(|| {
-            SmedError::workspace_refused(
+            MjolnrError::workspace_refused(
                 ReasonCode::WorkspaceCapabilityUnavailable,
                 format!("unknown external-agent profile `{profile}` — add .mjolnr/external-agent/{profile}.yaml"),
             )
@@ -2128,16 +2134,16 @@ impl Actor {
             branch,
         )
         .map_err(|detail| {
-            SmedError::workspace_refused(ReasonCode::WorkspaceCapabilityUnavailable, detail)
+            MjolnrError::workspace_refused(ReasonCode::WorkspaceCapabilityUnavailable, detail)
         })?;
         self.external_agents.insert(record);
         self.publish_snapshot();
         Ok(())
     }
 
-    async fn stop_external_agent(&mut self, id: &str) -> Result<(), SmedError> {
+    async fn stop_external_agent(&mut self, id: &str) -> Result<(), MjolnrError> {
         let record = self.external_agents.get_mut(id).ok_or_else(|| {
-            SmedError::workspace_refused(
+            MjolnrError::workspace_refused(
                 ReasonCode::WorkspaceCapabilityUnavailable,
                 format!("no external agent `{id}`"),
             )
@@ -2145,15 +2151,15 @@ impl Actor {
         crate::runtime::external_agent::runner::stop_agent(record)
             .await
             .map_err(|detail| {
-                SmedError::workspace_refused(ReasonCode::WorkspaceCapabilityUnavailable, detail)
+                MjolnrError::workspace_refused(ReasonCode::WorkspaceCapabilityUnavailable, detail)
             })?;
         self.publish_snapshot();
         Ok(())
     }
 
-    async fn import_external_agent_changes(&mut self, id: &str) -> Result<(), SmedError> {
+    async fn import_external_agent_changes(&mut self, id: &str) -> Result<(), MjolnrError> {
         let record = self.external_agents.get(id).ok_or_else(|| {
-            SmedError::workspace_refused(
+            MjolnrError::workspace_refused(
                 ReasonCode::WorkspaceCapabilityUnavailable,
                 format!("no external agent `{id}`"),
             )
@@ -2169,11 +2175,19 @@ impl Actor {
         )
         .await
         .map_err(|e| {
-            SmedError::workspace_refused(ReasonCode::WorkspaceCapabilityUnavailable, e.to_string())
+            MjolnrError::workspace_refused(
+                ReasonCode::WorkspaceCapabilityUnavailable,
+                e.to_string(),
+            )
         })?;
         match result {
             Ok(_) => {}
-            Err(e) => return Err(SmedError::workspace_refused(e.reason_code(), e.to_string())),
+            Err(e) => {
+                return Err(MjolnrError::workspace_refused(
+                    e.reason_code(),
+                    e.to_string(),
+                ));
+            }
         }
         self.publish_snapshot();
         Ok(())
@@ -2183,15 +2197,18 @@ impl Actor {
     /// refusal. The arm is a match rather than a direct call so the next
     /// workspace command joins the acknowledged path by construction instead of
     /// being dropped into the unacknowledged one.
-    async fn handle_workspace_command(&mut self, command: SmedCommand) -> Result<(), SmedError> {
+    async fn handle_workspace_command(
+        &mut self,
+        command: MjolnrCommand,
+    ) -> Result<(), MjolnrError> {
         match command {
-            SmedCommand::OpenProject { root } => self.open_project(root).await,
+            MjolnrCommand::OpenProject { root } => self.open_project(root).await,
             // A human asking what git says now. Refused when no project is
             // open, because "nothing to read" and "read and found nothing" are
             // different answers and the caller asked a question.
-            SmedCommand::RefreshRepository => {
+            MjolnrCommand::RefreshRepository => {
                 if self.state.workspace_root.is_none() {
-                    return Err(SmedError::workspace_refused(
+                    return Err(MjolnrError::workspace_refused(
                         ReasonCode::WorkspaceCapabilityUnavailable,
                         "No project is open, so there is no repository to read; nothing was run",
                     ));
@@ -2199,15 +2216,15 @@ impl Actor {
                 self.refresh_repository(RefreshTrigger::Requested).await;
                 Ok(())
             }
-            SmedCommand::SaveFile {
+            MjolnrCommand::SaveFile {
                 path,
                 expected_digest,
                 text,
             } => self.save_workspace_file(path, expected_digest, text).await,
-            // Deliberately does not print the command: `SmedCommand` carries
+            // Deliberately does not print the command: `MjolnrCommand` carries
             // credential-bearing variants, and a refusal message is exactly
             // the kind of string that ends up in a log (AGENTS.md §3).
-            _ => Err(SmedError::workspace_refused(
+            _ => Err(MjolnrError::workspace_refused(
                 ReasonCode::WorkspaceCapabilityUnavailable,
                 "a command was routed as a workspace command but no workspace handler claims \
                  it; nothing was changed",
@@ -2225,10 +2242,10 @@ impl Actor {
         path: String,
         expected_digest: String,
         text: String,
-    ) -> Result<(), SmedError> {
-        let session = self.state.session.ok_or(SmedError::NoSession)?;
+    ) -> Result<(), MjolnrError> {
+        let session = self.state.session.ok_or(MjolnrError::NoSession)?;
         let Some(root) = self.state.workspace_root.clone() else {
-            return Err(SmedError::workspace_refused(
+            return Err(MjolnrError::workspace_refused(
                 ReasonCode::WorkspaceCapabilityUnavailable,
                 "No project is open, so the file was not saved",
             ));
@@ -2244,22 +2261,22 @@ impl Actor {
         let saved = match outcome {
             Ok(Ok(saved)) => saved,
             Ok(Err(error)) => {
-                return Err(SmedError::workspace_refused(
+                return Err(MjolnrError::workspace_refused(
                     error.reason_code(),
                     error.to_string(),
                 ));
             }
             Err(error) => {
-                return Err(SmedError::workspace_refused(
+                return Err(MjolnrError::workspace_refused(
                     ReasonCode::RepositoryUncertainEffect,
                     format!(
-                        "The file-save task ended before reporting an outcome ({error}); smed cannot prove whether the write took effect"
+                        "The file-save task ended before reporting an outcome ({error}); mjolnr cannot prove whether the write took effect"
                     ),
                 ));
             }
         };
 
-        let event = SmedEvent::FileSaved {
+        let event = MjolnrEvent::FileSaved {
             session,
             path: saved.path,
             observed_digest: saved.observed_digest,
@@ -2268,7 +2285,7 @@ impl Actor {
         };
         if let Err(error) = self.persist(event).await {
             self.note_store_failure(&error);
-            return Err(SmedError::workspace_refused(
+            return Err(MjolnrError::workspace_refused(
                 ReasonCode::RepositoryUncertainEffect,
                 format!(
                     "The file was written but its operator-controlled record was not durable ({error}); do not retry until the file and event log are reviewed"
@@ -2296,36 +2313,42 @@ impl Actor {
         self.publish_snapshot();
     }
 
-    async fn handle_plan_command(&mut self, command: SmedCommand) -> Result<(), SmedError> {
-        if let SmedCommand::StartPlanInterview { goal } = command {
+    async fn handle_plan_command(&mut self, command: MjolnrCommand) -> Result<(), MjolnrError> {
+        if let MjolnrCommand::StartPlanInterview { goal } = command {
             return self.start_plan_interview(goal).await;
         }
-        let session = self.state.session.ok_or(SmedError::NoSession)?;
+        let session = self.state.session.ok_or(MjolnrError::NoSession)?;
         let answer = match &command {
-            SmedCommand::AnswerPlanQuestion { answer, .. } => Some(answer.clone()),
+            MjolnrCommand::AnswerPlanQuestion { answer, .. } => Some(answer.clone()),
             _ => None,
         };
         let event = match command {
-            SmedCommand::AskPlanQuestion { plan_id, question } => SmedEvent::PlanQuestionAsked {
-                session,
-                plan_id,
-                question,
-            },
-            SmedCommand::AnswerPlanQuestion { plan_id, answer } => {
-                SmedEvent::PlanQuestionAnswered {
+            MjolnrCommand::AskPlanQuestion { plan_id, question } => {
+                MjolnrEvent::PlanQuestionAsked {
+                    session,
+                    plan_id,
+                    question,
+                }
+            }
+            MjolnrCommand::AnswerPlanQuestion { plan_id, answer } => {
+                MjolnrEvent::PlanQuestionAnswered {
                     session,
                     plan_id,
                     answer,
                 }
             }
-            SmedCommand::ProposePlan { proposal } => SmedEvent::PlanProposed { session, proposal },
-            SmedCommand::ReviewPlan { review } => SmedEvent::PlanReviewed { session, review },
-            SmedCommand::ApprovePlan { approval } => SmedEvent::PlanApproved { session, approval },
-            SmedCommand::HandoffPlan { handoff } => {
-                SmedEvent::PlanHandoffCreated { session, handoff }
+            MjolnrCommand::ProposePlan { proposal } => {
+                MjolnrEvent::PlanProposed { session, proposal }
+            }
+            MjolnrCommand::ReviewPlan { review } => MjolnrEvent::PlanReviewed { session, review },
+            MjolnrCommand::ApprovePlan { approval } => {
+                MjolnrEvent::PlanApproved { session, approval }
+            }
+            MjolnrCommand::HandoffPlan { handoff } => {
+                MjolnrEvent::PlanHandoffCreated { session, handoff }
             }
             _ => {
-                return Err(SmedError::plan_invalid_transition(
+                return Err(MjolnrError::plan_invalid_transition(
                     "not a plan command",
                     "dispatch plan command",
                     "only plan workflow commands use the acknowledged path",
@@ -2335,7 +2358,7 @@ impl Actor {
         self.state.validate_event(&event)?;
         self.persist(event)
             .await
-            .map_err(|error| SmedError::Store {
+            .map_err(|error| MjolnrError::Store {
                 detail: error.to_string(),
             })?;
         if let Some(answer) = answer
@@ -2377,7 +2400,7 @@ impl Actor {
             return;
         }
 
-        // A directive smed did not get from its owner cannot run unattended
+        // A directive mjolnr did not get from its owner cannot run unattended
         // . Applied here, at the one door into autonomous work,
         // and *recorded* rather than applied quietly: a session that silently
         // stopped being full-auto would be a lie about its own state
@@ -2398,7 +2421,7 @@ impl Actor {
         // : a session with unresolved interrupted work does not
         // continue autonomously. Refused here, at the one door into autonomous
         // work, rather than trusted to the UI — a client that forgot to check
-        // would otherwise drive a session smed has said it cannot reason about.
+        // would otherwise drive a session mjolnr has said it cannot reason about.
         if self.blocked().is_some() {
             self.publish_snapshot();
             return;
@@ -2415,7 +2438,7 @@ impl Actor {
         // The first message after a rewind is the branch point; every message
         // after it continues that branch normally.
         let stored = match self
-            .persist_branching(SmedEvent::MessageAppended {
+            .persist_branching(MjolnrEvent::MessageAppended {
                 session,
                 message: Box::new(message.clone()),
             })
@@ -2432,7 +2455,7 @@ impl Actor {
         // The run marker is durable before the provider request. The user
         // message comes first so a failed marker leaves an honest unanswered
         // message, not a phantom interrupted provider turn.
-        if let Err(error) = self.persist(SmedEvent::RunStarted { session, run }).await {
+        if let Err(error) = self.persist(MjolnrEvent::RunStarted { session, run }).await {
             self.note_store_failure(&error);
             return;
         }
@@ -2500,7 +2523,7 @@ impl Actor {
             None => return,
         };
         if let Err(error) = self
-            .persist(SmedEvent::BudgetExhausted { session, run })
+            .persist(MjolnrEvent::BudgetExhausted { session, run })
             .await
         {
             self.halt_for_store(run, &error);
@@ -2552,7 +2575,7 @@ impl Actor {
             return;
         };
         if let Err(error) = self
-            .persist(SmedEvent::RunFinished {
+            .persist(MjolnrEvent::RunFinished {
                 session,
                 run,
                 reason,
@@ -2596,7 +2619,7 @@ impl Actor {
             return;
         };
         if let Err(error) = self
-            .persist(SmedEvent::RunFailed {
+            .persist(MjolnrEvent::RunFailed {
                 session,
                 run,
                 code,
@@ -2641,7 +2664,7 @@ impl Actor {
 /// decides. The one thing it adds is the sentence that says nothing was
 /// recorded, because a failed fetch that left a partial item on the board would
 /// be the worst outcome available.
-fn integration_refusal(error: &crate::integrations::IntegrationError) -> SmedError {
+fn integration_refusal(error: &crate::integrations::IntegrationError) -> MjolnrError {
     let code = error.reason_code();
-    SmedError::workspace_refused(code, format!("{error}; nothing was recorded"))
+    MjolnrError::workspace_refused(code, format!("{error}; nothing was recorded"))
 }

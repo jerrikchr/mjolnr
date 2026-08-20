@@ -234,8 +234,8 @@ impl SessionState {
     /// append and reduction.
     pub fn validate_event(
         &self,
-        event: &crate::core::event::SmedEvent,
-    ) -> crate::core::error::SmedResult<()> {
+        event: &crate::core::event::MjolnrEvent,
+    ) -> crate::core::error::MjolnrResult<()> {
         Self::validate_imported_comment(event)?;
         let mut plan = self.plan.clone();
         let mut council = self.last_council.clone();
@@ -250,12 +250,12 @@ impl SessionState {
     }
 
     fn validate_imported_comment(
-        event: &crate::core::event::SmedEvent,
-    ) -> crate::core::error::SmedResult<()> {
-        use crate::core::event::SmedEvent;
-        if let SmedEvent::ImportedCommentRecorded { body, .. } = event {
+        event: &crate::core::event::MjolnrEvent,
+    ) -> crate::core::error::MjolnrResult<()> {
+        use crate::core::event::MjolnrEvent;
+        if let MjolnrEvent::ImportedCommentRecorded { body, .. } = event {
             if body.len() > crate::integrations::MAX_REMOTE_BODY_BYTES {
-                return Err(crate::core::error::SmedError::workspace_refused(
+                return Err(crate::core::error::MjolnrError::workspace_refused(
                     crate::core::error::ReasonCode::SchemaInvalid,
                     format!(
                         "imported comment body may not exceed {} bytes",
@@ -267,7 +267,7 @@ impl SessionState {
                 .chars()
                 .any(|c| c.is_control() && !matches!(c, '\n' | '\r' | '\t'))
             {
-                return Err(crate::core::error::SmedError::workspace_refused(
+                return Err(crate::core::error::MjolnrError::workspace_refused(
                     crate::core::error::ReasonCode::SchemaInvalid,
                     "imported comment body may not contain control characters other than newline and tab",
                 ));
@@ -279,11 +279,11 @@ impl SessionState {
     /// Apply a durable event onto session state.
     pub fn apply_event(
         &mut self,
-        event: &crate::core::event::SmedEvent,
-    ) -> crate::core::error::SmedResult<()> {
+        event: &crate::core::event::MjolnrEvent,
+    ) -> crate::core::error::MjolnrResult<()> {
         Self::validate_imported_comment(event)?;
         Self::apply_plan_event(&mut self.plan, event)?;
-        if let crate::core::event::SmedEvent::CouncilAmendmentProposed { amendment, .. } = event {
+        if let crate::core::event::MjolnrEvent::CouncilAmendmentProposed { amendment, .. } = event {
             self.last_council_amendment = Some((**amendment).clone());
         }
         Self::apply_council_event(&mut self.last_council, event)?;
@@ -306,16 +306,16 @@ impl SessionState {
             crate::core::board::DecisionTicketId,
             crate::core::board::DecisionTicketRecord,
         >,
-        event: &crate::core::event::SmedEvent,
-    ) -> crate::core::error::SmedResult<()> {
+        event: &crate::core::event::MjolnrEvent,
+    ) -> crate::core::error::MjolnrResult<()> {
         use crate::core::board::DecisionTicketRecord;
-        use crate::core::error::{ReasonCode, SmedError};
-        use crate::core::event::SmedEvent;
+        use crate::core::error::{MjolnrError, ReasonCode};
+        use crate::core::event::MjolnrEvent;
 
         match event {
-            SmedEvent::DecisionTicketOpened { ticket, .. } => {
+            MjolnrEvent::DecisionTicketOpened { ticket, .. } => {
                 if tickets.contains_key(&ticket.id) {
-                    return Err(SmedError::workspace_refused(
+                    return Err(MjolnrError::workspace_refused(
                         ReasonCode::SchemaInvalid,
                         format!(
                             "decision ticket {} was already recorded; the log is append-only, \
@@ -326,7 +326,7 @@ impl SessionState {
                 }
                 for blocker in &ticket.blocked_by {
                     if !tickets.contains_key(blocker) {
-                        return Err(SmedError::workspace_refused(
+                        return Err(MjolnrError::workspace_refused(
                             ReasonCode::SchemaInvalid,
                             format!(
                                 "decision ticket {} names blocker {blocker}, which does not \
@@ -347,9 +347,9 @@ impl SessionState {
                 );
                 Ok(())
             }
-            SmedEvent::DecisionTicketResolved { resolution, .. } => {
+            MjolnrEvent::DecisionTicketResolved { resolution, .. } => {
                 let record = tickets.get_mut(&resolution.ticket).ok_or_else(|| {
-                    SmedError::workspace_refused(
+                    MjolnrError::workspace_refused(
                         ReasonCode::SchemaInvalid,
                         format!(
                             "resolution {} names ticket {}, which does not exist in this \
@@ -361,7 +361,7 @@ impl SessionState {
                 record
                     .apply_resolution(resolution.clone())
                     .map_err(|detail| {
-                        SmedError::workspace_refused(ReasonCode::SchemaInvalid, detail)
+                        MjolnrError::workspace_refused(ReasonCode::SchemaInvalid, detail)
                     })
             }
             _ => Ok(()),
@@ -386,16 +386,16 @@ impl SessionState {
             crate::core::imported::ImportedItemId,
             crate::core::imported::ImportedItem,
         >,
-        event: &crate::core::event::SmedEvent,
-    ) -> crate::core::error::SmedResult<()> {
-        use crate::core::error::{ReasonCode, SmedError};
-        use crate::core::event::SmedEvent;
+        event: &crate::core::event::MjolnrEvent,
+    ) -> crate::core::error::MjolnrResult<()> {
+        use crate::core::error::{MjolnrError, ReasonCode};
+        use crate::core::event::MjolnrEvent;
         use crate::core::imported::{ImportedItemRecord, RefreshRefusal};
 
         match event {
-            SmedEvent::ImportedItemFetched { item, .. } => {
+            MjolnrEvent::ImportedItemFetched { item, .. } => {
                 if items.contains_key(&item.id) {
-                    return Err(SmedError::workspace_refused(
+                    return Err(MjolnrError::workspace_refused(
                         ReasonCode::SchemaInvalid,
                         format!(
                             "imported item {} was already recorded; the log is append-only, \
@@ -407,13 +407,13 @@ impl SessionState {
                 items.insert(item.id, item.clone());
                 Ok(())
             }
-            SmedEvent::ImportedItemRefreshed {
+            MjolnrEvent::ImportedItemRefreshed {
                 expected_revision,
                 item,
                 ..
             } => {
                 let current = items.get(&item.id).ok_or_else(|| {
-                    SmedError::workspace_refused(
+                    MjolnrError::workspace_refused(
                         ReasonCode::SchemaInvalid,
                         format!(
                             "imported item {} does not exist in this session; a refresh cannot \
@@ -436,7 +436,7 @@ impl SessionState {
                             | RefreshRefusal::SameRevision { .. }
                             | RefreshRefusal::IdentityMoved => ReasonCode::SchemaInvalid,
                         };
-                        SmedError::workspace_refused(code, refusal.to_string())
+                        MjolnrError::workspace_refused(code, refusal.to_string())
                     })?;
                 items.insert(item.id, record.item);
                 Ok(())
@@ -461,18 +461,18 @@ impl SessionState {
             crate::core::imported::ImportedItemId,
             crate::core::imported::ImportedItem,
         >,
-        event: &crate::core::event::SmedEvent,
-    ) -> crate::core::error::SmedResult<()> {
-        use crate::core::error::{ReasonCode, SmedError};
-        use crate::core::event::SmedEvent;
+        event: &crate::core::event::MjolnrEvent,
+    ) -> crate::core::error::MjolnrResult<()> {
+        use crate::core::error::{MjolnrError, ReasonCode};
+        use crate::core::event::MjolnrEvent;
 
-        if matches!(event, SmedEvent::ImportedCommentRecorded { .. }) {
+        if matches!(event, MjolnrEvent::ImportedCommentRecorded { .. }) {
             return Ok(());
         }
         match event {
-            SmedEvent::ImportedActRecorded { act, .. } => {
+            MjolnrEvent::ImportedActRecorded { act, .. } => {
                 if !items.contains_key(&act.item_id) {
-                    return Err(SmedError::workspace_refused(
+                    return Err(MjolnrError::workspace_refused(
                         ReasonCode::SchemaInvalid,
                         format!(
                             "act {} was recorded against imported item {}, which does not exist \
@@ -482,7 +482,7 @@ impl SessionState {
                     ));
                 }
                 if acts.contains_key(&act.act_id) {
-                    return Err(SmedError::workspace_refused(
+                    return Err(MjolnrError::workspace_refused(
                         ReasonCode::SchemaInvalid,
                         format!(
                             "act {} was already recorded; the log is append-only, so a duplicate \
@@ -500,18 +500,18 @@ impl SessionState {
 
     fn apply_council_event(
         review_state: &mut Option<crate::core::council::CouncilReview>,
-        event: &crate::core::event::SmedEvent,
-    ) -> crate::core::error::SmedResult<()> {
-        use crate::core::event::SmedEvent;
+        event: &crate::core::event::MjolnrEvent,
+    ) -> crate::core::error::MjolnrResult<()> {
+        use crate::core::event::MjolnrEvent;
 
         match event {
-            SmedEvent::CouncilReviewed { review, .. } => {
+            MjolnrEvent::CouncilReviewed { review, .. } => {
                 *review_state = Some((**review).clone());
                 Ok(())
             }
-            SmedEvent::CouncilFindingDispositionRecorded { disposition, .. } => {
+            MjolnrEvent::CouncilFindingDispositionRecorded { disposition, .. } => {
                 let review = review_state.as_mut().ok_or_else(|| {
-                    crate::core::error::SmedError::workspace_refused(
+                    crate::core::error::MjolnrError::workspace_refused(
                         crate::core::error::ReasonCode::SchemaInvalid,
                         "a council finding disposition requires a completed review",
                     )
@@ -519,7 +519,7 @@ impl SessionState {
                 review
                     .apply_disposition(disposition.clone())
                     .map_err(|detail| {
-                        crate::core::error::SmedError::workspace_refused(
+                        crate::core::error::MjolnrError::workspace_refused(
                             crate::core::error::ReasonCode::SchemaInvalid,
                             detail,
                         )
@@ -531,16 +531,16 @@ impl SessionState {
 
     fn apply_plan_event(
         plan_state: &mut Option<crate::core::plan::PlanWorkflow>,
-        event: &crate::core::event::SmedEvent,
-    ) -> crate::core::error::SmedResult<()> {
-        use crate::core::event::SmedEvent;
+        event: &crate::core::event::MjolnrEvent,
+    ) -> crate::core::error::MjolnrResult<()> {
+        use crate::core::event::MjolnrEvent;
         use crate::core::plan::PlanWorkflow;
 
         match event {
-            SmedEvent::PlanInterviewStarted { plan_id, goal, .. } => {
+            MjolnrEvent::PlanInterviewStarted { plan_id, goal, .. } => {
                 let plan = plan_state.get_or_insert_with(|| PlanWorkflow::new(*plan_id));
                 if plan.plan_id != *plan_id {
-                    return Err(crate::core::error::SmedError::plan_invalid_transition(
+                    return Err(crate::core::error::MjolnrError::plan_invalid_transition(
                         "plan mismatch",
                         "start interview",
                         "interview plan_id does not match workflow plan_id",
@@ -548,13 +548,13 @@ impl SessionState {
                 }
                 plan.start_interview(goal.clone())?;
             }
-            SmedEvent::PlanQuestionAsked {
+            MjolnrEvent::PlanQuestionAsked {
                 plan_id, question, ..
             } => {
                 let plan = plan_state.get_or_insert_with(|| PlanWorkflow::new(*plan_id));
                 plan.ask_question(question.clone())?;
             }
-            SmedEvent::PlanQuestionAnswered {
+            MjolnrEvent::PlanQuestionAnswered {
                 plan_id, answer, ..
             } => {
                 let plan = Self::existing_plan(
@@ -563,7 +563,7 @@ impl SessionState {
                     "cannot answer a question before its plan workflow exists",
                 )?;
                 if plan.plan_id != *plan_id {
-                    return Err(crate::core::error::SmedError::plan_invalid_transition(
+                    return Err(crate::core::error::MjolnrError::plan_invalid_transition(
                         "plan mismatch",
                         "answer question",
                         "answer plan_id does not match workflow plan_id",
@@ -571,7 +571,7 @@ impl SessionState {
                 }
                 plan.answer_question(answer)?;
             }
-            SmedEvent::PlanPrdProposed { prd, .. } => {
+            MjolnrEvent::PlanPrdProposed { prd, .. } => {
                 let plan = Self::existing_plan(
                     plan_state,
                     "record PRD",
@@ -579,12 +579,12 @@ impl SessionState {
                 )?;
                 plan.record_prd(prd.clone())?;
             }
-            SmedEvent::PlanProposed { proposal, .. } => {
+            MjolnrEvent::PlanProposed { proposal, .. } => {
                 let plan_id = proposal.plan_id;
                 let plan = plan_state.get_or_insert_with(|| PlanWorkflow::new(plan_id));
                 plan.propose_plan(proposal.clone())?;
             }
-            SmedEvent::PlanReviewed { review, .. } => {
+            MjolnrEvent::PlanReviewed { review, .. } => {
                 let plan = Self::existing_plan(
                     plan_state,
                     "review plan",
@@ -592,7 +592,7 @@ impl SessionState {
                 )?;
                 plan.review_plan(review.clone())?;
             }
-            SmedEvent::PlanApproved { approval, .. } => {
+            MjolnrEvent::PlanApproved { approval, .. } => {
                 let plan = Self::existing_plan(
                     plan_state,
                     "approve plan",
@@ -600,7 +600,7 @@ impl SessionState {
                 )?;
                 plan.approve_plan(approval.clone())?;
             }
-            SmedEvent::PlanHandoffCreated { handoff, .. } => {
+            MjolnrEvent::PlanHandoffCreated { handoff, .. } => {
                 let plan = Self::existing_plan(
                     plan_state,
                     "handoff plan",
@@ -608,7 +608,7 @@ impl SessionState {
                 )?;
                 plan.handoff_plan(handoff.clone())?;
             }
-            SmedEvent::CouncilReviewed { review, .. } => {
+            MjolnrEvent::CouncilReviewed { review, .. } => {
                 if let (Some(plan_id), Some(prd_id)) = (review.plan_id, review.prd_id) {
                     let plan = Self::existing_plan(
                         plan_state,
@@ -631,9 +631,9 @@ impl SessionState {
         plan_state: &'a mut Option<crate::core::plan::PlanWorkflow>,
         action: &'static str,
         detail: &'static str,
-    ) -> crate::core::error::SmedResult<&'a mut crate::core::plan::PlanWorkflow> {
+    ) -> crate::core::error::MjolnrResult<&'a mut crate::core::plan::PlanWorkflow> {
         plan_state.as_mut().ok_or_else(|| {
-            crate::core::error::SmedError::plan_invalid_transition("no workflow", action, detail)
+            crate::core::error::MjolnrError::plan_invalid_transition("no workflow", action, detail)
         })
     }
 
@@ -663,7 +663,8 @@ impl SessionState {
                     ),
                 }
             })?;
-            if let crate::core::event::SmedEvent::MessageAppended { message, .. } = &stored.event {
+            if let crate::core::event::MjolnrEvent::MessageAppended { message, .. } = &stored.event
+            {
                 messages.push(TranscriptEntry::anchored(
                     stored.sequence,
                     (**message).clone(),
@@ -1143,7 +1144,7 @@ mod tests {
             id: crate::core::event::EventId::new(),
             sequence: 1,
             occurred_at: time::OffsetDateTime::now_utc(),
-            event: crate::core::event::SmedEvent::PlanQuestionAnswered {
+            event: crate::core::event::MjolnrEvent::PlanQuestionAnswered {
                 session,
                 plan_id,
                 answer: crate::core::plan::QuestionAnswer {
@@ -1206,7 +1207,7 @@ mod tests {
     }
 
     fn stored(
-        event: crate::core::event::SmedEvent,
+        event: crate::core::event::MjolnrEvent,
         sequence: u64,
     ) -> crate::core::event::StoredEvent {
         crate::core::event::StoredEvent {
@@ -1225,10 +1226,10 @@ mod tests {
 
         let mut state = SessionState::default();
         state
-            .apply_event(&crate::core::event::SmedEvent::ImportedItemFetched { session, item })
+            .apply_event(&crate::core::event::MjolnrEvent::ImportedItemFetched { session, item })
             .expect("the item fetch folds");
         state
-            .apply_event(&crate::core::event::SmedEvent::ImportedActRecorded {
+            .apply_event(&crate::core::event::MjolnrEvent::ImportedActRecorded {
                 session,
                 act: act.clone(),
             })
@@ -1244,14 +1245,14 @@ mod tests {
         replayed
             .rebuild_durable_records_from(&[
                 stored(
-                    crate::core::event::SmedEvent::ImportedItemFetched {
+                    crate::core::event::MjolnrEvent::ImportedItemFetched {
                         session,
                         item: item_fixture(),
                     },
                     1,
                 ),
                 stored(
-                    crate::core::event::SmedEvent::ImportedActRecorded { session, act },
+                    crate::core::event::MjolnrEvent::ImportedActRecorded { session, act },
                     2,
                 ),
             ])
@@ -1268,7 +1269,7 @@ mod tests {
         let session = SessionId::new();
         let mut state = SessionState::default();
         state
-            .apply_event(&crate::core::event::SmedEvent::ImportedItemFetched {
+            .apply_event(&crate::core::event::MjolnrEvent::ImportedItemFetched {
                 session,
                 item: item_fixture(),
             })
@@ -1277,7 +1278,7 @@ mod tests {
         let mut stranger = act_fixture();
         stranger.item_id = crate::core::imported::ImportedItemId::new();
         let error = state
-            .validate_event(&crate::core::event::SmedEvent::ImportedActRecorded {
+            .validate_event(&crate::core::event::MjolnrEvent::ImportedActRecorded {
                 session,
                 act: stranger,
             })
@@ -1285,7 +1286,7 @@ mod tests {
         assert!(
             matches!(
                 error,
-                crate::core::error::SmedError::WorkspaceRefused {
+                crate::core::error::MjolnrError::WorkspaceRefused {
                     code: crate::core::error::ReasonCode::SchemaInvalid,
                     ..
                 }
@@ -1303,26 +1304,26 @@ mod tests {
         let session = SessionId::new();
         let mut state = SessionState::default();
         state
-            .apply_event(&crate::core::event::SmedEvent::ImportedItemFetched {
+            .apply_event(&crate::core::event::MjolnrEvent::ImportedItemFetched {
                 session,
                 item: item_fixture(),
             })
             .expect("the item fetch folds");
         let act = act_fixture();
         state
-            .apply_event(&crate::core::event::SmedEvent::ImportedActRecorded {
+            .apply_event(&crate::core::event::MjolnrEvent::ImportedActRecorded {
                 session,
                 act: act.clone(),
             })
             .expect("first record folds");
 
         let error = state
-            .validate_event(&crate::core::event::SmedEvent::ImportedActRecorded { session, act })
+            .validate_event(&crate::core::event::MjolnrEvent::ImportedActRecorded { session, act })
             .expect_err("the log is append-only; a repeat must refuse");
         assert!(
             matches!(
                 error,
-                crate::core::error::SmedError::WorkspaceRefused {
+                crate::core::error::MjolnrError::WorkspaceRefused {
                     code: crate::core::error::ReasonCode::SchemaInvalid,
                     ..
                 }

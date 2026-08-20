@@ -44,12 +44,12 @@ const DEFAULT_BASE_URL: &str = "https://api.openai.com/v1";
 
 pub const PROVIDER_ID: &str = "openai";
 
-/// The models smed offers.
+/// The models mjolnr offers.
 ///
 /// A static list, not a discovery call. `GET /models` returns hundreds of
 /// entries with no capability metadata, so it cannot answer the question that
 /// matters ("does this support tools?"). A curated list is honest about what
-/// smed has actually been tested against; Phase 8 can revisit.
+/// mjolnr has actually been tested against; Phase 8 can revisit.
 const MODELS: &[(&str, &str, u32, u32)] = &[
     ("gpt-4o", "GPT-4o", 128_000, 16_384),
     ("gpt-4o-mini", "GPT-4o mini", 128_000, 16_384),
@@ -573,7 +573,7 @@ mod tests {
 
     #[test]
     fn every_offered_model_declares_tool_support() {
-        // smed's whole premise is a guarded tool loop. Offering a model that
+        // mjolnr's whole premise is a guarded tool loop. Offering a model that
         // cannot call tools would fail confusingly in Phase 3 rather than here.
         let secrets: Arc<dyn SecretStore> = Arc::new(NoSecrets);
         let provider = OpenAiProvider::new(secrets);

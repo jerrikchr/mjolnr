@@ -9,8 +9,8 @@
 
 use std::path::PathBuf;
 
-use smed::context::{DiscoveryConfig, DiscoveryLimits, ProjectContext, SkillScope};
-use smed::core::error::ReasonCode;
+use mjolnr::context::{DiscoveryConfig, DiscoveryLimits, ProjectContext, SkillScope};
+use mjolnr::core::error::ReasonCode;
 use tempfile::TempDir;
 
 fn write_skill(root: &std::path::Path, directory: &str, frontmatter: &str, body: &str) {
@@ -27,9 +27,9 @@ fn config(project: &std::path::Path, user: &std::path::Path) -> DiscoveryConfig 
     DiscoveryConfig {
         project_root: project.to_path_buf(),
         working_directory: project.to_path_buf(),
-        user_native_skills: user.join("smed"),
+        user_native_skills: user.join("mjolnr"),
         user_agent_skills: user.join("agents"),
-        user_config: user.join("smed"),
+        user_config: user.join("mjolnr"),
         limits: DiscoveryLimits::default(),
     }
 }
@@ -42,7 +42,7 @@ fn agents_is_canonical_claude_is_additional_and_discovery_walks_root_to_cwd() {
     std::fs::create_dir_all(&nested).expect("nested project");
     std::fs::write(root.join("AGENTS.md"), "root agents").expect("root agents");
     std::fs::write(root.join("CLAUDE.md"), "root claude").expect("root claude");
-    std::fs::write(root.join("SMED.md"), "must not load").expect("non-standard file");
+    std::fs::write(root.join("MJOLNR.md"), "must not load").expect("non-standard file");
     std::fs::write(nested.join("AGENTS.md"), "nested agents").expect("nested agents");
 
     let mut discovery = config(&root, fixture.path());
@@ -95,7 +95,7 @@ fn discovery_precedence_is_deterministic_and_collisions_are_typed() {
     let fixture = TempDir::new().expect("fixture");
     let project = fixture.path().join("project");
     let user = fixture.path().join("user");
-    let native = project.join(".smed/skills");
+    let native = project.join(".mjolnr/skills");
     let agents = project.join(".agents/skills");
     std::fs::create_dir_all(&project).expect("project");
     write_skill(
@@ -139,7 +139,7 @@ fn official_reference_validation_cases_have_the_same_outcomes() {
         ("my-skill", "name: my-skill\ndescription: A test skill"),
         (
             "all-fields",
-            "name: all-fields\ndescription: A test skill\nlicense: MIT\ncompatibility: Requires git\nallowed-tools: Bash(git:*) Read\nmetadata:\n  author: smed\n  version: 1.0",
+            "name: all-fields\ndescription: A test skill\nlicense: MIT\ncompatibility: Requires git\nallowed-tools: Bash(git:*) Read\nmetadata:\n  author: mjolnr\n  version: 1.0",
         ),
         ("技能", "name: 技能\ndescription: A Chinese skill name"),
         (
@@ -431,7 +431,7 @@ fn a_skill_written_after_discovery_is_invisible_until_reload() {
     // The agent writes a skill through the ordinary Write path.
     write_skill(
         &root,
-        ".smed/skills/authored",
+        ".mjolnr/skills/authored",
         "name: authored\ndescription: A skill the agent wrote during a session.",
         "Do the thing.",
     );
@@ -459,7 +459,7 @@ fn a_reload_reports_templates_that_appeared_and_vanished() {
     let fixture = TempDir::new().expect("fixture");
     let root = fixture.path().join("project");
     let user = fixture.path().join("user");
-    let prompts = root.join(".smed/prompts");
+    let prompts = root.join(".mjolnr/prompts");
     std::fs::create_dir_all(&prompts).expect("prompts");
     std::fs::create_dir_all(&user).expect("user");
     std::fs::write(
@@ -485,7 +485,7 @@ fn a_reload_reports_templates_that_appeared_and_vanished() {
 }
 
 ///  anti-pattern: a skill is knowledge, not capability. Its
-/// frontmatter may name tools, and smed must not treat that as a grant.
+/// frontmatter may name tools, and mjolnr must not treat that as a grant.
 #[test]
 fn a_skill_claiming_allowed_tools_gains_no_authority_from_saying_so() {
     let fixture = TempDir::new().expect("fixture");
@@ -494,7 +494,7 @@ fn a_skill_claiming_allowed_tools_gains_no_authority_from_saying_so() {
     std::fs::create_dir_all(&user).expect("user");
     write_skill(
         &root,
-        ".smed/skills/grabby",
+        ".mjolnr/skills/grabby",
         "name: grabby\ndescription: Claims tool access it must not receive.\nallowed-tools: run_command write_file",
         "Run whatever you like.",
     );

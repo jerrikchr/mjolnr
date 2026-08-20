@@ -93,7 +93,7 @@ pub trait Provider: Send + Sync + std::fmt::Debug {
     ///
     /// Static adapters inherit this implementation. Providers with a model
     /// endpoint override it so a successful login or server start can change
-    /// the catalog without rebuilding smed.
+    /// the catalog without rebuilding mjolnr.
     async fn discover_models(
         &self,
         cancel: CancellationToken,
@@ -115,7 +115,7 @@ pub trait Provider: Send + Sync + std::fmt::Debug {
     ///   point (AGENTS.md §4). An adapter must not buffer the stream to avoid
     ///   waiting on a slow consumer.
     /// - `cancel` must be honoured promptly. Cancellation is a client-side
-    ///   stream drop for every provider smed supports
+    ///   stream drop for every provider mjolnr supports
     ///   (`docs/provider-contract.md` §6.7).
     /// - **Never retry after output has been produced.** A stream that emitted
     ///   tokens and then failed is not safe to replay.

@@ -7,11 +7,11 @@
 
 use std::sync::Arc;
 
-use smed::core::client::types::ClientSnapshot;
-use smed::core::event::SessionId;
-use smed::core::fleet::{FleetAgentStatus, FleetAgentSummary, FleetSummary};
-use smed::core::runtime::RuntimeSnapshot;
-use smed::runtime::client_bridge::convert::snapshot_to_client;
+use mjolnr::core::client::types::ClientSnapshot;
+use mjolnr::core::event::SessionId;
+use mjolnr::core::fleet::{FleetAgentStatus, FleetAgentSummary, FleetSummary};
+use mjolnr::core::runtime::RuntimeSnapshot;
+use mjolnr::runtime::client_bridge::convert::snapshot_to_client;
 
 #[test]
 fn fleet_summary_calculates_visibility_and_active_count() {
@@ -26,7 +26,7 @@ fn fleet_summary_calculates_visibility_and_active_count() {
         status: FleetAgentStatus::Running,
         latest_activity: "indexing AST".to_owned(),
         feed: vec!["started".to_owned()],
-        worktree_branch: Some("smed/worktree-sub-1".to_owned()),
+        worktree_branch: Some("mjolnr/worktree-sub-1".to_owned()),
     }]);
     assert!(!single.visible);
     assert_eq!(single.active_count, 1);
@@ -40,7 +40,7 @@ fn fleet_summary_calculates_visibility_and_active_count() {
             status: FleetAgentStatus::Running,
             latest_activity: "indexing AST".to_owned(),
             feed: vec!["started".to_owned()],
-            worktree_branch: Some("smed/worktree-sub-1".to_owned()),
+            worktree_branch: Some("mjolnr/worktree-sub-1".to_owned()),
         },
         FleetAgentSummary {
             child_session_id: a2,
@@ -93,7 +93,7 @@ fn client_snapshot_bridges_fleet_summary() {
             status: FleetAgentStatus::Running,
             latest_activity: "reading docs".to_owned(),
             feed: vec!["started".to_owned(), "reading docs".to_owned()],
-            worktree_branch: Some("smed/worktree-sub-1".to_owned()),
+            worktree_branch: Some("mjolnr/worktree-sub-1".to_owned()),
         },
         FleetAgentSummary {
             child_session_id: a2,
@@ -104,7 +104,7 @@ fn client_snapshot_bridges_fleet_summary() {
             },
             latest_activity: "conflict in Cargo.toml".to_owned(),
             feed: vec!["conflict in Cargo.toml".to_owned()],
-            worktree_branch: Some("smed/worktree-sub-2".to_owned()),
+            worktree_branch: Some("mjolnr/worktree-sub-2".to_owned()),
         },
     ]);
 

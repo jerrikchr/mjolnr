@@ -1,14 +1,14 @@
 //! Anchoring, replaying, and framing review threads (Phase D3 producer).
 //!
 //! One reason to change: how a human's line note is pinned to a diff, folded
-//! into session state, and turned into a directive smed can act on.
+//! into session state, and turned into a directive mjolnr can act on.
 //!
 //! The division of labour matters. `core::review` holds the types and can only
 //! *compare* an anchor against a digest. This module is the only place that
 //! *builds* an anchor, and it builds it from the runtime's own capture — the
-//! hunk header and the digest are read out of what smed captured, never taken
+//! hunk header and the digest are read out of what mjolnr captured, never taken
 //! from the client that asked. A client says "path, side, line, and the digest
-//! I was looking at"; everything else on the anchor is smed's own record of
+//! I was looking at"; everything else on the anchor is mjolnr's own record of
 //! that diff. A client that could supply its own hunk context could describe a
 //! diff that never existed.
 
@@ -18,8 +18,8 @@ use std::fmt::Write as _;
 use time::OffsetDateTime;
 
 use crate::core::change_capture::{ChangeView, FileChange, Hunk};
-use crate::core::error::{ReasonCode, SmedError};
-use crate::core::event::SmedEvent;
+use crate::core::error::{MjolnrError, ReasonCode};
+use crate::core::event::MjolnrEvent;
 use crate::core::review::{
     ReviewAnchor, ReviewComment, ReviewSide, ReviewThread, ReviewThreadId, ReviewThreadStatus,
 };
@@ -31,7 +31,7 @@ use crate::core::review::{
 /// and a snapshot cannot reorder itself between publishes.
 pub(crate) type ReviewThreads = BTreeMap<ReviewThreadId, ReviewThread>;
 
-/// Pin a note to a line of the capture smed currently holds.
+/// Pin a note to a line of the capture mjolnr currently holds.
 ///
 /// Every refusal here is one §D3 asks for by name, and each is a refusal rather
 /// than an approximation:
@@ -51,9 +51,9 @@ pub(crate) fn anchor_note(
     side: ReviewSide,
     line: u32,
     digest: &str,
-) -> Result<ReviewAnchor, SmedError> {
+) -> Result<ReviewAnchor, MjolnrError> {
     let Some(capture) = changes.capture() else {
-        return Err(SmedError::workspace_refused(
+        return Err(MjolnrError::workspace_refused(
             ReasonCode::WorkspaceCapabilityUnavailable,
             "No diff has been captured for the open project, so there is no line to anchor a \
              review note to; nothing was recorded",
@@ -61,7 +61,7 @@ pub(crate) fn anchor_note(
     };
 
     if capture.digest != digest {
-        return Err(SmedError::workspace_refused(
+        return Err(MjolnrError::workspace_refused(
             ReasonCode::WorkspaceStaleDiff,
             format!(
                 "This note was written against diff revision {digest}, and the working tree has \
@@ -73,14 +73,14 @@ pub(crate) fn anchor_note(
     }
 
     let Some(file) = capture.files.iter().find(|file| file.path == path) else {
-        return Err(SmedError::workspace_refused(
+        return Err(MjolnrError::workspace_refused(
             ReasonCode::SchemaInvalid,
             format!("'{path}' is not a file in the captured diff, so it has no line {line}"),
         ));
     };
 
     let Some(hunk) = hunk_containing(file, side, line) else {
-        return Err(SmedError::workspace_refused(
+        return Err(MjolnrError::workspace_refused(
             ReasonCode::SchemaInvalid,
             format!(
                 "line {line} on the {} side of '{path}' is not in any hunk of the captured diff",
@@ -93,7 +93,7 @@ pub(crate) fn anchor_note(
         path: file.path.clone(),
         side,
         line,
-        // smed's own record of the context, not the client's claim about it.
+        // mjolnr's own record of the context, not the client's claim about it.
         hunk_header: hunk.header.clone(),
         capture_digest: capture.digest.clone(),
         base_object_id: capture.base_revision.clone(),
@@ -129,9 +129,9 @@ fn hunk_containing(file: &FileChange, side: ReviewSide, line: u32) -> Option<&Hu
 /// than creating a stub. A thread with no anchor is not a thread, and inventing
 /// one to hang a comment from would put a note on the surface pointing at no
 /// line at all.
-pub(crate) fn apply_event(threads: &mut ReviewThreads, event: &SmedEvent) {
+pub(crate) fn apply_event(threads: &mut ReviewThreads, event: &MjolnrEvent) {
     match event {
-        SmedEvent::ReviewNoteRecorded {
+        MjolnrEvent::ReviewNoteRecorded {
             thread,
             anchor,
             comment,
@@ -141,21 +141,21 @@ pub(crate) fn apply_event(threads: &mut ReviewThreads, event: &SmedEvent) {
                 .entry(*thread)
                 .or_insert_with(|| ReviewThread::open(*thread, anchor.clone(), comment.clone()));
         }
-        SmedEvent::ReviewCommentAdded {
+        MjolnrEvent::ReviewCommentAdded {
             thread, comment, ..
         } => {
             if let Some(existing) = threads.get_mut(thread) {
                 existing.comments.push(comment.clone());
             }
         }
-        SmedEvent::ReviewRequestSent { threads: sent, .. } => {
+        MjolnrEvent::ReviewRequestSent { threads: sent, .. } => {
             for id in sent {
                 if let Some(existing) = threads.get_mut(id) {
                     existing.status = ReviewThreadStatus::Sent;
                 }
             }
         }
-        SmedEvent::ReviewRequestAnswered {
+        MjolnrEvent::ReviewRequestAnswered {
             threads: answered,
             response_message,
             ..
@@ -170,9 +170,9 @@ pub(crate) fn apply_event(threads: &mut ReviewThreads, event: &SmedEvent) {
     }
 }
 
-/// Turn the selected threads into the directive "send to smed" delivers.
+/// Turn the selected threads into the directive "send to mjolnr" delivers.
 ///
-/// The text is assembled from smed's own record — the anchors it built and the
+/// The text is assembled from mjolnr's own record — the anchors it built and the
 /// bodies a human typed, both already bounded at the bridge — so nothing here
 /// can grow without limit. It reads as a request rather than an instruction to
 /// a tool because that is what it is: the human is asking for a revision, and
@@ -267,7 +267,7 @@ mod tests {
     }
 
     #[test]
-    fn an_anchor_takes_its_hunk_context_from_smeds_capture() {
+    fn an_anchor_takes_its_hunk_context_from_mjolnrs_capture() {
         let anchor = anchor_note(&capture("d1"), "src/main.rs", ReviewSide::New, 41, "d1")
             .expect("a live anchor");
 
@@ -331,8 +331,8 @@ mod tests {
         );
     }
 
-    fn recorded(id: ReviewThreadId, session: SessionId) -> SmedEvent {
-        SmedEvent::ReviewNoteRecorded {
+    fn recorded(id: ReviewThreadId, session: SessionId) -> MjolnrEvent {
+        MjolnrEvent::ReviewNoteRecorded {
             session,
             thread: id,
             anchor: anchor_note(&capture("d1"), "src/main.rs", ReviewSide::New, 41, "d1").unwrap(),
@@ -353,7 +353,7 @@ mod tests {
 
         apply_event(
             &mut threads,
-            &SmedEvent::ReviewCommentAdded {
+            &MjolnrEvent::ReviewCommentAdded {
                 session,
                 thread: id,
                 comment: comment("and the empty case".to_owned()),
@@ -364,7 +364,7 @@ mod tests {
         let run = RunId::new();
         apply_event(
             &mut threads,
-            &SmedEvent::ReviewRequestSent {
+            &MjolnrEvent::ReviewRequestSent {
                 session,
                 threads: vec![id],
                 run,
@@ -375,7 +375,7 @@ mod tests {
         let answer = uuid::Uuid::now_v7();
         apply_event(
             &mut threads,
-            &SmedEvent::ReviewRequestAnswered {
+            &MjolnrEvent::ReviewRequestAnswered {
                 session,
                 threads: vec![id],
                 response_message: answer,
@@ -400,7 +400,7 @@ mod tests {
 
         apply_event(
             &mut threads,
-            &SmedEvent::ReviewCommentAdded {
+            &MjolnrEvent::ReviewCommentAdded {
                 session,
                 thread: ReviewThreadId::new(),
                 comment: comment("orphan".to_owned()),
@@ -408,7 +408,7 @@ mod tests {
         );
         apply_event(
             &mut threads,
-            &SmedEvent::ReviewRequestAnswered {
+            &MjolnrEvent::ReviewRequestAnswered {
                 session,
                 threads: vec![ReviewThreadId::new()],
                 response_message: uuid::Uuid::now_v7(),

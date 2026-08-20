@@ -11,17 +11,17 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use smed::core::board::{DecisionAuthor, DecisionTicketId, DecisionTicketKind};
-use smed::core::command::SmedCommand;
-use smed::core::error::ReasonCode;
-use smed::core::event::{SessionId, SmedEvent};
-use smed::core::model::{ModelId, ProviderId};
-use smed::core::provider::Provider;
-use smed::core::runtime::{RuntimeSnapshot, SmedRuntime};
-use smed::core::store::EventStore;
-use smed::providers::fake::FakeProvider;
-use smed::runtime::Runtime;
-use smed::store::memory::InMemoryEventStore;
+use mjolnr::core::board::{DecisionAuthor, DecisionTicketId, DecisionTicketKind};
+use mjolnr::core::command::MjolnrCommand;
+use mjolnr::core::error::ReasonCode;
+use mjolnr::core::event::{MjolnrEvent, SessionId};
+use mjolnr::core::model::{ModelId, ProviderId};
+use mjolnr::core::provider::Provider;
+use mjolnr::core::runtime::{MjolnrRuntime, RuntimeSnapshot};
+use mjolnr::core::store::EventStore;
+use mjolnr::providers::fake::FakeProvider;
+use mjolnr::runtime::Runtime;
+use mjolnr::store::memory::InMemoryEventStore;
 
 async fn open_project() -> (
     Runtime,
@@ -36,13 +36,13 @@ async fn open_project() -> (
         store.clone() as Arc<dyn EventStore>,
     );
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: temp.path().to_path_buf(),
         })
         .await
         .expect("open project");
     runtime
-        .dispatch(SmedCommand::CreateSession {
+        .dispatch(MjolnrCommand::CreateSession {
             provider: ProviderId::new(FakeProvider::ID),
             model: ModelId::new(FakeProvider::MODEL),
         })
@@ -80,7 +80,7 @@ async fn opened_ticket(store: &InMemoryEventStore, session: SessionId) -> Decisi
     events
         .iter()
         .find_map(|stored| match &stored.event {
-            SmedEvent::DecisionTicketOpened { ticket, .. } => Some(ticket.id),
+            MjolnrEvent::DecisionTicketOpened { ticket, .. } => Some(ticket.id),
             _ => None,
         })
         .expect("a ticket was recorded")
@@ -89,14 +89,14 @@ async fn opened_ticket(store: &InMemoryEventStore, session: SessionId) -> Decisi
 async fn recorded_resolutions(
     store: &InMemoryEventStore,
     session: SessionId,
-) -> Vec<smed::core::board::DecisionResolution> {
+) -> Vec<mjolnr::core::board::DecisionResolution> {
     store
         .events(session)
         .await
         .expect("events")
         .iter()
         .filter_map(|stored| match &stored.event {
-            SmedEvent::DecisionTicketResolved { resolution, .. } => Some(resolution.clone()),
+            MjolnrEvent::DecisionTicketResolved { resolution, .. } => Some(resolution.clone()),
             _ => None,
         })
         .collect()
@@ -107,7 +107,7 @@ async fn opening_and_resolving_a_ticket_records_durable_verbatim_judgement() {
     let (runtime, _temp, store, session) = open_project().await;
 
     runtime
-        .dispatch(SmedCommand::OpenDecisionTicket {
+        .dispatch(MjolnrCommand::OpenDecisionTicket {
             question: "Which order for the E5 board?".to_owned(),
             kind: DecisionTicketKind::Research,
             options: vec!["tickets first".to_owned(), "frontier first".to_owned()],
@@ -118,7 +118,7 @@ async fn opening_and_resolving_a_ticket_records_durable_verbatim_judgement() {
 
     let ticket = opened_ticket(&store, session).await;
     runtime
-        .dispatch(SmedCommand::ResolveDecisionTicket {
+        .dispatch(MjolnrCommand::ResolveDecisionTicket {
             ticket,
             chosen_option: 0,
             note: Some("the frontier has nothing to compute over until tickets exist".to_owned()),
@@ -150,7 +150,7 @@ async fn a_blocker_edge_is_recorded_and_a_dangling_one_is_refused() {
     let (runtime, _temp, store, session) = open_project().await;
 
     runtime
-        .dispatch(SmedCommand::OpenDecisionTicket {
+        .dispatch(MjolnrCommand::OpenDecisionTicket {
             question: "What does a budget mean without dollars?".to_owned(),
             kind: DecisionTicketKind::Research,
             options: vec!["windows".to_owned(), "turn credits".to_owned()],
@@ -161,7 +161,7 @@ async fn a_blocker_edge_is_recorded_and_a_dangling_one_is_refused() {
     let blocker = opened_ticket(&store, session).await;
 
     runtime
-        .dispatch(SmedCommand::OpenDecisionTicket {
+        .dispatch(MjolnrCommand::OpenDecisionTicket {
             question: "What does continuation show beside the loop?".to_owned(),
             kind: DecisionTicketKind::Task,
             options: vec!["worst window".to_owned(), "all windows".to_owned()],
@@ -172,7 +172,7 @@ async fn a_blocker_edge_is_recorded_and_a_dangling_one_is_refused() {
 
     let missing = DecisionTicketId::new();
     let error = runtime
-        .dispatch(SmedCommand::OpenDecisionTicket {
+        .dispatch(MjolnrCommand::OpenDecisionTicket {
             question: "A ticket behind nothing".to_owned(),
             kind: DecisionTicketKind::Task,
             options: vec!["this".to_owned(), "that".to_owned()],
@@ -191,7 +191,7 @@ async fn a_blocker_edge_is_recorded_and_a_dangling_one_is_refused() {
         .await
         .expect("events")
         .iter()
-        .filter(|stored| matches!(stored.event, SmedEvent::DecisionTicketOpened { .. }))
+        .filter(|stored| matches!(stored.event, MjolnrEvent::DecisionTicketOpened { .. }))
         .count();
     assert_eq!(tickets_opened, 2, "only the two valid opens persisted");
 }
@@ -201,7 +201,7 @@ async fn resolving_an_unknown_ticket_or_an_unrecorded_option_is_refused() {
     let (runtime, _temp, store, session) = open_project().await;
 
     let error = runtime
-        .dispatch(SmedCommand::ResolveDecisionTicket {
+        .dispatch(MjolnrCommand::ResolveDecisionTicket {
             ticket: DecisionTicketId::new(),
             chosen_option: 0,
             note: None,
@@ -211,7 +211,7 @@ async fn resolving_an_unknown_ticket_or_an_unrecorded_option_is_refused() {
     assert_eq!(error.reason_code(), Some(ReasonCode::SchemaInvalid));
 
     runtime
-        .dispatch(SmedCommand::OpenDecisionTicket {
+        .dispatch(MjolnrCommand::OpenDecisionTicket {
             question: "two-option question".to_owned(),
             kind: DecisionTicketKind::Grilling,
             options: vec!["a".to_owned(), "b".to_owned()],
@@ -222,7 +222,7 @@ async fn resolving_an_unknown_ticket_or_an_unrecorded_option_is_refused() {
     let ticket = opened_ticket(&store, session).await;
 
     let error = runtime
-        .dispatch(SmedCommand::ResolveDecisionTicket {
+        .dispatch(MjolnrCommand::ResolveDecisionTicket {
             ticket,
             chosen_option: 2,
             note: None,
@@ -241,7 +241,7 @@ async fn changing_your_mind_records_a_new_resolution_that_supersedes_in_chain() 
     let (runtime, _temp, store, session) = open_project().await;
 
     runtime
-        .dispatch(SmedCommand::OpenDecisionTicket {
+        .dispatch(MjolnrCommand::OpenDecisionTicket {
             question: "Ship with or without?".to_owned(),
             kind: DecisionTicketKind::Prototype,
             options: vec!["with".to_owned(), "without".to_owned()],
@@ -252,7 +252,7 @@ async fn changing_your_mind_records_a_new_resolution_that_supersedes_in_chain() 
     let ticket = opened_ticket(&store, session).await;
 
     runtime
-        .dispatch(SmedCommand::ResolveDecisionTicket {
+        .dispatch(MjolnrCommand::ResolveDecisionTicket {
             ticket,
             chosen_option: 0,
             note: Some("with, on first reading".to_owned()),
@@ -266,7 +266,7 @@ async fn changing_your_mind_records_a_new_resolution_that_supersedes_in_chain() 
         .expect("one resolution is recorded");
 
     runtime
-        .dispatch(SmedCommand::ResolveDecisionTicket {
+        .dispatch(MjolnrCommand::ResolveDecisionTicket {
             ticket,
             chosen_option: 1,
             note: Some("without — the prototype disagreed".to_owned()),
@@ -286,7 +286,7 @@ async fn changing_your_mind_records_a_new_resolution_that_supersedes_in_chain() 
 async fn store_copy_choice(
     store: &InMemoryEventStore,
     session: SessionId,
-    resolution_id: smed::core::board::DecisionResolutionId,
+    resolution_id: mjolnr::core::board::DecisionResolutionId,
 ) -> usize {
     recorded_resolutions(store, session)
         .await
@@ -310,7 +310,7 @@ async fn resolving_a_ticket_moves_nothing_but_the_ticket_itself() {
     );
 
     runtime
-        .dispatch(SmedCommand::OpenDecisionTicket {
+        .dispatch(MjolnrCommand::OpenDecisionTicket {
             question: "Question one?".to_owned(),
             kind: DecisionTicketKind::Task,
             options: vec!["yes".to_owned(), "no".to_owned()],
@@ -320,7 +320,7 @@ async fn resolving_a_ticket_moves_nothing_but_the_ticket_itself() {
         .expect("open");
     let ticket = opened_ticket(&store, session).await;
     runtime
-        .dispatch(SmedCommand::ResolveDecisionTicket {
+        .dispatch(MjolnrCommand::ResolveDecisionTicket {
             ticket,
             chosen_option: 1,
             note: None,
@@ -349,11 +349,11 @@ async fn resolving_a_ticket_moves_nothing_but_the_ticket_itself() {
         assert!(
             !matches!(
                 stored.event,
-                SmedEvent::ApprovalResolved { .. }
-                    | SmedEvent::ToolProposed { .. }
-                    | SmedEvent::ToolCompleted { .. }
-                    | SmedEvent::PolicyChanged { .. }
-                    | SmedEvent::SpawnEnvelopeArmed { .. }
+                MjolnrEvent::ApprovalResolved { .. }
+                    | MjolnrEvent::ToolProposed { .. }
+                    | MjolnrEvent::ToolCompleted { .. }
+                    | MjolnrEvent::PolicyChanged { .. }
+                    | MjolnrEvent::SpawnEnvelopeArmed { .. }
             ),
             "nothing authority-bearing entered the log: {:?}",
             stored.event
@@ -366,7 +366,7 @@ async fn a_replayed_session_remembers_tickets_and_supersedes_in_chain() {
     let (runtime, temp, store, session) = open_project().await;
 
     runtime
-        .dispatch(SmedCommand::OpenDecisionTicket {
+        .dispatch(MjolnrCommand::OpenDecisionTicket {
             question: "persisted question".to_owned(),
             kind: DecisionTicketKind::Research,
             options: vec!["a".to_owned(), "b".to_owned()],
@@ -376,7 +376,7 @@ async fn a_replayed_session_remembers_tickets_and_supersedes_in_chain() {
         .expect("open");
     let ticket = opened_ticket(&store, session).await;
     runtime
-        .dispatch(SmedCommand::ResolveDecisionTicket {
+        .dispatch(MjolnrCommand::ResolveDecisionTicket {
             ticket,
             chosen_option: 0,
             note: None,
@@ -398,19 +398,19 @@ async fn a_replayed_session_remembers_tickets_and_supersedes_in_chain() {
         store.clone() as Arc<dyn EventStore>,
     );
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: temp.path().to_path_buf(),
         })
         .await
         .expect("open project");
     runtime
-        .dispatch(SmedCommand::ResumeSession { session })
+        .dispatch(MjolnrCommand::ResumeSession { session })
         .await
         .expect("resume");
     settle_until(&runtime, |snap| snap.session.is_some()).await;
 
     runtime
-        .dispatch(SmedCommand::ResolveDecisionTicket {
+        .dispatch(MjolnrCommand::ResolveDecisionTicket {
             ticket,
             chosen_option: 1,
             note: Some("second thoughts, after a restart".to_owned()),

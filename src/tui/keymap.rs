@@ -30,7 +30,7 @@ pub(crate) struct InputContext {
     pub composer_empty: bool,
     pub help_open: bool,
     pub approval_tier: Option<ToolTier>,
-    /// A crash left work smed cannot account for. Takes precedence over every
+    /// A crash left work mjolnr cannot account for. Takes precedence over every
     /// other context: nothing else may be typed until it is resolved.
     pub recovery_required: bool,
     /// The model picker is open, so arrows and Enter drive the list rather than
@@ -133,7 +133,7 @@ impl KeymapState {
             self.disarm();
         }
 
-        // Recovery outranks everything. A session whose history smed cannot
+        // Recovery outranks everything. A session whose history mjolnr cannot
         // account for must not accept a prompt, an approval, or a policy change
         // — the guard is here, in the one place physical keys become intent,
         // rather than spread across the branches below.
@@ -872,7 +872,7 @@ mod tests {
 
     #[test]
     fn recovery_blocks_typing_and_offers_only_its_own_choices() {
-        // A session smed cannot account for must not accept a directive. The
+        // A session mjolnr cannot account for must not accept a directive. The
         // guard lives in the keymap so no client can forget it.
         let mut state = KeymapState::default();
         let context = InputContext {

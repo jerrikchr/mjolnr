@@ -252,7 +252,7 @@ impl GeminiCliProvider {
     }
 
     /// The inference response carries no quota signal at all (E0 spike), so
-    /// unlike every other provider's passive header read, this is smed's
+    /// unlike every other provider's passive header read, this is mjolnr's
     /// one active quota probe: a side request to `fetchAvailableModels`,
     /// found via reverse-engineering docs and confirmed live — it 403s
     /// without the `antigravity` user-agent header (not a scope issue; the

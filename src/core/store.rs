@@ -23,7 +23,7 @@ use time::OffsetDateTime;
 
 use crate::core::checkpoint::SessionCheckpoint;
 use crate::core::continuation::CommandFact;
-use crate::core::event::{EventId, SessionId, SmedEvent, StoredEvent};
+use crate::core::event::{EventId, MjolnrEvent, SessionId, StoredEvent};
 use crate::core::model::{ModelId, ProviderId};
 
 /// Failures from a store implementation.
@@ -56,18 +56,18 @@ pub enum StoreError {
     #[error("duplicate event id {id}")]
     DuplicateEvent { id: EventId },
 
-    /// The database was written by a newer smed.
+    /// The database was written by a newer mjolnr.
     ///
     /// Refused, never best-effort: a build that silently ignores columns it does
     /// not understand will drop data on its next write.
     #[error(
         "database schema version {found} is newer than this build supports ({supported}); \
-         upgrade smed rather than risking a partial read"
+         upgrade mjolnr rather than risking a partial read"
     )]
     UnsupportedSchema { found: u32, supported: u32 },
 
     /// Another process holds the session's write lease.
-    #[error("session {session} is already open in another smed process ({holder})")]
+    #[error("session {session} is already open in another mjolnr process ({holder})")]
     SessionOwned { session: SessionId, holder: String },
 
     #[error("unknown session {session}")]
@@ -255,7 +255,7 @@ pub struct SessionTreeNode {
 /// *(Deliberate divergence from Pi, which asks a model to summarise a branch
 /// when you switch away from it.)*
 ///
-/// smed will not spend the user's tokens on a step they did not ask for, and
+/// mjolnr will not spend the user's tokens on a step they did not ask for, and
 /// a projection of the record cannot hallucinate what the branch did. Every
 /// field here is read off events that were already written: the message that
 /// started the branch, the files it touched, the commands it ran and how they
@@ -326,9 +326,9 @@ pub trait EventStore: Send + Sync + std::fmt::Debug {
 
     /// Append a durable event, assigning it the next sequence number.
     ///
-    /// Callers must not pass ephemeral events; [`SmedEvent::is_durable`]
+    /// Callers must not pass ephemeral events; [`MjolnrEvent::is_durable`]
     /// decides. Implementations may assume the caller checked.
-    async fn append(&self, event: SmedEvent) -> Result<StoredEvent, StoreError>;
+    async fn append(&self, event: MjolnrEvent) -> Result<StoredEvent, StoreError>;
 
     /// Every event for a session, in sequence order.
     ///
@@ -347,7 +347,7 @@ pub trait EventStore: Send + Sync + std::fmt::Debug {
     /// silently losing the branch point.
     async fn append_after(
         &self,
-        event: SmedEvent,
+        event: MjolnrEvent,
         parent: Option<u64>,
     ) -> Result<StoredEvent, StoreError> {
         let _ = parent;
@@ -492,7 +492,7 @@ pub trait EventStore: Send + Sync + std::fmt::Debug {
     /// Fails with [`StoreError::SessionOwned`] when another process holds it.
     /// Ended sessions also refuse: acquiring a lease must never resurrect one.
     /// SQLite serialises writers to the *file*; nothing in SQLite prevents two
-    /// smed processes interleaving two runs into one *session*, which is what
+    /// mjolnr processes interleaving two runs into one *session*, which is what
     /// this prevents (`docs/persistence.md` §5).
     async fn acquire_session(&self, session: SessionId) -> Result<SessionLease, StoreError>;
 
@@ -504,7 +504,7 @@ pub trait EventStore: Send + Sync + std::fmt::Debug {
 
     /// Forcibly clear a lease, whoever holds it.
     ///
-    /// The explicit human act behind `mjolnr sessions release`. smed never does
+    /// The explicit human act behind `mjolnr sessions release`. mjolnr never does
     /// this on its own: it cannot prove the holder is dead.
     async fn break_lease(&self, session: SessionId) -> Result<(), StoreError>;
 
@@ -615,7 +615,7 @@ mod tests {
     fn an_unknown_session_status_fails_closed_to_ended() {
         assert_eq!(SessionStatus::parse("active"), SessionStatus::Active);
         assert_eq!(SessionStatus::parse("ended"), SessionStatus::Ended);
-        // A status written by a newer smed must not resurrect as live work.
+        // A status written by a newer mjolnr must not resurrect as live work.
         assert_eq!(SessionStatus::parse("archived"), SessionStatus::Ended);
         assert_eq!(SessionStatus::parse(""), SessionStatus::Ended);
     }

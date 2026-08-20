@@ -51,7 +51,7 @@ Sources: [streaming guide](https://developers.openai.com/api/docs/guides/streami
 
 `/responses/{response_id}` (retrieve), `/responses/{response_id}/cancel`, `/responses/{response_id}/input_items`, `/responses/input_tokens`.
 
-> **`/cancel` does not apply to smed's MVP.** The spec states: *"Only responses created with the `background` parameter set to `true` can be cancelled."* smed streams synchronously, so cancellation remains a client-side stream drop (§6.7). Recorded because the endpoint's existence invites the wrong conclusion.
+> **`/cancel` does not apply to mjolnr's MVP.** The spec states: *"Only responses created with the `background` parameter set to `true` can be cancelled."* mjolnr streams synchronously, so cancellation remains a client-side stream drop (§6.7). Recorded because the endpoint's existence invites the wrong conclusion.
 
 ### Tool-call lifecycle **[confirmed]**
 
@@ -62,7 +62,7 @@ Define:
   "parameters": { "type": "object", "properties": {}, "required": [], "additionalProperties": false } }
 ```
 
-smed sends function tools with `strict: true`. OpenAI strict mode requires
+mjolnr sends function tools with `strict: true`. OpenAI strict mode requires
 `additionalProperties: false` on every object and requires every key in
 `properties` to appear in `required`. A semantically optional argument is
 therefore required on the wire with `null` included in its allowed type; the
@@ -112,11 +112,11 @@ Verified as literal wire strings in `openapi.yaml`:
 
 > **Phase 0 recorded these as [inferred] from the dotted pattern; the spec confirms every one.** The guess was right — which is exactly why the labelling mattered. Had one been wrong, the label is what would have caught it rather than a confusing runtime failure.
 
-**`response.incomplete` was not predicted.** A third terminal state beyond success/failure — a response that stopped early (e.g. token limit). smed must treat it as its own outcome: it is neither an error nor a complete answer, and reporting it as either would violate AGENTS.md §1.3 (never lie about state).
+**`response.incomplete` was not predicted.** A third terminal state beyond success/failure — a response that stopped early (e.g. token limit). mjolnr must treat it as its own outcome: it is neither an error nor a complete answer, and reporting it as either would violate AGENTS.md §1.3 (never lie about state).
 
 The streaming guide lists SDK-level class names (`ResponseCreatedEvent`, `ResponseOutputTextDelta`, `ResponseRefusalDelta`, …). **Those are SDK type names, not wire strings** — do not map against them.
 
-Refusals stream as a distinct channel (`ResponseRefusalDelta`/`ResponseRefusalDone` as SDK names). smed must not render a refusal as assistant text; map it to a typed outcome.
+Refusals stream as a distinct channel (`ResponseRefusalDelta`/`ResponseRefusalDone` as SDK names). mjolnr must not render a refusal as assistant text; map it to a typed outcome.
 
 ### Terminal events carry a `Response` object — read the status, not the event name
 
@@ -135,7 +135,7 @@ Every streaming event also carries a `sequence_number` (integer). Useful for det
 
 `ResponseErrorCode` includes **`rate_limit_exceeded`**, alongside `server_error`, `invalid_prompt`, and a long tail of image-specific codes. **[confirmed]**
 
-So a rate limit reaches smed by *two different paths*:
+So a rate limit reaches mjolnr by *two different paths*:
 
 1. **Pre-stream:** HTTP 429 with an `ErrorResponse` body.
 2. **Mid-stream:** HTTP **200**, then `response.failed` with `error.code = "rate_limit_exceeded"`.
@@ -150,7 +150,7 @@ Both paths must map to `PROVIDER_RATE_LIMIT`. Mapping only the 429 would let a m
 
 - **Non-200 responses:** `ErrorResponse` = `{ "error": { type, message, param, code } }`. All four fields required; `param` and `code` are nullable.
 - **Documented mid-stream SSE frame:** `event: error` with top-level `{ "type": "error", "code", "message", "param", "sequence_number" }`. The actionable classification is `code`; `type` is always the generic string `error`.
-- **Observed during live request setup on 2026-07-16:** the SSE data used `{ "type": "error", "error": { type, message, code } }`. smed accepts both shapes and retains only the stable code, never the provider's raw prose.
+- **Observed during live request setup on 2026-07-16:** the SSE data used `{ "type": "error", "error": { type, message, code } }`. mjolnr accepts both shapes and retains only the stable code, never the provider's raw prose.
 
 Do not report the SSE `type` as the failure reason. Doing so collapses every
 error to the useless word `error` and hides codes such as
@@ -168,7 +168,7 @@ total_tokens            (required)
 
 > **The `_details` are breakdowns, not additions.** `cached_tokens` is a subset of `input_tokens`; `reasoning_tokens` is a subset of `output_tokens`. Adding them to their parent double-counts — the same shape of error Gemini invites with `promptTokenCount` (§3).
 
-smed's canonical [`Usage`] carries `input_tokens` and `output_tokens` only. The breakdowns are real information the MVP has no surface for; dropping them is deliberate, not an oversight.
+mjolnr's canonical [`Usage`] carries `input_tokens` and `output_tokens` only. The breakdowns are real information the MVP has no surface for; dropping them is deliberate, not an oversight.
 
 ### Still open
 
@@ -185,9 +185,9 @@ This provider is intentionally named `openai-codex`, not an `openai` mode. It ha
 
 ### Support boundary
 
-This route spends ChatGPT Plus/Pro subscription quota rather than API credits. It is **not a published OpenAI API contract**. It is implemented by the official Codex CLI and currently tolerated for this use, but can change or disappear without notice. Anthropic closed its analogous third-party subscription route. smed therefore keeps API keys as the canonical supported OpenAI path and identifies itself honestly as `smed` on requests.
+This route spends ChatGPT Plus/Pro subscription quota rather than API credits. It is **not a published OpenAI API contract**. It is implemented by the official Codex CLI and currently tolerated for this use, but can change or disappear without notice. Anthropic closed its analogous third-party subscription route. mjolnr therefore keeps API keys as the canonical supported OpenAI path and identifies itself honestly as `mjolnr` on requests.
 
-smed never reads or live-shares `~/.codex/auth.json`. Refresh tokens rotate and are single-use; two owners racing the same generation can strand both. A login creates a smed-owned token chain in smed's own owner-only credential file.
+mjolnr never reads or live-shares `~/.codex/auth.json`. Refresh tokens rotate and are single-use; two owners racing the same generation can strand both. A login creates a mjolnr-owned token chain in mjolnr's own owner-only credential file.
 
 ### Device-code login
 
@@ -197,20 +197,20 @@ The official sequence is **[confirmed from official source and offline contract-
 2. Show `https://auth.openai.com/codex/device` and the returned user code.
 3. Poll `POST /api/accounts/deviceauth/token`; HTTP 403/404 means authorization is still pending, with a 15-minute ceiling.
 4. Exchange the returned authorization code and PKCE verifier at `POST https://auth.openai.com/oauth/token`, using redirect URI `https://auth.openai.com/deviceauth/callback`.
-5. Persist access token, rotating refresh token, expiry, and the ChatGPT account id derived from the access-token JWT claims in smed's owner-only credential file.
+5. Persist access token, rotating refresh token, expiry, and the ChatGPT account id derived from the access-token JWT claims in mjolnr's owner-only credential file.
 
-Refresh uses `grant_type=refresh_token` and the same public client id. Refresh is single-flight inside one smed process. After an exchange succeeds, the replacement chain is persisted before the new access token can be used for `/responses`. If persistence fails, smed sends no model request and requires a fresh login rather than risking use of an unowned token generation.
+Refresh uses `grant_type=refresh_token` and the same public client id. Refresh is single-flight inside one mjolnr process. After an exchange succeeds, the replacement chain is persisted before the new access token can be used for `/responses`. If persistence fails, mjolnr sends no model request and requires a fresh login rather than risking use of an unowned token generation.
 
 ### Provider request
 
-- Endpoint: `POST https://chatgpt.com/backend-api/codex/responses`. **[confirmed from official source and a live smed request on 2026-07-16]**
+- Endpoint: `POST https://chatgpt.com/backend-api/codex/responses`. **[confirmed from official source and a live mjolnr request on 2026-07-16]**
 - Auth: `Authorization: Bearer <OAuth access token>`. **[confirmed from official source and live]**
 - Account routing: `chatgpt-account-id` from the access-token JWT claim. **[confirmed from official source and live]**
-- Client identity: `originator: smed` and `User-Agent: smed/<version>`. This is smed's honesty policy, not an upstream requirement. **[confirmed accepted live]**
+- Client identity: `originator: mjolnr` and `User-Agent: mjolnr/<version>`. This is mjolnr's honesty policy, not an upstream requirement. **[confirmed accepted live]**
 - Body: non-empty `instructions`, canonical `input`, strict function `tools`, `tool_choice: "auto"`, `parallel_tool_calls: true`, `store: false`, and `stream: true`. **[confirmed accepted live with `gpt-5.4` on 2026-07-16]**
 - Stream: the Responses SSE dialect in §1. **[confirmed from official source and live]**
 
-smed fetches the authenticated account catalogue from
+mjolnr fetches the authenticated account catalogue from
 `GET /backend-api/codex/models`, sends the same bearer token and
 `chatgpt-account-id` boundary as generation, and exposes only entries with
 `supported_in_api: true` and `visibility: "list"`. Display name, context
@@ -220,10 +220,10 @@ projection. A successful re-auth triggers a fresh runtime discovery generation,
 and stale results from an older generation are discarded.
 
 The subscription endpoint uses non-strict function definitions. This is
-deliberate: smed's `spawn_subagent.result_schema` is itself a user-declared
+deliberate: mjolnr's `spawn_subagent.result_schema` is itself a user-declared
 JSON Schema, so its possible properties cannot be closed when the outer tool
 definition is published. Sending that tool with `strict: true` is rejected by
-the live Codex backend as `invalid_function_parameters`. smed removes
+the live Codex backend as `invalid_function_parameters`. mjolnr removes
 `$schema` dialect markers but preserves optionality and the dynamic nested
 schema. This does not change the API-key `openai` adapter, whose built-in tool
 contract remains strict.
@@ -232,7 +232,7 @@ Live verification on 2026-07-27 discovered and completed a text turn with
 `gpt-5.6-sol`. The account catalogue also exposed `gpt-5.6-terra`,
 `gpt-5.6-luna`, `gpt-5.5`, `gpt-5.4`, and `gpt-5.4-mini`; hidden
 `codex-auto-review` was correctly excluded. Account grants remain the source of
-truth and can change independently of smed.
+truth and can change independently of mjolnr.
 
 ### Subscription quota
 
@@ -247,7 +247,7 @@ Sources: [create a message](https://platform.claude.com/docs/en/api/messages/cre
 - **Endpoint:** `POST https://api.anthropic.com/v1/messages`. **[confirmed]**
 - **Authentication:** `x-api-key: <credential>`. **[confirmed]**
 - **Version:** `anthropic-version: 2023-06-01` is mandatory. **[confirmed]**
-- **Request:** `model`, `messages`, and `max_tokens` are required for smed's streamed call; system instructions use the top-level `system` field. **[confirmed]**
+- **Request:** `model`, `messages`, and `max_tokens` are required for mjolnr's streamed call; system instructions use the top-level `system` field. **[confirmed]**
 
 - **Transport:** SSE. Enabled with `"stream": true`. **[confirmed]**
 - **Framing:** each event has both an SSE event name (`event: message_stop`) *and* a matching `type` in its JSON data. **[confirmed]** Prefer the `data.type` field as the source of truth; the SSE event name duplicates it.
@@ -274,7 +274,7 @@ data: {"type": "error", "error": {"type": "overloaded_error", "message": "Overlo
 
 > **Official instruction:** *"new event types may be added, and your code should handle unknown event types gracefully."* Unknown events are retained, never fatal.
 
-That forward-compatibility rule applies to an unknown top-level `type`, not to corrupt data for a type smed already understands. The adapter first reads the event envelope: an unknown type becomes `UnknownUpstream`, while a known type whose required payload cannot decode fails immediately with `PROVIDER_PROTOCOL`. Treating both as unknown would hide the corrupt frame and produce a misleading error later.
+That forward-compatibility rule applies to an unknown top-level `type`, not to corrupt data for a type mjolnr already understands. The adapter first reads the event envelope: an unknown type becomes `UnknownUpstream`, while a known type whose required payload cannot decode fails immediately with `PROVIDER_PROTOCOL`. Treating both as unknown would hide the corrupt frame and produce a misleading error later.
 
 ### Delta types **[confirmed]**
 
@@ -306,10 +306,10 @@ During server-side fallback, a `fallback` content block arrives as a `content_bl
 
 ### Phase 6 implementation decisions
 
-- smed offers pinned current IDs `claude-sonnet-5`, `claude-opus-4-8`, and `claude-haiku-4-5-20251001`, with the published 1M/1M/200k context limits.
+- mjolnr offers pinned current IDs `claude-sonnet-5`, `claude-opus-4-8`, and `claude-haiku-4-5-20251001`, with the published 1M/1M/200k context limits.
 - Thinking and signature blocks are intentionally not canonicalized. They therefore cannot be replayed as if private reasoning state migrated to another provider.
 - HTTP 401/403 map to authentication, 429 and 529/`overloaded_error` map to rate limiting, and no error path automatically retries.
-- The adapter declares image input unsupported even though the models support it, because smed does not yet translate canonical image references onto this wire. Capability metadata describes the adapter path that exists, not provider marketing.
+- The adapter declares image input unsupported even though the models support it, because mjolnr does not yet translate canonical image references onto this wire. Capability metadata describes the adapter path that exists, not provider marketing.
 
 ---
 
@@ -323,11 +323,11 @@ Source: [generateContent reference](https://ai.google.dev/api/generate-content)
 - **Streaming [confirmed]:** add `?alt=sse` for SSE framing. Without it, the response is a stream of `GenerateContentResponse` instances in a different framing — **always send `alt=sse`** so one SSE decoder serves all SSE providers.
 - **Model is part of the path**, not the body — unlike every other provider here.
 
-### 3.2 Authentication — a smed decision, not a doc quote
+### 3.2 Authentication — a mjolnr decision, not a doc quote
 
 The reference documents the key as a **query parameter**: `?key=$GEMINI_API_KEY`. **[confirmed]**
 
-> **smed must not put a credential in a URL.** Query strings land in `tracing` spans, `reqwest` debug output, proxy logs, and crash reports. That directly violates AGENTS.md §3 ("secrets never leave their boundary") and defeats the redaction rules, because the secret would be inside a field we otherwise treat as safe to log.
+> **mjolnr must not put a credential in a URL.** Query strings land in `tracing` spans, `reqwest` debug output, proxy logs, and crash reports. That directly violates AGENTS.md §3 ("secrets never leave their boundary") and defeats the redaction rules, because the secret would be inside a field we otherwise treat as safe to log.
 >
 > **Decision:** use the `x-goog-api-key` request header instead. **[inferred — not stated in the page consulted]**
 >
@@ -353,7 +353,7 @@ GenerateContentResponse
 
 `usageMetadata`: `promptTokenCount` (includes cached), `cachedContentTokenCount`, `candidatesTokenCount`, `totalTokenCount`, `toolUsePromptTokenCount`, `thoughtsTokenCount`, plus per-modality breakdowns.
 
-Note `promptTokenCount` *includes* cached content — smed's usage display must not double-count it against `cachedContentTokenCount`.
+Note `promptTokenCount` *includes* cached content — mjolnr's usage display must not double-count it against `cachedContentTokenCount`.
 
 `promptFeedback` and `safetyRatings` can terminate a response for policy reasons. That is not an error and must not map to `PROVIDER_PROTOCOL`; it needs an honest typed outcome.
 
@@ -380,7 +380,7 @@ Using a spec-compliant SSE decoder (`eventsource-stream`) handles this; a hand-r
 - **Pre-stream:** standard JSON error body with a real HTTP status.
 - **Mid-stream:** delivered as an SSE event with a top-level `error` field and `finish_reason: "error"` in `choices`, **while the HTTP status remains 200 OK**.
 
-> smed must not infer success from HTTP status on any streaming provider. The stream body is the authority.
+> mjolnr must not infer success from HTTP status on any streaming provider. The stream body is the authority.
 
 Plan anti-pattern (§Phase 7): *"do not label OpenRouter as merely an OpenAI alias."* Its routing, comment frames, error placement, and per-model capability variance are its own contract.
 
@@ -414,7 +414,7 @@ Required `model`, `messages[]` (role + content). Optional: `stream`, `tools[]`, 
 
 `done: true`, `done_reason`, `total_duration`, `load_duration`, `prompt_eval_count` (input tokens), `prompt_eval_duration`, `eval_count` (output tokens), `eval_duration`, `logprobs`.
 
-Durations are **nanoseconds**. Token counts map to smed's usage from `prompt_eval_count`/`eval_count`.
+Durations are **nanoseconds**. Token counts map to mjolnr's usage from `prompt_eval_count`/`eval_count`.
 
 ### Not documented
 
@@ -429,22 +429,22 @@ Sources: LM Studio's official [REST API overview](https://lmstudio.ai/docs/devel
 [model listing reference](https://lmstudio.ai/docs/developer/rest/models).
 
 - **Server [confirmed]:** local default `http://localhost:1234`; OpenAI-compatible
-  generation uses `POST /v1/chat/completions`. smed accepts a host, IP, or full
-  URL during `smed auth login lm-studio`, normalizes it to the `/v1` root, and
-  stores it in `.smed/providers/lm-studio.url`. The
+  generation uses `POST /v1/chat/completions`. mjolnr accepts a host, IP, or full
+  URL during `mjolnr auth login lm-studio`, normalizes it to the `/v1` root, and
+  stores it in `.mjolnr/providers/lm-studio.url`. The
   `SMED_LM_STUDIO_BASE_URL` environment variable takes precedence.
 - **Authentication [confirmed]:** disabled by default and therefore optional in
-  smed. When enabled, LM Studio accepts bearer API tokens. smed resolves
+  mjolnr. When enabled, LM Studio accepts bearer API tokens. mjolnr resolves
   `LM_API_TOKEN` or its owner-only `lm-studio` credential file and sends the
   header only when a non-blank token exists.
-- **Catalogue [confirmed]:** smed uses native `GET /api/v1/models`, not the
+- **Catalogue [confirmed]:** mjolnr uses native `GET /api/v1/models`, not the
   sparse OpenAI-compatible list. It accepts only `type: "llm"` entries whose
   `capabilities.trained_for_tool_use` is true, then maps `key`, `display_name`,
   `max_context_length`, `capabilities.vision`, and `capabilities.reasoning`.
 - **Loaded context caveat [observed]:** `max_context_length` is model metadata,
   not the context chosen for a loaded instance. A model loaded at 8,192 tokens
-  can therefore appear capable but refuse smed's larger governed prompt. The
-  server's refusal is a typed protocol failure; smed does not guess or truncate
+  can therefore appear capable but refuse mjolnr's larger governed prompt. The
+  server's refusal is a typed protocol failure; mjolnr does not guess or truncate
   safety instructions to make it fit.
 - **Stream error envelopes [observed]:** LM Studio can emit an SSE data object
   containing root `error` and `message` fields with no `choices`. The decoder
@@ -470,7 +470,7 @@ bare `String` when an image is present:
 ```
 
 `image_url` accepts a data URI directly. JPEG, PNG, WebP, and non-animated GIF.
-Documented ceilings are far above smed's own: 512 MB per request, 1500 images.
+Documented ceilings are far above mjolnr's own: 512 MB per request, 1500 images.
 
 ### Anthropic — Messages API **[confirmed]**
 
@@ -485,7 +485,7 @@ path, 5 MB via Bedrock/Vertex. Max 8000×8000 px. 100 images per request on
 
 Two facts worth encoding as behaviour rather than as comments: images placed
 *before* text perform better, and above 20 images per request a stricter
-per-image dimension limit applies. smed's own per-request cap sits well below
+per-image dimension limit applies. mjolnr's own per-request cap sits well below
 that threshold, so the stricter regime is unreachable by construction.
 
 ### Gemini — `generateContent` **[confirmed]**
@@ -495,7 +495,7 @@ that threshold, so the stricter regime is unreachable by construction.
 ```
 
 camelCase, consistent with the adapter's existing `functionCall` and
-`thoughtSignature` spellings — smed targets the camelCase JSON surface, not the
+`thoughtSignature` spellings — mjolnr targets the camelCase JSON surface, not the
 snake_case proto spelling, and mixing them in one `parts` array would be a
 request that half-decodes. `image/png`, `image/jpeg`, `image/webp`, `image/heic`,
 `image/heif`. **Inline data caps the whole request at 20 MB**, text included;
@@ -522,5 +522,5 @@ Each of these is a plan requirement now backed by a citation rather than an assu
 4. **Never infer success from HTTP status.** OpenRouter proves the body is the authority.
 5. **Tool argument parsing happens only at the provider-defined completion boundary** — `content_block_stop` (Anthropic), `response.function_call_arguments.done` (OpenAI), immediately (Ollama, Gemini).
 6. **Usage normalisation is per-provider arithmetic**: cumulative (Anthropic), final-chunk (OpenRouter, Ollama), cache-inclusive (Gemini).
-7. **Cancellation is a client-side drop** for every provider *as smed uses them*. OpenAI publishes `/responses/{id}/cancel`, but it applies **only to `background: true` responses**, which the MVP does not create (§1). Reconnecting a generation POST is forbidden, so cancellation means dropping the response stream and recording it — never retrying.
+7. **Cancellation is a client-side drop** for every provider *as mjolnr uses them*. OpenAI publishes `/responses/{id}/cancel`, but it applies **only to `background: true` responses**, which the MVP does not create (§1). Reconnecting a generation POST is forbidden, so cancellation means dropping the response stream and recording it — never retrying.
 8. **Prefer machine-readable specs where they exist.** OpenAI's `openapi.yaml` (MIT) and OpenRouter's `openapi.yaml` (already in ) are authoritative in a way prose guides are not, and they answered questions the guides left open. Neither becomes a dependency: read, cite, implement independently.

@@ -8,7 +8,7 @@
 //! in-memory state that a restart throws away.
 
 use crate::core::envelope::{ActiveEnvelope, EnvelopeRefusal, SpawnEnvelope};
-use crate::core::event::{EnvelopeEnd, RunId, SmedEvent};
+use crate::core::event::{EnvelopeEnd, MjolnrEvent, RunId};
 use crate::core::policy::PolicyMode;
 
 use super::Actor;
@@ -73,7 +73,7 @@ impl Actor {
             return;
         };
         if let Err(error) = self
-            .persist(SmedEvent::SpawnEnvelopeArmed {
+            .persist(MjolnrEvent::SpawnEnvelopeArmed {
                 session,
                 ceiling: envelope.ceiling,
                 max_children: envelope.max_children,
@@ -103,7 +103,7 @@ impl Actor {
         self.state.envelope = None;
         if let Some(session) = self.state.session
             && let Err(error) = self
-                .persist(SmedEvent::SpawnEnvelopeCleared { session, reason })
+                .persist(MjolnrEvent::SpawnEnvelopeCleared { session, reason })
                 .await
         {
             self.note_store_failure(&error);
@@ -166,7 +166,7 @@ impl Actor {
         let spent = active.exhausted();
         if let Some(session) = self.state.session
             && let Err(error) = self
-                .persist(SmedEvent::SpawnEnvelopeDrawn {
+                .persist(MjolnrEvent::SpawnEnvelopeDrawn {
                     session,
                     run,
                     children,

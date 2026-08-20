@@ -12,12 +12,12 @@
 //! **Nothing here claims currency.** A listing is what one `read_dir` returned
 //! at one moment, and a file read is the bytes that were on disk at one moment.
 //! Nothing watches the filesystem, so between two reads a file can change under
-//! smed and this module will not know. That is exactly why [`FileRead`] carries
+//! mjolnr and this module will not know. That is exactly why [`FileRead`] carries
 //! a digest: the save path compares it rather than trusting it.
 
 use crate::core::error::ReasonCode;
 
-/// Largest file smed will hand to an editor, in bytes.
+/// Largest file mjolnr will hand to an editor, in bytes.
 ///
 /// Above this a file opens in bounded preview instead (§D7 acceptance: "binary
 /// and over-limit files open in bounded preview mode, not the editor"). It is a
@@ -54,7 +54,7 @@ pub const MAX_ENUMERATED_ENTRIES: usize = 10_000;
 ///
 /// There is no `fresh` flag and no `is_current` method, for the reason
 /// [`crate::core::repository::RepositoryProjection`] has none: nothing watches
-/// the filesystem, so smed can say what it saw and when it looked, and cannot
+/// the filesystem, so mjolnr can say what it saw and when it looked, and cannot
 /// say the answer is still true.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -81,7 +81,7 @@ pub struct DirectoryListing {
 /// large-file, and permission — is spread across [`Self::symlink`],
 /// [`Self::content`], [`Self::ignored`], and [`Self::writable`] rather than
 /// collected into six booleans, because three of those questions have a fourth
-/// answer that is not yes or no: smed could not look.
+/// answer that is not yes or no: mjolnr could not look.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct DirectoryEntry {
@@ -101,7 +101,7 @@ pub struct DirectoryEntry {
     /// Permission metadata: whether this process could write the entry, from
     /// the filesystem's read-only bit. It is not a claim that a write would
     /// succeed — ownership, ACLs, and mounts all outrank it — so a surface
-    /// renders it as a hint and smed still tries and reports.
+    /// renders it as a hint and mjolnr still tries and reports.
     pub writable: bool,
 }
 
@@ -117,7 +117,7 @@ pub enum EntryKind {
     Directory,
     File,
     /// A socket, FIFO, device node, or an entry whose metadata could not be
-    /// read. smed offers no way to open one.
+    /// read. mjolnr offers no way to open one.
     Other,
 }
 
@@ -129,7 +129,7 @@ pub enum SymlinkTarget {
     /// carried so a surface can say where it goes.
     Contained { path: String },
     /// Resolves outside the workspace, or could not be resolved at all. Both
-    /// are one variant on purpose: smed refuses to open either, and giving the
+    /// are one variant on purpose: mjolnr refuses to open either, and giving the
     /// unresolvable case its own name would invite a caller to treat it as
     /// merely unknown rather than as refused.
     Escaping,
@@ -151,7 +151,7 @@ pub enum ContentFacts {
         binary: bool,
         /// A `@generated` marker appeared in the prefix.
         ///
-        /// Declared, never inferred. smed does not guess from a directory name
+        /// Declared, never inferred. mjolnr does not guess from a directory name
         /// that `build/` or `dist/` holds generated code: that is a claim about
         /// somebody else's conventions, and being wrong about it mislabels
         /// hand-written source. [`DirectoryEntry::ignored`] already answers the
@@ -263,7 +263,7 @@ pub enum PreviewReason {
     /// Over [`MAX_EDITABLE_FILE_BYTES`].
     TooLarge,
     /// No NUL byte, but the bytes are not valid UTF-8. Distinct from `Binary`
-    /// because the remedy differs — an encoding smed does not decode is not
+    /// because the remedy differs — an encoding mjolnr does not decode is not
     /// the same thing as a file that is not text at all.
     NotUtf8,
 }
@@ -325,7 +325,7 @@ pub enum FileTreeView {
     NoProject,
     /// A project is open but the directory could not be read. Carries the
     /// refusal rather than an empty listing, which would render as an empty
-    /// directory — a positive claim smed did not earn.
+    /// directory — a positive claim mjolnr did not earn.
     Unavailable {
         code: ReasonCode,
         detail: String,
@@ -357,7 +357,7 @@ mod tests {
 
     /// The distinction the enum exists for: an unreadable directory is not an
     /// empty one. An empty listing renders as "this directory has no files",
-    /// which is a positive claim about a directory smed could not read.
+    /// which is a positive claim about a directory mjolnr could not read.
     #[test]
     fn an_unreadable_directory_is_not_an_empty_listing() {
         let view = FileTreeView::Unavailable {

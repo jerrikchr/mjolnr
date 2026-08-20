@@ -4,11 +4,11 @@ use tempfile::tempdir;
 use time::OffsetDateTime;
 use tokio_util::sync::CancellationToken;
 
-use smed::core::command::{ApprovalDecision, ApprovalId};
-use smed::core::event::{EventId, RunId, SessionId, SmedEvent, StoredEvent};
-use smed::core::message::{CanonicalMessage, ToolResult};
-use smed::memory::consolidation::consolidate_events;
-use smed::memory::store::MemoryStore;
+use mjolnr::core::command::{ApprovalDecision, ApprovalId};
+use mjolnr::core::event::{EventId, MjolnrEvent, RunId, SessionId, StoredEvent};
+use mjolnr::core::message::{CanonicalMessage, ToolResult};
+use mjolnr::memory::consolidation::consolidate_events;
+use mjolnr::memory::store::MemoryStore;
 
 #[tokio::test]
 async fn consolidation_on_empty_or_cancelled_returns_none() {
@@ -27,10 +27,10 @@ async fn consolidation_on_empty_or_cancelled_returns_none() {
         id: EventId::new(),
         sequence: 1,
         occurred_at: OffsetDateTime::now_utc(),
-        event: SmedEvent::SessionCreated {
+        event: MjolnrEvent::SessionCreated {
             session: SessionId::new(),
-            provider: smed::core::model::ProviderId::new("p"),
-            model: smed::core::model::ModelId::new("m"),
+            provider: mjolnr::core::model::ProviderId::new("p"),
+            model: mjolnr::core::model::ModelId::new("m"),
         },
     };
     let res = consolidate_events(&store, "session-1", &[dummy_event], &cancel)
@@ -53,16 +53,16 @@ async fn consolidation_distills_events_and_updates_progress() {
             id: EventId::new(),
             sequence: 1,
             occurred_at: now,
-            event: SmedEvent::MessageAppended {
+            event: MjolnrEvent::MessageAppended {
                 session,
-                message: Box::new(CanonicalMessage::user("Refactor memory layer for smed")),
+                message: Box::new(CanonicalMessage::user("Refactor memory layer for mjolnr")),
             },
         },
         StoredEvent {
             id: EventId::new(),
             sequence: 2,
             occurred_at: now,
-            event: SmedEvent::ApprovalResolved {
+            event: MjolnrEvent::ApprovalResolved {
                 session,
                 run: RunId::new(),
                 approval: ApprovalId::new(),
@@ -73,7 +73,7 @@ async fn consolidation_distills_events_and_updates_progress() {
             id: EventId::new(),
             sequence: 3,
             occurred_at: now,
-            event: SmedEvent::ToolCompleted {
+            event: MjolnrEvent::ToolCompleted {
                 session,
                 run: RunId::new(),
                 call_id: "call-1".to_owned(),
@@ -123,7 +123,7 @@ async fn consolidation_distills_events_and_updates_progress() {
             id: EventId::new(),
             sequence: 4,
             occurred_at: now,
-            event: SmedEvent::MessageAppended {
+            event: MjolnrEvent::MessageAppended {
                 session,
                 message: Box::new(CanonicalMessage::user("Run verification tests")),
             },

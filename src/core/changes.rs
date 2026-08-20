@@ -98,7 +98,7 @@ pub enum FileContent {
     /// git recognized the content as binary and declined to diff it.
     Binary,
     /// git produced bytes that are not valid UTF-8. A text file in an encoding
-    /// smed will not guess at, which is a different problem from binary and
+    /// mjolnr will not guess at, which is a different problem from binary and
     /// has a different answer.
     Undecodable,
 }

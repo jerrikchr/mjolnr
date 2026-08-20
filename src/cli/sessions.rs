@@ -36,7 +36,7 @@ pub enum SessionsCommand {
 
     /// Release a session's write lease.
     ///
-    /// A crash leaves the lease behind, and smed will not take it on its own:
+    /// A crash leaves the lease behind, and mjolnr will not take it on its own:
     /// it cannot prove the previous process is gone. This is the explicit human
     /// act that says so (`docs/persistence.md` §5).
     Release { session: String },
@@ -54,7 +54,7 @@ async fn list(store: &Store) -> Result<i32, StoreError> {
     let sessions = store.sessions().await?;
 
     if sessions.is_empty() {
-        println!("no sessions yet — run `smed` to start one");
+        println!("no sessions yet — run `mjolnr` to start one");
         return Ok(0);
     }
 
@@ -76,7 +76,7 @@ async fn list(store: &Store) -> Result<i32, StoreError> {
     if sessions.iter().any(|summary| summary.leased) {
         println!();
         println!(
-            "* held by a running smed, or left behind by one that crashed. \
+            "* held by a running mjolnr, or left behind by one that crashed. \
              `mjolnr sessions release <id>` reclaims it."
         );
     }
@@ -86,7 +86,7 @@ async fn list(store: &Store) -> Result<i32, StoreError> {
 
 /// A held lease is marked rather than described.
 ///
-/// smed cannot tell "open in another terminal" from "crashed an hour ago", and
+/// mjolnr cannot tell "open in another terminal" from "crashed an hour ago", and
 /// the marker says exactly that much (`AGENTS.md` §1.3).
 fn lease_marker(summary: &SessionSummary) -> &'static str {
     if summary.leased { " *" } else { "" }

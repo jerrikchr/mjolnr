@@ -20,16 +20,16 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use smed::core::error::{ProviderError, ReasonCode};
-use smed::core::event::{FinishReason, ProviderEvent};
-use smed::core::message::{CanonicalMessage, ContentBlock, ToolCall, ToolResult};
-use smed::core::model::{ModelId, ProviderId};
-use smed::core::provider::{Provider, ProviderRequest};
-use smed::core::secrets::{
+use mjolnr::core::error::{ProviderError, ReasonCode};
+use mjolnr::core::event::{FinishReason, ProviderEvent};
+use mjolnr::core::message::{CanonicalMessage, ContentBlock, ToolCall, ToolResult};
+use mjolnr::core::model::{ModelId, ProviderId};
+use mjolnr::core::provider::{Provider, ProviderRequest};
+use mjolnr::core::secrets::{
     Credential, CredentialKind, ResolvedCredential, Secret, SecretError, SecretSource, SecretStore,
 };
-use smed::providers::openai::OpenAiProvider;
-use smed::tools::ToolRegistry;
+use mjolnr::providers::openai::OpenAiProvider;
+use mjolnr::tools::ToolRegistry;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use wiremock::matchers::{header, method, path};
@@ -86,7 +86,7 @@ fn request() -> ProviderRequest {
         messages: vec![CanonicalMessage::user("hello")],
         system: None,
         tools: Vec::new(),
-        images: smed::core::image::ImageSidecar::new(),
+        images: mjolnr::core::image::ImageSidecar::new(),
     }
 }
 
@@ -96,7 +96,7 @@ async fn run(
     secrets: Arc<dyn SecretStore>,
 ) -> (
     Vec<ProviderEvent>,
-    Result<smed::core::provider::ProviderCompletion, smed::core::error::ProviderError>,
+    Result<mjolnr::core::provider::ProviderCompletion, mjolnr::core::error::ProviderError>,
 ) {
     run_request(server, secrets, request()).await
 }
@@ -107,7 +107,7 @@ async fn run_request(
     request: ProviderRequest,
 ) -> (
     Vec<ProviderEvent>,
-    Result<smed::core::provider::ProviderCompletion, smed::core::error::ProviderError>,
+    Result<mjolnr::core::provider::ProviderCompletion, mjolnr::core::error::ProviderError>,
 ) {
     let provider = OpenAiProvider::new(secrets).with_base_url(server.uri());
     let (tx, mut rx) = mpsc::channel(64);
@@ -148,7 +148,7 @@ async fn tools_and_function_results_use_the_responses_api_contract() {
             CanonicalMessage::tool_result("call_1", "read_file", ToolResult::ok("contents")),
         ],
         system: Some("use tools".to_owned()),
-        tools: vec![smed::core::tool::ToolDefinition {
+        tools: vec![mjolnr::core::tool::ToolDefinition {
             name: "read_file".to_owned(),
             description: "read a file".to_owned(),
             schema: serde_json::json!({
@@ -158,7 +158,7 @@ async fn tools_and_function_results_use_the_responses_api_contract() {
                 "additionalProperties": false
             }),
         }],
-        images: smed::core::image::ImageSidecar::new(),
+        images: mjolnr::core::image::ImageSidecar::new(),
     };
 
     let (_events, outcome) = run_request(&server, FakeSecrets::with("sk-test"), request).await;
@@ -189,7 +189,7 @@ async fn every_builtin_tool_emits_strict_compatible_openai_parameters() {
         messages: vec![CanonicalMessage::user("inspect the repository")],
         system: None,
         tools: ToolRegistry::builtins().definitions(),
-        images: smed::core::image::ImageSidecar::new(),
+        images: mjolnr::core::image::ImageSidecar::new(),
     };
 
     let (_events, outcome) = run_request(&server, FakeSecrets::with("sk-test"), request).await;

@@ -1,7 +1,7 @@
 //! Guided onboarding flow for first-time setup.
 //!
 //! One reason to change: how a first-time user is walked from nothing to a
-//! working, fully configured smed.
+//! working, fully configured mjolnr.
 //!
 //! # Why this module may print to stdout
 //!
@@ -32,10 +32,10 @@ use crate::routing::scaffold::{self, ScaffoldFile, SeededRoute};
 
 use super::auth::{self, AuthCommand, AuthProvider};
 
-/// The default `SOUL.md` a first run offers — smed's standing identity. Inert
+/// The default `SOUL.md` a first run offers — mjolnr's standing identity. Inert
 /// prose; it confers no capability (see [`crate::context`]).
-const STARTER_SOUL: &str = "# SOUL.md — smed's identity\n\n\
-    You are smed, a local-first, governed coding harness. You are deliberate and\n\
+const STARTER_SOUL: &str = "# SOUL.md — mjolnr's identity\n\n\
+    You are mjolnr, a local-first, governed coding harness. You are deliberate and\n\
     honest: you say what you did and did not do, you never report success you have\n\
     not earned, and you seek explicit approval before any side effect.\n";
 
@@ -54,7 +54,7 @@ struct MenuProvider {
 /// (E8). A subset of the full `auth` catalog: the common held-account providers
 /// a first run is likely to have. Anything else remains reachable by
 /// `mjolnr auth login` afterwards. The subscription caveat is unchanged —
-/// losing one degrades to a narrower smed, never a broken one.
+/// losing one degrades to a narrower mjolnr, never a broken one.
 const MENU: &[MenuProvider] = &[
     MenuProvider {
         auth: AuthProvider::Anthropic,
@@ -108,7 +108,7 @@ const MENU: &[MenuProvider] = &[
 // declined user is a durable fact, not a bit that can be lost.
 // ---------------------------------------------------------------------------
 
-/// Whether a plain `smed` launch should open the wizard rather than fall back
+/// Whether a plain `mjolnr` launch should open the wizard rather than fall back
 /// to the silent local default.
 ///
 /// Global first run is: no credential resolves for *any* provider, *and* no
@@ -125,7 +125,7 @@ pub fn global_first_run(any_credential: bool, session_store_exists: bool, declin
 /// a project that has one is never re-offered the project flow.
 #[must_use]
 pub fn project_first_run(project_root: &Path) -> bool {
-    !project_root.join(".mjolnr").exists() && !project_root.join(".smed").exists()
+    !project_root.join(".mjolnr").exists() && !project_root.join(".mjolnr").exists()
 }
 
 /// The owner-scoped file whose presence records "the user declined onboarding".
@@ -133,8 +133,14 @@ pub fn project_first_run(project_root: &Path) -> bool {
 /// read the way triggers read state from facts, not a mutable flag.
 #[must_use]
 pub fn decline_marker_path() -> Option<PathBuf> {
-    crate::core::paths::resolve_user_config_dir()
-        .map(|directory| directory.join("onboarding-declined"))
+    use etcetera::app_strategy::{AppStrategy, AppStrategyArgs, choose_native_strategy};
+    choose_native_strategy(AppStrategyArgs {
+        top_level_domain: String::new(),
+        author: String::new(),
+        app_name: "mjolnr".to_owned(),
+    })
+    .ok()
+    .map(|strategy| strategy.config_dir().join("onboarding-declined"))
 }
 
 /// Whether the user has a standing decline on record.
@@ -242,8 +248,8 @@ fn mcp_config(servers: &[(String, String)]) -> String {
     out
 }
 
-/// smed's curated role suggestion for a chosen model, if it has an opinion.
-/// Rendered by the role step as *smed's suggestion*, never a provider fact; a
+/// mjolnr's curated role suggestion for a chosen model, if it has an opinion.
+/// Rendered by the role step as *mjolnr's suggestion*, never a provider fact; a
 /// model with no curated tier yields `None`, and the step then asks with no
 /// suggestion rather than guessing.
 #[must_use]
@@ -276,15 +282,15 @@ pub fn run_onboarding(
     secrets: &Arc<dyn SecretStore>,
     theme: &ThemeStep,
 ) -> Result<(), String> {
-    println!("── smed · guided setup ──\n");
+    println!("── mjolnr · guided setup ──\n");
     println!(
-        "This walks you from nothing to a working smed: connect a provider, confirm\n\
+        "This walks you from nothing to a working mjolnr: connect a provider, confirm\n\
          a model, assign roles, set an identity, and pick a theme. Sensible defaults\n\
          are pre-selected — press Enter to accept each. Nothing is written until you\n\
          confirm a preview at the end.\n"
     );
 
-    if !prompt_yes_no("Set up smed now?", true) {
+    if !prompt_yes_no("Set up mjolnr now?", true) {
         record_decline();
         println!("\nNo problem — nothing was written. Run `mjolnr init` any time to pick this up.");
         return Ok(());
@@ -305,7 +311,7 @@ pub fn run_onboarding(
         );
     }
 
-    // Step 4 — the Soul and who smed works for.
+    // Step 4 — the Soul and who mjolnr works for.
     capture_identity(project_root, &mut selections);
 
     // Step 5 — optional remote MCP servers.
@@ -347,7 +353,7 @@ fn connect_providers(secrets: &Arc<dyn SecretStore>) {
         "\nStep 1/6 · Connect a provider  (OAuth subscriptions first; API keys are secondary)"
     );
     println!(
-        "  Note: subscription OAuth is opportunistic — losing one narrows smed, never breaks it.\n"
+        "  Note: subscription OAuth is opportunistic — losing one narrows mjolnr, never breaks it.\n"
     );
     loop {
         let connected: Vec<&str> = MENU
@@ -413,7 +419,7 @@ fn confirm_models_and_roles(secrets: &Arc<dyn SecretStore>) -> Vec<SeededRoute> 
         return Vec::new();
     }
     println!("\nStep 2/6 · Confirm the model each provider opens on");
-    println!("Step 3/6 · Assign a role (smed suggests one from the model's tier)\n");
+    println!("Step 3/6 · Assign a role (mjolnr suggests one from the model's tier)\n");
 
     let mut routes = Vec::with_capacity(configured.len());
     for menu in configured {
@@ -430,13 +436,13 @@ fn confirm_models_and_roles(secrets: &Arc<dyn SecretStore>) -> Vec<SeededRoute> 
         };
         let model = ModelId::new(&model_id);
 
-        // Role: render smed's suggestion if it has one, else ask with none.
+        // Role: render mjolnr's suggestion if it has one, else ask with none.
         let suggestion = suggested_role(&provider, &model);
         let prompt = suggestion.map_or_else(
             || format!("  role for {} (e.g. plan, smol; blank for none): ", menu.id),
             |role| {
                 format!(
-                    "  role for {} [smed suggests \"{role}\" for this model]: ",
+                    "  role for {} [mjolnr suggests \"{role}\" for this model]: ",
                     menu.id
                 )
             },
@@ -452,7 +458,7 @@ fn confirm_models_and_roles(secrets: &Arc<dyn SecretStore>) -> Vec<SeededRoute> 
     routes
 }
 
-/// Decide a route's roles from what the person typed and smed's suggestion.
+/// Decide a route's roles from what the person typed and mjolnr's suggestion.
 /// Empty input accepts the suggestion (if any); a typed value overrides it;
 /// the literal `none` clears it. Pure, so the accept/override/clear rules are
 /// testable without a terminal.
@@ -479,7 +485,7 @@ fn capture_identity(project_root: &Path, selections: &mut Selections) {
     let existing_soul = config_dir.join("SOUL.md").exists();
     if existing_soul {
         println!("  `SOUL.md` already exists and will be left untouched.");
-    } else if prompt_yes_no("  Write a starter SOUL.md (smed's identity)?", true) {
+    } else if prompt_yes_no("  Write a starter SOUL.md (mjolnr's identity)?", true) {
         selections.soul = Some(STARTER_SOUL.to_owned());
     }
 
@@ -488,12 +494,12 @@ fn capture_identity(project_root: &Path, selections: &mut Selections) {
         println!("  `USER.md` already exists and will be left untouched.");
         return;
     }
-    println!("  A line or two about who you are and how smed should work for you");
+    println!("  A line or two about who you are and how mjolnr should work for you");
     println!("  becomes `.mjolnr/USER.md`. Press Enter to skip.");
     let about = prompt_line("  You: ");
     let about = about.trim();
     if !about.is_empty() {
-        selections.user_profile = Some(format!("# USER.md — who smed works for\n\n{about}\n"));
+        selections.user_profile = Some(format!("# USER.md — who mjolnr works for\n\n{about}\n"));
     }
 }
 
@@ -574,14 +580,14 @@ fn print_summary(selections: &Selections, written: usize) {
             }
         }
     }
-    println!("  New project: describe it and smed will draft a PRD with you.");
-    println!("  Existing project: run `smed` and try `/help` → discovery.");
-    println!("  Run `smed` to open a session. Edit anything under .mjolnr/ freely.");
+    println!("  New project: describe it and mjolnr will draft a PRD with you.");
+    println!("  Existing project: run `mjolnr` and try `/help` → discovery.");
+    println!("  Run `mjolnr` to open a session. Edit anything under .mjolnr/ freely.");
     println!("\n  Closing step:");
     if project_first_run(std::env::current_dir().as_deref().unwrap_or(Path::new("."))) {
-        println!("    → New project → `smed` will interview for a PRD on first session.");
+        println!("    → New project → `mjolnr` will interview for a PRD on first session.");
     } else {
-        println!("    → Existing project → try `smed` then `/discover` (bounded scan, no LLM).");
+        println!("    → Existing project → try `mjolnr` then `/discover` (bounded scan, no LLM).");
     }
 }
 
@@ -647,7 +653,7 @@ mod tests {
     }
 
     #[test]
-    fn project_first_run_is_the_absence_of_dot_smed() {
+    fn project_first_run_is_the_absence_of_dot_mjolnr() {
         let temp = tempfile::tempdir().unwrap();
         assert!(project_first_run(temp.path()), "no .mjolnr/ yet");
         std::fs::create_dir_all(temp.path().join(".mjolnr")).unwrap();
@@ -658,7 +664,7 @@ mod tests {
     }
 
     #[test]
-    fn a_wizard_generated_smed_loads_without_diagnostics() {
+    fn a_wizard_generated_mjolnr_loads_without_diagnostics() {
         // The whole feature rests on this: a defaults run produces a `.mjolnr/`
         // that the Phase 15 loader reads clean and that resolves a default role.
         let selections = Selections {
@@ -687,7 +693,7 @@ mod tests {
     }
 
     #[test]
-    fn every_planned_file_is_confined_to_dot_smed() {
+    fn every_planned_file_is_confined_to_dot_mjolnr() {
         // The confinement invariant: no step writes outside `.mjolnr/`.
         let selections = Selections {
             routes: vec![route("openai", "gpt-4o", &[])],
@@ -727,7 +733,7 @@ mod tests {
     }
 
     #[test]
-    fn suggested_role_is_a_suggestion_only_where_smed_has_an_opinion() {
+    fn suggested_role_is_a_suggestion_only_where_mjolnr_has_an_opinion() {
         assert_eq!(
             suggested_role(
                 &ProviderId::new("anthropic"),

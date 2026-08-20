@@ -174,7 +174,7 @@ fn sample_snapshot() -> ClientSnapshot {
                 trigger: "projectOpened".to_owned(),
                 sequence: 1,
             },
-            trust: crate::core::client::workspace::TrustClass::SmedGoverned,
+            trust: crate::core::client::workspace::TrustClass::MjolnrGoverned,
         },
         review_threads: crate::core::client::workspace::BoundedProjection {
             items: vec![crate::core::client::workspace::ReviewThreadSummary {
@@ -182,7 +182,7 @@ fn sample_snapshot() -> ClientSnapshot {
                 status: "sent".to_owned(),
                 comment_count: 1,
                 comment_count_truncated: false,
-                // A human's remark about code, never a smed-governed
+                // A human's remark about code, never a mjolnr-governed
                 // observation.
                 trust: crate::core::client::workspace::TrustClass::OperatorControlled,
                 anchor: crate::core::client::workspace::ReviewAnchorView {
@@ -235,7 +235,7 @@ fn sample_snapshot() -> ClientSnapshot {
                 status: crate::core::fleet::FleetAgentStatus::Running,
                 latest_activity: "searching codebase".to_owned(),
                 feed: vec!["started".to_owned(), "searching codebase".to_owned()],
-                worktree_branch: Some("smed/worktree-sub-1".to_owned()),
+                worktree_branch: Some("mjolnr/worktree-sub-1".to_owned()),
             }],
         }),
         preview: Some(crate::core::preview::PreviewState::default()),
@@ -550,8 +550,8 @@ fn every_event_variant_round_trips() {
             child: "c".to_owned(),
             directive: "do a bounded thing".to_owned(),
             directive_truncated: false,
-            branch: "smed/child".to_owned(),
-            worktree: "/tmp/smed-child".to_owned(),
+            branch: "mjolnr/child".to_owned(),
+            worktree: "/tmp/mjolnr-child".to_owned(),
         },
         ClientEvent::RecoveryRequired {
             work: Box::new(ClientRecoveryWork {

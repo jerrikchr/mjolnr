@@ -10,7 +10,7 @@
 
 ## Decision
 
-smed keeps its Rust-owned agent loop, tools, policy gates, durable record,
+mjolnr keeps its Rust-owned agent loop, tools, policy gates, durable record,
 provider adapters, and semantic command/snapshot boundary.
 
 Ratatui remains a supported, terminal-launched client. It will be repaired and
@@ -18,7 +18,7 @@ made compact and truthful, but it is no longer expected to imitate a full
 desktop workspace by accumulating permanent panels.
 
 The Tauri application is the selected rich interface and now exists in
-`desktop/`. Its remaining development continues to preserve smed's governance,
+`desktop/`. Its remaining development continues to preserve mjolnr's governance,
 attention, recovery, and evidence contracts. The Tauri frontend is a client of
 the Rust runtime, not a second agent engine.
 
@@ -34,7 +34,7 @@ showed its limit: translating every desktop-workspace concept into another
 always-visible rail, tab, or panel made the interface denser without making the
 underlying runtime state more authoritative.
 
-Orca demonstrated that smed's richer product vision benefits from a spatial,
+Orca demonstrated that mjolnr's richer product vision benefits from a spatial,
 onboarding-friendly desktop surface. HumanLayer and Herdr remain useful
 references for decision flow and attention management. The canvas idea matters,
 but it does not define the primary product or justify delaying the main
@@ -89,7 +89,7 @@ value is the governed workspace and its planning, review, execution, and
 attention flows.
 
 **Run a separate TypeScript agent engine behind Tauri.** Rejected because it
-would duplicate smed's central governance boundary and make client behavior a
+would duplicate mjolnr's central governance boundary and make client behavior a
 source of authority.
 
 ## Revisit if

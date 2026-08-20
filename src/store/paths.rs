@@ -5,7 +5,7 @@
 //!
 //! # Why not `$HOME/.mjolnr`
 //!
-//! Because it is wrong on both platforms smed targets, and the rules are not
+//! Because it is wrong on both platforms mjolnr targets, and the rules are not
 //! guessable: macOS wants `~/Library/Application Support`, Linux wants
 //! `$XDG_DATA_HOME` with a `~/.local/share` fallback, and the fallback applies
 //! only when the variable is unset *or* not absolute. Hand-rolling that is a
@@ -14,7 +14,7 @@
 //! # Why `etcetera` rather than 's `directories`
 //!
 //! `directories 6` depends on `option-ext`, which is **MPL-2.0**. `deny.toml`
-//! allows permissive licences only, and `THIRD_PARTY.md` says why: smed's own
+//! allows permissive licences only, and `THIRD_PARTY.md` says why: mjolnr's own
 //! licence is an open owner decision , and a copyleft dependency
 //! appearing in the graph "fails CI on purpose" so that decision stays open.
 //!
@@ -29,28 +29,28 @@
 //!
 //! | Platform | Data directory |
 //! |---|---|
-//! | macOS | `~/Library/Application Support/smed` |
-//! | Linux | `$XDG_DATA_HOME/smed`, else `~/.local/share/smed` |
+//! | macOS | `~/Library/Application Support/mjolnr` |
+//! | Linux | `$XDG_DATA_HOME/mjolnr`, else `~/.local/share/mjolnr` |
 
 use std::path::{Path, PathBuf};
 
 use etcetera::app_strategy::{AppStrategy, AppStrategyArgs, choose_native_strategy};
 
 /// The database file name inside the data directory.
-const DATABASE_FILE: &str = "smed.sqlite3";
+const DATABASE_FILE: &str = "mjolnr.sqlite3";
 
 /// The credentials sub-directory inside the data directory.
 const CREDENTIALS_DIR: &str = "credentials";
 
 /// Reverse-DNS components for the app strategy.
 ///
-/// Both are deliberately empty: smed has no domain or organisation yet, and
+/// Both are deliberately empty: mjolnr has no domain or organisation yet, and
 /// inventing one would put the data directory somewhere that has to be migrated
 /// the moment a real one exists. `AppStrategyArgs::bundle_id` drops empty parts,
-/// so the identifier is exactly `smed`.
+/// so the identifier is exactly `mjolnr`.
 const TOP_LEVEL_DOMAIN: &str = "";
 const AUTHOR: &str = "";
-const APPLICATION: &str = "smed";
+const APPLICATION: &str = "mjolnr";
 
 /// Why a data location could not be resolved.
 #[derive(Debug, thiserror::Error)]
@@ -167,11 +167,11 @@ mod tests {
         assert!(
             parent_path
                 .components()
-                .any(|component| component.as_os_str() == std::ffi::OsStr::new("smed")),
-            "the data directory must contain a smed namespace: {parent}"
+                .any(|component| component.as_os_str() == std::ffi::OsStr::new("mjolnr")),
+            "the data directory must contain a mjolnr namespace: {parent}"
         );
         assert!(
-            !parent.contains("/.smed") && !parent.contains("\\.smed"),
+            !parent.contains("/.mjolnr") && !parent.contains("\\.mjolnr"),
             "a bare dotfile in $HOME is not a platform data directory: {parent}"
         );
     }
@@ -180,18 +180,18 @@ mod tests {
     fn the_platform_convention_is_the_native_one() {
         // `choose_app_strategy` would put macOS data in `~/.local/share`. That is
         // a CLI convention, not the platform's, and  asks for the
-        // platform's. This pins which one smed actually uses.
+        // platform's. This pins which one mjolnr actually uses.
         let path = default_database_path().expect("path");
         let rendered = path.to_string_lossy();
 
         if cfg!(target_os = "macos") {
             assert!(
-                rendered.contains("Library/Application Support/smed"),
+                rendered.contains("Library/Application Support/mjolnr"),
                 "macOS data belongs in Application Support: {rendered}"
             );
         } else if cfg!(target_os = "linux") {
             assert!(
-                rendered.contains("/smed"),
+                rendered.contains("/mjolnr"),
                 "Linux data belongs under XDG_DATA_HOME or ~/.local/share: {rendered}"
             );
         }

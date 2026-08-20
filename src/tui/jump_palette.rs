@@ -526,7 +526,7 @@ mod tests {
         let child = crate::core::event::SessionId::new();
         let run = crate::core::event::RunId::new();
 
-        view.apply(&crate::core::event::SmedEvent::SubagentActivity {
+        view.apply(&crate::core::event::MjolnrEvent::SubagentActivity {
             session: crate::core::event::SessionId::new(),
             run,
             child,

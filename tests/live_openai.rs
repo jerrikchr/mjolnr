@@ -26,14 +26,14 @@
 
 use std::sync::Arc;
 
-use smed::core::event::{FinishReason, ProviderEvent};
-use smed::core::message::CanonicalMessage;
-use smed::core::model::ModelId;
-use smed::core::provider::{Provider, ProviderRequest};
-use smed::core::secrets::SecretStore;
-use smed::providers::openai::OpenAiProvider;
-use smed::store::secrets::OsSecretStore;
-use smed::tools::ToolRegistry;
+use mjolnr::core::event::{FinishReason, ProviderEvent};
+use mjolnr::core::message::CanonicalMessage;
+use mjolnr::core::model::ModelId;
+use mjolnr::core::provider::{Provider, ProviderRequest};
+use mjolnr::core::secrets::SecretStore;
+use mjolnr::providers::openai::OpenAiProvider;
+use mjolnr::store::secrets::OsSecretStore;
+use mjolnr::tools::ToolRegistry;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
@@ -54,7 +54,7 @@ async fn live_text_stream_matches_the_documented_contract() {
         messages: vec![CanonicalMessage::user("Reply with exactly the word: ok")],
         system: None,
         tools: Vec::new(),
-        images: smed::core::image::ImageSidecar::new(),
+        images: mjolnr::core::image::ImageSidecar::new(),
     };
 
     let task = tokio::spawn(async move { provider.stream(request, tx, cancel).await });
@@ -94,7 +94,7 @@ async fn live_text_stream_matches_the_documented_contract() {
     assert!(usage.output_tokens > 0, "output_tokens went missing");
 
     // Any unknown event is a drift signal worth seeing, not a failure: the
-    // provider adds events continuously and smed tolerates them by design.
+    // provider adds events continuously and mjolnr tolerates them by design.
     for event in &events {
         if let ProviderEvent::UnknownUpstream { kind } = event {
             println!(
@@ -118,7 +118,7 @@ async fn live_builtin_function_schemas_are_accepted() {
         )],
         system: None,
         tools: ToolRegistry::builtins().definitions(),
-        images: smed::core::image::ImageSidecar::new(),
+        images: mjolnr::core::image::ImageSidecar::new(),
     };
 
     let task =
@@ -141,30 +141,30 @@ async fn live_invalid_credentials_map_to_auth() {
     impl SecretStore for BadKey {
         fn resolve(
             &self,
-            _provider: &smed::core::model::ProviderId,
-            _kind: smed::core::secrets::CredentialKind,
-        ) -> Result<smed::core::secrets::ResolvedCredential, smed::core::secrets::SecretError>
+            _provider: &mjolnr::core::model::ProviderId,
+            _kind: mjolnr::core::secrets::CredentialKind,
+        ) -> Result<mjolnr::core::secrets::ResolvedCredential, mjolnr::core::secrets::SecretError>
         {
-            Ok(smed::core::secrets::ResolvedCredential {
-                credential: smed::core::secrets::Credential::ApiKey(
-                    smed::core::secrets::Secret::new("sk-obviously-not-a-real-key".to_owned()),
+            Ok(mjolnr::core::secrets::ResolvedCredential {
+                credential: mjolnr::core::secrets::Credential::ApiKey(
+                    mjolnr::core::secrets::Secret::new("sk-obviously-not-a-real-key".to_owned()),
                 ),
-                source: smed::core::secrets::SecretSource::Environment,
+                source: mjolnr::core::secrets::SecretSource::Environment,
             })
         }
 
         fn store(
             &self,
-            _provider: &smed::core::model::ProviderId,
-            _credential: smed::core::secrets::Credential,
-        ) -> Result<(), smed::core::secrets::SecretError> {
+            _provider: &mjolnr::core::model::ProviderId,
+            _credential: mjolnr::core::secrets::Credential,
+        ) -> Result<(), mjolnr::core::secrets::SecretError> {
             Ok(())
         }
 
         fn delete(
             &self,
-            _provider: &smed::core::model::ProviderId,
-        ) -> Result<(), smed::core::secrets::SecretError> {
+            _provider: &mjolnr::core::model::ProviderId,
+        ) -> Result<(), mjolnr::core::secrets::SecretError> {
             Ok(())
         }
     }
@@ -179,7 +179,7 @@ async fn live_invalid_credentials_map_to_auth() {
                 messages: vec![CanonicalMessage::user("hi")],
                 system: None,
                 tools: Vec::new(),
-                images: smed::core::image::ImageSidecar::new(),
+                images: mjolnr::core::image::ImageSidecar::new(),
             },
             tx,
             CancellationToken::new(),
@@ -189,7 +189,7 @@ async fn live_invalid_credentials_map_to_auth() {
 
     assert_eq!(
         error.reason_code(),
-        smed::core::error::ReasonCode::ProviderAuth,
+        mjolnr::core::error::ReasonCode::ProviderAuth,
         "a real 401 must still map to PROVIDER_AUTH"
     );
 

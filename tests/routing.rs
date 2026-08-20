@@ -15,23 +15,23 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use async_trait::async_trait;
-use smed::core::command::SmedCommand;
-use smed::core::continuation::QuotaReserveStatus;
-use smed::core::error::{ProviderError, ReasonCode};
-use smed::core::event::{FinishReason, ProviderEvent, SmedEvent};
-use smed::core::model::{
+use mjolnr::core::command::MjolnrCommand;
+use mjolnr::core::continuation::QuotaReserveStatus;
+use mjolnr::core::error::{ProviderError, ReasonCode};
+use mjolnr::core::event::{FinishReason, MjolnrEvent, ProviderEvent};
+use mjolnr::core::model::{
     ModelCapabilities, ModelDescriptor, ModelId, ProviderId, QuotaSnapshot, QuotaWindow,
 };
-use smed::core::provider::{Provider, ProviderCompletion, ProviderRequest};
-use smed::core::routing::{
+use mjolnr::core::provider::{Provider, ProviderCompletion, ProviderRequest};
+use mjolnr::core::routing::{
     BreakerConfig, BreakerState, RouteAdvanceCondition, RouteDefinition, RouteHop,
     RouteSelectionReason, RouteTable,
 };
-use smed::core::runtime::SmedRuntime;
-use smed::core::store::EventStore;
-use smed::providers::fake::{FakeProvider, FakeScript};
-use smed::runtime::Runtime;
-use smed::store::memory::InMemoryEventStore;
+use mjolnr::core::runtime::MjolnrRuntime;
+use mjolnr::core::store::EventStore;
+use mjolnr::providers::fake::{FakeProvider, FakeScript};
+use mjolnr::runtime::Runtime;
+use mjolnr::store::memory::InMemoryEventStore;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
@@ -177,13 +177,13 @@ fn route_table(hops: &[(&str, &str)]) -> RouteTable {
 
 async fn open_and_attach(runtime: &Runtime, provider: &str, model: &str) {
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: std::env::current_dir().expect("cwd"),
         })
         .await
         .expect("open project");
     runtime
-        .dispatch(SmedCommand::CreateSession {
+        .dispatch(MjolnrCommand::CreateSession {
             provider: ProviderId::new(provider),
             model: ModelId::new(model),
         })
@@ -191,7 +191,7 @@ async fn open_and_attach(runtime: &Runtime, provider: &str, model: &str) {
         .expect("create session");
     wait_for(runtime, |snapshot| snapshot.session.is_some()).await;
     runtime
-        .dispatch(SmedCommand::AttachRoute {
+        .dispatch(MjolnrCommand::AttachRoute {
             route: None,
             role: None,
             task_class: "default".to_owned(),
@@ -203,7 +203,7 @@ async fn open_and_attach(runtime: &Runtime, provider: &str, model: &str) {
 
 async fn wait_for(
     runtime: &Runtime,
-    mut predicate: impl FnMut(&smed::core::runtime::RuntimeSnapshot) -> bool,
+    mut predicate: impl FnMut(&mjolnr::core::runtime::RuntimeSnapshot) -> bool,
 ) {
     if predicate(&runtime.snapshot()) {
         return;
@@ -221,25 +221,25 @@ async fn wait_for(
     .expect("condition reached");
 }
 
-async fn send_and_wait(runtime: &Runtime, text: &str) -> SmedEvent {
+async fn send_and_wait(runtime: &Runtime, text: &str) -> MjolnrEvent {
     let mut events = runtime.subscribe();
     runtime
-        .dispatch(SmedCommand::SendUserMessage {
+        .dispatch(MjolnrCommand::SendUserMessage {
             text: text.to_owned(),
-            source: smed::core::directive::DirectiveSource::Human,
+            source: mjolnr::core::directive::DirectiveSource::Human,
         })
         .await
         .expect("send");
     terminal(&mut events).await
 }
 
-async fn terminal(events: &mut smed::core::runtime::RuntimeSubscription) -> SmedEvent {
+async fn terminal(events: &mut mjolnr::core::runtime::RuntimeSubscription) -> MjolnrEvent {
     tokio::time::timeout(Duration::from_secs(5), async {
         loop {
             let event = events.recv().await.expect("event");
             if matches!(
                 event,
-                SmedEvent::RunFinished { .. } | SmedEvent::RunFailed { .. }
+                MjolnrEvent::RunFinished { .. } | MjolnrEvent::RunFailed { .. }
             ) {
                 return event;
             }
@@ -283,7 +283,7 @@ async fn quota_reserve_breach_advances_the_route_and_bounds_the_next_request() {
 
     let terminal = send_and_wait(&runtime, "do the work").await;
     assert!(
-        matches!(terminal, SmedEvent::RunFinished { .. }),
+        matches!(terminal, MjolnrEvent::RunFinished { .. }),
         "the route advanced and the run finished on the fallback hop, it did not stop: {terminal:?}"
     );
 
@@ -301,7 +301,7 @@ async fn quota_reserve_breach_advances_the_route_and_bounds_the_next_request() {
     let session = runtime.snapshot().session.expect("session");
     let history = store.events(session).await.expect("history");
     let advanced = history.iter().find_map(|stored| match &stored.event {
-        SmedEvent::RouteAdvanced {
+        MjolnrEvent::RouteAdvanced {
             route,
             from_position,
             to_position,
@@ -319,7 +319,7 @@ async fn quota_reserve_breach_advances_the_route_and_bounds_the_next_request() {
     assert!(
         history
             .iter()
-            .any(|stored| matches!(stored.event, SmedEvent::HandoffCreated { .. })),
+            .any(|stored| matches!(stored.event, MjolnrEvent::HandoffCreated { .. })),
         "the Phase 10 handoff artifact still lands before crossing providers"
     );
 
@@ -330,7 +330,7 @@ async fn quota_reserve_breach_advances_the_route_and_bounds_the_next_request() {
         request.messages.len() <= 2,
         "the request onto the new hop was not bounded"
     );
-    assert!(request.messages[0].text().contains("SMED COMPACT RESUME"));
+    assert!(request.messages[0].text().contains("MJOLNR COMPACT RESUME"));
 
     assert_eq!(
         runtime.snapshot().route.map(|route| route.position),
@@ -394,7 +394,7 @@ async fn a_failing_provider_opens_its_breaker_then_half_opens_and_closes() {
     let first_terminal = send_and_wait(&runtime, "trip it").await;
     assert!(matches!(
         first_terminal,
-        SmedEvent::RunFailed {
+        MjolnrEvent::RunFailed {
             code: ReasonCode::RouteExhausted,
             ..
         }
@@ -404,7 +404,7 @@ async fn a_failing_provider_opens_its_breaker_then_half_opens_and_closes() {
     // on the very next turn's poll and permits exactly one probe, which
     // succeeds and closes the breaker.
     let second_terminal = send_and_wait(&runtime, "probe it").await;
-    assert!(matches!(second_terminal, SmedEvent::RunFinished { .. }));
+    assert!(matches!(second_terminal, MjolnrEvent::RunFinished { .. }));
     assert_eq!(flaky.request_count(), 2);
 
     let session = runtime.snapshot().session.expect("session");
@@ -412,7 +412,7 @@ async fn a_failing_provider_opens_its_breaker_then_half_opens_and_closes() {
     let transitions: Vec<(BreakerState, BreakerState)> = history
         .iter()
         .filter_map(|stored| match &stored.event {
-            SmedEvent::BreakerStateChanged { from, to, .. } => Some((*from, *to)),
+            MjolnrEvent::BreakerStateChanged { from, to, .. } => Some((*from, *to)),
             _ => None,
         })
         .collect();
@@ -432,7 +432,7 @@ async fn a_failing_provider_opens_its_breaker_then_half_opens_and_closes() {
     let exhausted = history.iter().any(|stored| {
         matches!(
             &stored.event,
-            SmedEvent::RouteExhausted {
+            MjolnrEvent::RouteExhausted {
                 condition: RouteAdvanceCondition::ProviderFailure(_),
                 ..
             }
@@ -476,27 +476,27 @@ async fn a_child_spawn_with_no_named_route_uses_the_configured_default() {
         Arc::new(table),
     );
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: repository.path().to_path_buf(),
         })
         .await
         .expect("open");
     runtime
-        .dispatch(SmedCommand::CreateSession {
+        .dispatch(MjolnrCommand::CreateSession {
             provider: ProviderId::new(FakeProvider::ID),
             model: ModelId::new(FakeProvider::MODEL),
         })
         .await
         .expect("create session");
     runtime
-        .dispatch(SmedCommand::SetPolicy {
-            mode: smed::core::policy::PolicyMode::WorkspaceWrite,
+        .dispatch(MjolnrCommand::SetPolicy {
+            mode: mjolnr::core::policy::PolicyMode::WorkspaceWrite,
         })
         .await
         .expect("set policy");
     wait_for(&runtime, |snapshot| {
         snapshot.session.is_some()
-            && snapshot.policy == smed::core::policy::PolicyMode::WorkspaceWrite
+            && snapshot.policy == mjolnr::core::policy::PolicyMode::WorkspaceWrite
     })
     .await;
 
@@ -504,16 +504,16 @@ async fn a_child_spawn_with_no_named_route_uses_the_configured_default() {
     // *child*, independent of whether the parent itself attached a route.
     let mut events = runtime.subscribe();
     runtime
-        .dispatch(SmedCommand::SendUserMessage {
+        .dispatch(MjolnrCommand::SendUserMessage {
             text: "spawn-two: delegate the work".to_owned(),
-            source: smed::core::directive::DirectiveSource::Human,
+            source: mjolnr::core::directive::DirectiveSource::Human,
         })
         .await
         .expect("send directive");
     let approval = tokio::time::timeout(Duration::from_secs(10), async {
         loop {
             let event = events.recv().await.expect("event feed remains open");
-            if let SmedEvent::ToolProposed {
+            if let MjolnrEvent::ToolProposed {
                 approval: Some(approval),
                 call,
                 ..
@@ -527,9 +527,9 @@ async fn a_child_spawn_with_no_named_route_uses_the_configured_default() {
     .await
     .expect("spawn proposal arrives");
     runtime
-        .dispatch(SmedCommand::ResolveApproval {
+        .dispatch(MjolnrCommand::ResolveApproval {
             approval,
-            decision: smed::core::command::ApprovalDecision::ApproveOnce,
+            decision: mjolnr::core::command::ApprovalDecision::ApproveOnce,
         })
         .await
         .expect("approve spawn");
@@ -539,7 +539,7 @@ async fn a_child_spawn_with_no_named_route_uses_the_configured_default() {
             let event = events.recv().await.expect("event feed remains open");
             if matches!(
                 event,
-                SmedEvent::RunFinished { .. } | SmedEvent::RunFailed { .. }
+                MjolnrEvent::RunFinished { .. } | MjolnrEvent::RunFailed { .. }
             ) {
                 return event;
             }
@@ -547,14 +547,14 @@ async fn a_child_spawn_with_no_named_route_uses_the_configured_default() {
     })
     .await
     .expect("parent run settles");
-    assert!(matches!(terminal, SmedEvent::RunFinished { .. }));
+    assert!(matches!(terminal, MjolnrEvent::RunFinished { .. }));
 
     let session = runtime.snapshot().session.expect("session");
     let history = store.events(session).await.expect("history");
     let selections: Vec<_> = history
         .iter()
         .filter_map(|stored| match &stored.event {
-            SmedEvent::RouteSelected {
+            MjolnrEvent::RouteSelected {
                 child: Some(child),
                 route,
                 reason,
@@ -595,13 +595,13 @@ async fn no_routing_config_restores_present_day_behaviour_exactly() {
         store.clone() as Arc<dyn EventStore>,
     );
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: std::env::current_dir().expect("cwd"),
         })
         .await
         .expect("open");
     runtime
-        .dispatch(SmedCommand::CreateSession {
+        .dispatch(MjolnrCommand::CreateSession {
             provider: ProviderId::new("plain"),
             model: ModelId::new("m1"),
         })
@@ -610,7 +610,7 @@ async fn no_routing_config_restores_present_day_behaviour_exactly() {
     wait_for(&runtime, |snapshot| snapshot.session.is_some()).await;
 
     let terminal = send_and_wait(&runtime, "just answer").await;
-    assert!(matches!(terminal, SmedEvent::RunFinished { .. }));
+    assert!(matches!(terminal, MjolnrEvent::RunFinished { .. }));
 
     let snapshot = runtime.snapshot();
     assert!(
@@ -629,10 +629,10 @@ async fn no_routing_config_restores_present_day_behaviour_exactly() {
     assert!(
         !history.iter().any(|stored| matches!(
             stored.event,
-            SmedEvent::RouteSelected { .. }
-                | SmedEvent::RouteAdvanced { .. }
-                | SmedEvent::RouteExhausted { .. }
-                | SmedEvent::BreakerStateChanged { .. }
+            MjolnrEvent::RouteSelected { .. }
+                | MjolnrEvent::RouteAdvanced { .. }
+                | MjolnrEvent::RouteExhausted { .. }
+                | MjolnrEvent::BreakerStateChanged { .. }
         )),
         "no routing event of any kind is recorded when no routing config exists"
     );
@@ -678,13 +678,13 @@ async fn a_role_lands_on_the_same_hop_a_named_route_would_and_says_it_was_a_role
         Arc::new(table),
     );
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: std::env::current_dir().expect("cwd"),
         })
         .await
         .expect("open");
     runtime
-        .dispatch(SmedCommand::CreateSession {
+        .dispatch(MjolnrCommand::CreateSession {
             provider: ProviderId::new("cheap-provider"),
             model: ModelId::new("c1"),
         })
@@ -693,7 +693,7 @@ async fn a_role_lands_on_the_same_hop_a_named_route_would_and_says_it_was_a_role
     wait_for(&runtime, |snapshot| snapshot.session.is_some()).await;
 
     runtime
-        .dispatch(SmedCommand::AttachRoute {
+        .dispatch(MjolnrCommand::AttachRoute {
             route: None,
             role: Some("smol".to_owned()),
             task_class: "default".to_owned(),
@@ -716,13 +716,13 @@ async fn a_role_lands_on_the_same_hop_a_named_route_would_and_says_it_was_a_role
     let reason = history
         .iter()
         .find_map(|stored| match &stored.event {
-            SmedEvent::RouteSelected { reason, .. } => Some(reason.clone()),
+            MjolnrEvent::RouteSelected { reason, .. } => Some(reason.clone()),
             _ => None,
         })
         .expect("a RouteSelected event was recorded");
     assert_eq!(
         reason,
-        smed::core::routing::RouteSelectionReason::Role("smol".to_owned()),
+        mjolnr::core::routing::RouteSelectionReason::Role("smol".to_owned()),
         "the evidence names the role, not just the route it landed on"
     );
 }
@@ -748,13 +748,13 @@ async fn an_unmapped_role_falls_back_to_the_named_route_and_records_the_fallback
         Arc::new(route_table(&[("plain", "m1")])),
     );
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: std::env::current_dir().expect("cwd"),
         })
         .await
         .expect("open");
     runtime
-        .dispatch(SmedCommand::CreateSession {
+        .dispatch(MjolnrCommand::CreateSession {
             provider: ProviderId::new("plain"),
             model: ModelId::new("m1"),
         })
@@ -763,7 +763,7 @@ async fn an_unmapped_role_falls_back_to_the_named_route_and_records_the_fallback
     wait_for(&runtime, |snapshot| snapshot.session.is_some()).await;
 
     runtime
-        .dispatch(SmedCommand::AttachRoute {
+        .dispatch(MjolnrCommand::AttachRoute {
             route: Some("main".to_owned()),
             role: Some("smol".to_owned()),
             task_class: "default".to_owned(),
@@ -784,13 +784,13 @@ async fn an_unmapped_role_falls_back_to_the_named_route_and_records_the_fallback
     let reason = history
         .iter()
         .find_map(|stored| match &stored.event {
-            SmedEvent::RouteSelected { reason, .. } => Some(reason.clone()),
+            MjolnrEvent::RouteSelected { reason, .. } => Some(reason.clone()),
             _ => None,
         })
         .expect("a RouteSelected event was recorded");
     assert_eq!(
         reason,
-        smed::core::routing::RouteSelectionReason::NamedAfterUnmappedRole("smol".to_owned()),
+        mjolnr::core::routing::RouteSelectionReason::NamedAfterUnmappedRole("smol".to_owned()),
         "the fallback is stated in the evidence rather than left to be guessed"
     );
 }
@@ -819,20 +819,20 @@ async fn a_route_advance_never_widens_policy_or_budgets() {
     );
     open_and_attach(&runtime, "narrow", "n1").await;
     runtime
-        .dispatch(SmedCommand::SetPolicy {
-            mode: smed::core::policy::PolicyMode::ReadOnly,
+        .dispatch(MjolnrCommand::SetPolicy {
+            mode: mjolnr::core::policy::PolicyMode::ReadOnly,
         })
         .await
         .expect("set policy");
     wait_for(&runtime, |snapshot| {
-        snapshot.policy == smed::core::policy::PolicyMode::ReadOnly
+        snapshot.policy == mjolnr::core::policy::PolicyMode::ReadOnly
     })
     .await;
 
     let before = runtime.snapshot();
 
     let terminal = send_and_wait(&runtime, "advance past the failure").await;
-    assert!(matches!(terminal, SmedEvent::RunFinished { .. }));
+    assert!(matches!(terminal, MjolnrEvent::RunFinished { .. }));
 
     let after = runtime.snapshot();
     assert_eq!(
@@ -876,7 +876,7 @@ async fn a_route_advance_resets_the_quota_reserve_for_the_new_provider() {
     open_and_attach(&runtime, "a", "a1").await;
     assert!(matches!(
         terminal_after_send(&runtime).await,
-        SmedEvent::RunFinished { .. }
+        MjolnrEvent::RunFinished { .. }
     ));
     assert_eq!(
         runtime.snapshot().quota_reserve,
@@ -884,7 +884,7 @@ async fn a_route_advance_resets_the_quota_reserve_for_the_new_provider() {
     );
 }
 
-async fn terminal_after_send(runtime: &Runtime) -> SmedEvent {
+async fn terminal_after_send(runtime: &Runtime) -> MjolnrEvent {
     send_and_wait(runtime, "go").await
 }
 
@@ -895,10 +895,10 @@ fn git_repository() -> tempfile::TempDir {
     let repository = tempfile::tempdir().expect("temporary repository");
     std::fs::write(repository.path().join("README.md"), "base\n").expect("seed file");
     git(repository.path(), &["init", "-q"]);
-    git(repository.path(), &["config", "user.name", "smed Test"]);
+    git(repository.path(), &["config", "user.name", "mjolnr Test"]);
     git(
         repository.path(),
-        &["config", "user.email", "smed-test@localhost"],
+        &["config", "user.email", "mjolnr-test@localhost"],
     );
     git(repository.path(), &["add", "README.md"]);
     git(repository.path(), &["commit", "-q", "-m", "seed"]);

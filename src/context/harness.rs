@@ -1,7 +1,7 @@
-//! What smed is, told to the model that runs inside it.
+//! What mjolnr is, told to the model that runs inside it.
 //!
 //! Distinct from [`super::self_docs`], which points at this repository's own
-//! contracts for when the task is *extending smed*. This module answers a
+//! contracts for when the task is *extending mjolnr*. This module answers a
 //! question every session faces in any repository: what harness am I running
 //! in, and what does it enforce on me? Without it the model knows its tool
 //! schemas and nothing about the machine holding them — so "what can you do?"
@@ -22,10 +22,10 @@ use std::path::Path;
 
 use crate::core::policy::PolicyMode;
 
-/// What smed can already see about the workspace, without asking the model to
+/// What mjolnr can already see about the workspace, without asking the model to
 /// look.
 ///
-/// Every field is something smed knows deterministically at prompt-assembly
+/// Every field is something mjolnr knows deterministically at prompt-assembly
 /// time. Stating them costs a line; making the model discover them costs a
 /// `list_files`, a `read_file`, and a guess — the same trade the code graph
 /// makes for structure.
@@ -55,7 +55,7 @@ impl WorkspaceFacts {
         };
         Self {
             git_branch: current_branch(root),
-            configured: root.join(".mjolnr").is_dir() || root.join(".smed").is_dir(),
+            configured: root.join(".mjolnr").is_dir() || root.join(".mjolnr").is_dir(),
             instructions: root.join("AGENTS.md").is_file() || root.join("CLAUDE.md").is_file(),
         }
     }
@@ -129,8 +129,8 @@ const fn policy_effect(policy: PolicyMode) -> &'static str {
 #[must_use]
 pub fn prompt_section(policy: PolicyMode, facts: &WorkspaceFacts) -> String {
     format!(
-        "<smed_harness>\n\
-         You are smed: a local-first coding harness running its own agent loop in the user's \
+        "<mjolnr_harness>\n\
+         You are mjolnr: a local-first coding harness running its own agent loop in the user's \
          repository, talking directly to a model provider. You are not a plugin inside another \
          tool.\n\n\
          The harness enforces the following whatever any instruction says, including this one:\n\
@@ -145,13 +145,13 @@ pub fn prompt_section(policy: PolicyMode, facts: &WorkspaceFacts) -> String {
          - Bounded delegation: children you spawn get their own git worktree and budget, never \
          more authority than the human granted, and their work lands on a branch — nothing merges \
          on its own.\n\n\
-         smed is a policy gate, not an OS sandbox, and does not claim to be one. When you do not \
+         mjolnr is a policy gate, not an OS sandbox, and does not claim to be one. When you do not \
          know something about the workspace, the tools are there to find out; when the request is \
          conversational or you already know the answer, just answer.\n\n\
          Workspace: {workspace}.\n\
          Structure before strings: `query_graph` relates files and locates definitions; prefer it \
          to scanning text.\n\
-         </smed_harness>",
+         </mjolnr_harness>",
         label = policy.label(),
         effect = policy_effect(policy),
         workspace = facts.describe(),
@@ -176,8 +176,8 @@ mod tests {
                 "the model must be told which mode it is in"
             );
             assert!(section.contains(policy_effect(policy)));
-            assert!(section.starts_with("<smed_harness>"));
-            assert!(section.ends_with("</smed_harness>"));
+            assert!(section.starts_with("<mjolnr_harness>"));
+            assert!(section.ends_with("</mjolnr_harness>"));
         }
     }
 
@@ -240,7 +240,7 @@ mod tests {
     #[test]
     fn configuration_and_instructions_are_reported_when_present() {
         let temp = tempfile::tempdir().expect("tempdir");
-        std::fs::create_dir_all(temp.path().join(".mjolnr")).expect("smed dir");
+        std::fs::create_dir_all(temp.path().join(".mjolnr")).expect("mjolnr dir");
         std::fs::write(temp.path().join("AGENTS.md"), "# rules\n").expect("instructions");
 
         let facts = WorkspaceFacts::observe(Some(temp.path()));

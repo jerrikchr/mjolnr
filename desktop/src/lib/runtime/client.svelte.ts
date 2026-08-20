@@ -150,7 +150,7 @@ export interface WorktreeEntry {
 
 const MAX_WORKTREES = 50;
 
-export class SmedClient {
+export class MjolnrClient {
   snapshot = $state<ClientSnapshot>(cloneSnapshot());
   activityFeed = $state<ClientEvent[]>([]);
   fleet = $state<FleetAgent[]>([]);
@@ -210,7 +210,7 @@ export class SmedClient {
         this.connected = true;
 
         // Listen for updates from backend channel
-        await listen<ClientUpdate>('smed-update', (event) => {
+        await listen<ClientUpdate>('mjolnr-update', (event) => {
           this.handleUpdate(event.payload);
         });
 
@@ -523,7 +523,7 @@ export class SmedClient {
   }
 }
 
-export const clientStore = new SmedClient();
+export const clientStore = new MjolnrClient();
 
 export function resetClientStoreForTests() {
   clientStore.snapshot = cloneSnapshot();

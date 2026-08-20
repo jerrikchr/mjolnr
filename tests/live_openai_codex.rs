@@ -6,7 +6,7 @@
 //! cargo test --test live_openai_codex -- --ignored --nocapture
 //! ```
 //!
-//! The test reads only smed's OS-keychain credential. It does not inspect or
+//! The test reads only mjolnr's OS-keychain credential. It does not inspect or
 //! share `~/.codex/auth.json`.
 
 #![allow(clippy::expect_used, clippy::panic, clippy::unwrap_used)]
@@ -14,18 +14,18 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use smed::core::command::SmedCommand;
-use smed::core::event::SmedEvent;
-use smed::core::model::{ModelId, ProviderId};
-use smed::core::provider::Provider;
-use smed::core::runtime::SmedRuntime;
-use smed::core::store::EventStore;
-use smed::providers::openai_codex::{DEFAULT_MODEL, OpenAiCodexProvider, PROVIDER_ID};
-use smed::runtime::Runtime;
-use smed::store::secrets::OsSecretStore;
-use smed::store::sqlite::SqliteEventStore;
+use mjolnr::core::command::MjolnrCommand;
+use mjolnr::core::event::MjolnrEvent;
+use mjolnr::core::model::{ModelId, ProviderId};
+use mjolnr::core::provider::Provider;
+use mjolnr::core::runtime::MjolnrRuntime;
+use mjolnr::core::store::EventStore;
+use mjolnr::providers::openai_codex::{DEFAULT_MODEL, OpenAiCodexProvider, PROVIDER_ID};
+use mjolnr::runtime::Runtime;
+use mjolnr::store::secrets::OsSecretStore;
+use mjolnr::store::sqlite::SqliteEventStore;
 
-async fn wait_for_session(runtime: &Runtime, session: smed::core::event::SessionId) {
+async fn wait_for_session(runtime: &Runtime, session: mjolnr::core::event::SessionId) {
     let mut snapshots = runtime.snapshots();
     if runtime.snapshot().session == Some(session) {
         return;
@@ -66,22 +66,22 @@ async fn a_tool_call_assembles_over_the_subscription_backend() {
     let runtime = Runtime::spawn(vec![provider], Arc::clone(&store) as Arc<dyn EventStore>);
     let mut events = runtime.subscribe();
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: std::env::current_dir().expect("current directory"),
         })
         .await
         .expect("open project");
     runtime
-        .dispatch(SmedCommand::CreateSession {
+        .dispatch(MjolnrCommand::CreateSession {
             provider: ProviderId::new(PROVIDER_ID),
             model: ModelId::new(DEFAULT_MODEL),
         })
         .await
         .expect("create session");
     runtime
-        .dispatch(SmedCommand::SendUserMessage {
+        .dispatch(MjolnrCommand::SendUserMessage {
             text: "Use the list_dir tool to list the entries in the current directory.".to_owned(),
-            source: smed::core::directive::DirectiveSource::Human,
+            source: mjolnr::core::directive::DirectiveSource::Human,
         })
         .await
         .expect("send tool-using turn");
@@ -97,11 +97,11 @@ async fn a_tool_call_assembles_over_the_subscription_backend() {
                 // The decoder assembled and surfaced a call: exactly the path
                 // that used to die as PROVIDER_PROTOCOL. Stop here rather than
                 // execute anything unapproved.
-                SmedEvent::ToolProposed { call, .. } => return Outcome::Assembled(call.name),
-                SmedEvent::RunFailed { code, detail, .. } => {
+                MjolnrEvent::ToolProposed { call, .. } => return Outcome::Assembled(call.name),
+                MjolnrEvent::RunFailed { code, detail, .. } => {
                     // The specific regression this test exists for.
                     assert!(
-                        code != smed::core::error::ReasonCode::ProviderProtocol,
+                        code != mjolnr::core::error::ReasonCode::ProviderProtocol,
                         "decoder regression: tool-call assembly failed with {code}: {detail}"
                     );
                     panic!("run failed before assembling a tool call — {code}: {detail}");
@@ -110,7 +110,7 @@ async fn a_tool_call_assembles_over_the_subscription_backend() {
                 // does not exercise assembly, so it cannot confirm the fix — but
                 // it is not a decoder failure either. Report inconclusive rather
                 // than a false red.
-                SmedEvent::RunFinished { .. } => return Outcome::NoTool,
+                MjolnrEvent::RunFinished { .. } => return Outcome::NoTool,
                 _ => {}
             }
         }
@@ -119,7 +119,7 @@ async fn a_tool_call_assembles_over_the_subscription_backend() {
     .expect("the live turn produced no terminal event within the timeout");
 
     // Clean up the in-flight run; we proved assembly, not execution.
-    runtime.dispatch(SmedCommand::CancelRun).await.ok();
+    runtime.dispatch(MjolnrCommand::CancelRun).await.ok();
     runtime.close().await.expect("close runtime");
 
     match outcome {
@@ -154,22 +154,22 @@ async fn live_guarded_turn_completes_and_provider_selection_resumes() {
     let runtime = Runtime::spawn(vec![provider], Arc::clone(&store) as Arc<dyn EventStore>);
     let mut events = runtime.subscribe();
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: std::env::current_dir().expect("current directory"),
         })
         .await
         .expect("open project");
     runtime
-        .dispatch(SmedCommand::CreateSession {
+        .dispatch(MjolnrCommand::CreateSession {
             provider: ProviderId::new(PROVIDER_ID),
             model: ModelId::new(DEFAULT_MODEL),
         })
         .await
         .expect("create session");
     runtime
-        .dispatch(SmedCommand::SendUserMessage {
-            text: "Reply with exactly: smed-subscription-live-ok. Do not call tools.".to_owned(),
-            source: smed::core::directive::DirectiveSource::Human,
+        .dispatch(MjolnrCommand::SendUserMessage {
+            text: "Reply with exactly: mjolnr-subscription-live-ok. Do not call tools.".to_owned(),
+            source: mjolnr::core::directive::DirectiveSource::Human,
         })
         .await
         .expect("send guarded turn");
@@ -177,8 +177,8 @@ async fn live_guarded_turn_completes_and_provider_selection_resumes() {
     tokio::time::timeout(Duration::from_mins(3), async {
         loop {
             match events.recv().await.expect("event feed") {
-                SmedEvent::RunFinished { .. } => break,
-                SmedEvent::RunFailed { code, detail, .. } => {
+                MjolnrEvent::RunFinished { .. } => break,
+                MjolnrEvent::RunFailed { code, detail, .. } => {
                     panic!("live run failed with {code}: {detail}")
                 }
                 _ => {}
@@ -203,7 +203,7 @@ async fn live_guarded_turn_completes_and_provider_selection_resumes() {
             message
                 .text()
                 .to_ascii_lowercase()
-                .contains("smed-subscription-live-ok")
+                .contains("mjolnr-subscription-live-ok")
         }),
         "live model response was not retained in the guarded transcript"
     );
@@ -216,13 +216,13 @@ async fn live_guarded_turn_completes_and_provider_selection_resumes() {
         Arc::clone(&store) as Arc<dyn EventStore>,
     );
     resumed
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: std::env::current_dir().expect("current directory"),
         })
         .await
         .expect("reopen project");
     resumed
-        .dispatch(SmedCommand::ResumeSession { session })
+        .dispatch(MjolnrCommand::ResumeSession { session })
         .await
         .expect("resume session");
     wait_for_session(&resumed, session).await;

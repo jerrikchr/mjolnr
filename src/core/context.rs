@@ -2,7 +2,7 @@
 //!
 //! These are inert descriptions, never authority. Project prose and skill
 //! instructions may influence a model, but every resulting side effect still
-//! crosses smed's normal deterministic tool and policy gates.
+//! crosses mjolnr's normal deterministic tool and policy gates.
 
 use crate::core::error::ReasonCode;
 

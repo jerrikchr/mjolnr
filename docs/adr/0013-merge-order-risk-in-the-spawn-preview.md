@@ -29,7 +29,7 @@ spawn-time analysis of any kind.** The placement argument below — that risk
 belongs where a human authorises a fan-out — was reasonable and is moot; spawn
 time is too late to re-slice the work and too early to measure anything.
 
-The remaining question is not risk but **capability**: smed has no `push`,
+The remaining question is not risk but **capability**: mjolnr has no `push`,
 `pull`, `fetch`, `clone`, or `rebase`, and `submit_change` refuses, so the merge
 path terminates at the local `main`. Ordering PRs is an optimisation above a
 floor that does not exist yet.
@@ -121,7 +121,7 @@ makes that case visible.
 
 **Undeclared scope must read as unknown.** This follows the D7 precedent: three
 of six file-metadata questions carry a fourth answer —
-*smed could not look* — because a pair of `false`s cannot distinguish "not
+*mjolnr could not look* — because a pair of `false`s cannot distinguish "not
 binary" from "never sniffed". A preview that shows no collisions because no child
 declared a scope, and a preview that shows no collisions because the scopes are
 genuinely disjoint, must not render identically.
@@ -152,7 +152,7 @@ genuinely disjoint, must not render identically.
   someone already exploring, which is the wrong audience at the wrong time.
 - **Model-inferred file scope.** Trades the property that makes the analysis
   worth showing for the convenience of not declaring anything.
-- **Refusing a spawn on detected overlap.** Rejected as authority smed does not
+- **Refusing a spawn on detected overlap.** Rejected as authority mjolnr does not
   have. Overlapping children are sometimes exactly right — two agents on the same
-  module with a serialised merge is a normal plan. smed shows the risk; the
+  module with a serialised merge is a normal plan. mjolnr shows the risk; the
   human takes it or does not.

@@ -532,7 +532,7 @@ mod tests {
 
     #[test]
     fn every_reason_code_survives_a_round_trip() {
-        // A code that fails to parse back is a stored refusal smed can no
+        // A code that fails to parse back is a stored refusal mjolnr can no
         // longer read. The list mirrors core::error::ReasonCode exactly; if one
         // is added there without a wire mapping, this fails.
         let codes = [
@@ -587,7 +587,7 @@ mod tests {
 
     #[test]
     fn an_unknown_field_is_refused() {
-        // The database is smed's own format. A field this build does not know
+        // The database is mjolnr's own format. A field this build does not know
         // means the row was written by a newer schema, which the version gate
         // should already have caught — this is the second line of defence.
         let json = r#"{"input_tokens":1,"output_tokens":2,"cached_tokens":3}"#;

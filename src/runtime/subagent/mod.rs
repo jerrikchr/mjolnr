@@ -28,14 +28,14 @@ use std::time::Duration;
 use tokio::sync::{broadcast, mpsc};
 use tokio_util::sync::CancellationToken;
 
-use crate::core::command::{ApprovalDecision, SmedCommand};
+use crate::core::command::{ApprovalDecision, MjolnrCommand};
 use crate::core::error::{ReasonCode, ToolError};
-use crate::core::event::{FinishReason, RunId, SessionId, SmedEvent};
+use crate::core::event::{FinishReason, MjolnrEvent, RunId, SessionId};
 use crate::core::message::{ToolCall, ToolOutcome, ToolResult};
 use crate::core::model::{ModelId, ProviderId};
 use crate::core::policy::PolicyMode;
 use crate::core::provider::Provider;
-use crate::core::runtime::SmedRuntime;
+use crate::core::runtime::MjolnrRuntime;
 use crate::core::store::EventStore;
 use crate::runtime::budget::BudgetLimits;
 use crate::runtime::{Actor, ChildLink, Mail, Runtime, SubagentNotice};
@@ -224,7 +224,7 @@ pub(super) struct SpawnPlan {
     pub children: Vec<ChildSpec>,
     pub providers: Vec<Arc<dyn Provider>>,
     pub store: Arc<dyn EventStore>,
-    pub events: broadcast::Sender<SmedEvent>,
+    pub events: broadcast::Sender<MjolnrEvent>,
     pub mailbox: mpsc::Sender<Mail>,
     pub cancel: CancellationToken,
 }
@@ -543,7 +543,7 @@ struct ChildTask {
     model: ModelId,
     parent_session: SessionId,
     parent_run: RunId,
-    events: broadcast::Sender<SmedEvent>,
+    events: broadcast::Sender<MjolnrEvent>,
     cancel: CancellationToken,
     workspace: PathBuf,
 }
@@ -633,18 +633,18 @@ async fn drive_child(task: &ChildTask, runtime: &Runtime, slot: &ResultSlot) -> 
 
     let setup = async {
         runtime
-            .dispatch(SmedCommand::OpenProject {
+            .dispatch(MjolnrCommand::OpenProject {
                 root: task.spec.worktree.clone(),
             })
             .await?;
         runtime
-            .dispatch(SmedCommand::CreateSession {
+            .dispatch(MjolnrCommand::CreateSession {
                 provider: task.provider.clone(),
                 model: task.model.clone(),
             })
             .await?;
         runtime
-            .dispatch(SmedCommand::SetPolicy {
+            .dispatch(MjolnrCommand::SetPolicy {
                 mode: task.spec.request.policy,
             })
             .await
@@ -664,7 +664,7 @@ async fn drive_child(task: &ChildTask, runtime: &Runtime, slot: &ResultSlot) -> 
     }
 
     let directive = format!(
-        "You are a smed subagent in an isolated git worktree; your branch is `{}`. \
+        "You are a mjolnr subagent in an isolated git worktree; your branch is `{}`. \
          Complete only this directive. Commit your changes if you can; then call \
          report_result exactly once with a result matching its schema, then \
          finish_task with an honest outcome.\n\nDirective: {}",
@@ -673,7 +673,7 @@ async fn drive_child(task: &ChildTask, runtime: &Runtime, slot: &ResultSlot) -> 
 
     let mut events = runtime.subscribe();
     if runtime
-        .dispatch(SmedCommand::SendUserMessage {
+        .dispatch(MjolnrCommand::SendUserMessage {
             text: directive,
             // Composed by the parent, inside a spawn the human already approved.
             source: crate::core::directive::DirectiveSource::Internal,
@@ -699,7 +699,7 @@ async fn drive_child(task: &ChildTask, runtime: &Runtime, slot: &ResultSlot) -> 
             event = events.recv() => event,
             () = task.cancel.cancelled(), if !cancel_requested => {
                 cancel_requested = true;
-                let _ = runtime.dispatch(SmedCommand::CancelRun).await;
+                let _ = runtime.dispatch(MjolnrCommand::CancelRun).await;
                 continue;
             }
         };
@@ -710,34 +710,34 @@ async fn drive_child(task: &ChildTask, runtime: &Runtime, slot: &ResultSlot) -> 
         };
         forward_activity(task, &event);
         match &event {
-            SmedEvent::ToolProposed {
+            MjolnrEvent::ToolProposed {
                 approval: Some(approval),
                 ..
             } => {
                 let _ = runtime
-                    .dispatch(SmedCommand::ResolveApproval {
+                    .dispatch(MjolnrCommand::ResolveApproval {
                         approval: *approval,
                         decision: ApprovalDecision::Deny,
                     })
                     .await;
             }
-            SmedEvent::ToolCompleted { result, .. } => match result.outcome {
+            MjolnrEvent::ToolCompleted { result, .. } => match result.outcome {
                 ToolOutcome::Refused(code) => refusal = Some(code),
                 ToolOutcome::Failed(code) => failure = Some(code),
                 ToolOutcome::Ok => {}
             },
-            SmedEvent::ToolFailed { code, .. } | SmedEvent::RunFailed { code, .. } => {
+            MjolnrEvent::ToolFailed { code, .. } | MjolnrEvent::RunFailed { code, .. } => {
                 failure = Some(*code);
             }
-            SmedEvent::BudgetExhausted { .. } => {
+            MjolnrEvent::BudgetExhausted { .. } => {
                 stopped = Some(ReasonCode::BudgetExhausted);
             }
-            SmedEvent::QuotaBoundaryReached { reserve, .. }
+            MjolnrEvent::QuotaBoundaryReached { reserve, .. }
                 if reserve.phase == crate::core::continuation::QuotaReservePhase::Stopped =>
             {
                 stopped = Some(ReasonCode::ProviderPlanQuota);
             }
-            SmedEvent::RunFinished {
+            MjolnrEvent::RunFinished {
                 reason: FinishReason::Cancelled,
                 ..
             } => cancelled_child = true,
@@ -745,7 +745,7 @@ async fn drive_child(task: &ChildTask, runtime: &Runtime, slot: &ResultSlot) -> 
         }
         if matches!(
             &event,
-            SmedEvent::RunFinished { .. } | SmedEvent::RunFailed { .. }
+            MjolnrEvent::RunFinished { .. } | MjolnrEvent::RunFailed { .. }
         ) {
             break;
         }
@@ -832,22 +832,22 @@ async fn wait_ready(runtime: &Runtime, policy: PolicyMode) -> bool {
 }
 
 /// Map a child event onto one ephemeral activity label for the parent.
-fn forward_activity(task: &ChildTask, event: &SmedEvent) {
+fn forward_activity(task: &ChildTask, event: &MjolnrEvent) {
     let label = match event {
-        SmedEvent::RunStarted { .. } => Some("started".to_owned()),
-        SmedEvent::ToolAssembling { name, .. } => Some(format!("assembling {name}")),
-        SmedEvent::ToolProposed { call, .. } => Some(format!("tool {}", call.name)),
-        SmedEvent::ToolCompleted { name, result, .. } => Some(match &result.outcome {
+        MjolnrEvent::RunStarted { .. } => Some("started".to_owned()),
+        MjolnrEvent::ToolAssembling { name, .. } => Some(format!("assembling {name}")),
+        MjolnrEvent::ToolProposed { call, .. } => Some(format!("tool {}", call.name)),
+        MjolnrEvent::ToolCompleted { name, result, .. } => Some(match &result.outcome {
             ToolOutcome::Ok => format!("{name} ok"),
             ToolOutcome::Refused(code) => format!("{name} refused {}", code.as_str()),
             ToolOutcome::Failed(code) => format!("{name} failed {}", code.as_str()),
         }),
-        SmedEvent::RunFinished { reason, .. } => Some(format!("finished {reason:?}")),
-        SmedEvent::RunFailed { code, .. } => Some(format!("failed {}", code.as_str())),
+        MjolnrEvent::RunFinished { reason, .. } => Some(format!("finished {reason:?}")),
+        MjolnrEvent::RunFailed { code, .. } => Some(format!("failed {}", code.as_str())),
         _ => None,
     };
     if let Some(label) = label {
-        let _ = task.events.send(SmedEvent::SubagentActivity {
+        let _ = task.events.send(MjolnrEvent::SubagentActivity {
             session: task.parent_session,
             run: task.parent_run,
             child: task.spec.link.session,
@@ -954,7 +954,7 @@ impl Actor {
             let (child_provider, child_model) = match route_selection {
                 Some((route_name, reason, hop_provider, hop_model)) => {
                     if let Err(error) = self
-                        .persist(SmedEvent::RouteSelected {
+                        .persist(MjolnrEvent::RouteSelected {
                             session,
                             child: Some(child),
                             route: route_name,
@@ -1030,7 +1030,7 @@ impl Actor {
                 policy,
                 branch,
                 worktree,
-            } => SmedEvent::SubagentSpawned {
+            } => MjolnrEvent::SubagentSpawned {
                 session,
                 run,
                 child,
@@ -1039,7 +1039,7 @@ impl Actor {
                 branch,
                 worktree,
             },
-            SubagentNotice::Late { child, detail } => SmedEvent::SubagentResultLate {
+            SubagentNotice::Late { child, detail } => MjolnrEvent::SubagentResultLate {
                 session,
                 child,
                 detail,
@@ -1048,7 +1048,7 @@ impl Actor {
                 reader,
                 writer,
                 path,
-            } => SmedEvent::ReadSetCollision {
+            } => MjolnrEvent::ReadSetCollision {
                 session,
                 reader,
                 writer,

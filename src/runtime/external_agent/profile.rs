@@ -3,17 +3,17 @@ use std::path::{Path, PathBuf};
 pub fn resolve_executable(
     executable: &str,
     workspace_root: &Path,
-) -> Result<PathBuf, crate::core::error::SmedError> {
+) -> Result<PathBuf, crate::core::error::MjolnrError> {
     use crate::core::error::ReasonCode;
     let exe = executable.trim();
     if exe.is_empty() {
-        return Err(crate::core::error::SmedError::workspace_refused(
+        return Err(crate::core::error::MjolnrError::workspace_refused(
             ReasonCode::WorkspaceCapabilityUnavailable,
             "external-agent profile has no executable",
         ));
     }
     if exe.contains("..") {
-        return Err(crate::core::error::SmedError::workspace_refused(
+        return Err(crate::core::error::MjolnrError::workspace_refused(
             ReasonCode::WorkspaceCapabilityUnavailable,
             format!("external-agent executable may not contain `..`: {exe}"),
         ));
@@ -25,7 +25,7 @@ pub fn resolve_executable(
             workspace_root.join(exe)
         };
         let resolved = candidate.canonicalize().map_err(|_| {
-            crate::core::error::SmedError::workspace_refused(
+            crate::core::error::MjolnrError::workspace_refused(
                 ReasonCode::WorkspaceCapabilityUnavailable,
                 format!("external-agent executable not found: {exe}"),
             )
@@ -42,7 +42,7 @@ pub fn resolve_executable(
             return Ok(candidate);
         }
     }
-    Err(crate::core::error::SmedError::workspace_refused(
+    Err(crate::core::error::MjolnrError::workspace_refused(
         ReasonCode::WorkspaceCapabilityUnavailable,
         format!("external-agent executable not found on PATH: {exe}"),
     ))

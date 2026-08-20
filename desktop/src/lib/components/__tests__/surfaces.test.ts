@@ -171,7 +171,7 @@ describe('Desktop surfaces stay inside explicit snapshot authority', () => {
     expect(getByText('@@ -1,5 +1,6 @@')).toBeDefined();
     expect(getByText('line 2')).toBeDefined();
     // The freshness marker, not a currency claim: the surface reports when
-    // smed last looked, never that this is the tree as it stands now.
+    // mjolnr last looked, never that this is the tree as it stands now.
     expect(getByText('captured at #4')).toBeDefined();
   });
 
@@ -221,7 +221,7 @@ describe('Desktop surfaces stay inside explicit snapshot authority', () => {
     ).toBeDefined();
     expect(
       getByText(
-        'git returned bytes that are not valid UTF-8. smed will not guess at an encoding, so no content is shown.'
+        'git returned bytes that are not valid UTF-8. mjolnr will not guess at an encoding, so no content is shown.'
       )
     ).toBeDefined();
   });
@@ -293,7 +293,7 @@ describe('Desktop surfaces stay inside explicit snapshot authority', () => {
   });
 
   it('ChangesSurface shows no evidence section when nothing recorded a read', () => {
-    // An empty "Read before edit evidence:" heading would read as "smed
+    // An empty "Read before edit evidence:" heading would read as "mjolnr
     // looked and found none", which is a different claim from "nothing
     // recorded a read". The section is absent instead.
     clientStore.snapshot = { ...baseSnapshot, changes: changesWithoutEvidence() };
@@ -342,12 +342,12 @@ describe('Desktop surfaces stay inside explicit snapshot authority', () => {
     const { getByLabelText, getByText } = render(ChangesSurface);
 
     // Nothing selected: the control is there but refuses to fire, because an
-    // empty request asks smed for nothing.
-    const send = getByText(/Send 0 to smed/).closest('button');
+    // empty request asks mjolnr for nothing.
+    const send = getByText(/Send 0 to mjolnr/).closest('button');
     expect(send?.disabled).toBe(true);
 
     await fireEvent.click(getByLabelText('Note on new line 2'));
-    await fireEvent.click(getByText(/Send 1 to smed/));
+    await fireEvent.click(getByText(/Send 1 to mjolnr/));
 
     expect(dispatch).toHaveBeenCalledWith({
       type: 'sendReviewNotes',

@@ -11,7 +11,7 @@
 # List candidates with:  security find-identity -v -p codesigning
 set -eu
 
-IDENTITY="${MJOLNR_SIGN_IDENTITY:-D507F58CF5AD58A6472534ED911C4E9F02D66642}"
+IDENTITY="${MJOLNR_SIGN_IDENTITY:-${SMED_SIGN_IDENTITY:-D507F58CF5AD58A6472534ED911C4E9F02D66642}}"
 
 cargo install --path "$(dirname "$0")/.." --force
 codesign -f -s "$IDENTITY" "$HOME/.cargo/bin/mjolnr"

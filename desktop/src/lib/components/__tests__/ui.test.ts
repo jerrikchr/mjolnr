@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render } from '@testing-library/svelte';
 import ButtonHarness from './ui/ButtonHarness.svelte';
 import TabsHarness from './ui/TabsHarness.svelte';
-import { SmedClient } from '$lib/runtime/client.svelte';
+import { MjolnrClient } from '$lib/runtime/client.svelte';
 import type { ClientSnapshot } from '$lib/runtime/contract';
 import { NO_PROJECT_REPOSITORY, NO_REVIEW_THREADS } from '$lib/runtime/contract';
 
@@ -73,7 +73,7 @@ describe('Tauri IPC command dispatch', () => {
       invoke: invokeMock
     };
 
-    const client = new SmedClient();
+    const client = new MjolnrClient();
     client.handleUpdate({ type: 'snapshot', snapshot: sampleSnapshot });
     await client.resumeSession('0190d5f0-test-session');
 
@@ -90,7 +90,7 @@ describe('Tauri IPC command dispatch', () => {
       invoke: invokeMock
     };
 
-    const client = new SmedClient();
+    const client = new MjolnrClient();
     await client.resolveResume('compact');
 
     expect(invokeMock).toHaveBeenCalledWith(
@@ -106,7 +106,7 @@ describe('Tauri IPC command dispatch', () => {
       invoke: invokeMock
     };
 
-    const client = new SmedClient();
+    const client = new MjolnrClient();
     client.lastError = 'no session is open';
 
     await client.resolveResume('compact');

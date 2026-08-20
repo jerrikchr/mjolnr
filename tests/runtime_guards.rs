@@ -12,19 +12,19 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use async_trait::async_trait;
-use smed::core::command::{ApprovalDecision, SmedCommand};
-use smed::core::error::{ProviderError, ReasonCode, ToolError};
-use smed::core::event::{FinishReason, ProviderEvent, SmedEvent};
-use smed::core::message::{ContentBlock, ToolCall, ToolOutcome, ToolResult};
-use smed::core::model::{ModelCapabilities, ModelDescriptor, ModelId, ProviderId};
-use smed::core::provider::{Provider, ProviderCompletion, ProviderRequest};
-use smed::core::runtime::SmedRuntime;
-use smed::core::store::EventStore;
-use smed::core::tool::{Tool, ToolContext, ToolTier};
-use smed::runtime::Runtime;
-use smed::runtime::budget::BudgetLimits;
-use smed::store::memory::InMemoryEventStore;
-use smed::tools::ToolRegistry;
+use mjolnr::core::command::{ApprovalDecision, MjolnrCommand};
+use mjolnr::core::error::{ProviderError, ReasonCode, ToolError};
+use mjolnr::core::event::{FinishReason, MjolnrEvent, ProviderEvent};
+use mjolnr::core::message::{ContentBlock, ToolCall, ToolOutcome, ToolResult};
+use mjolnr::core::model::{ModelCapabilities, ModelDescriptor, ModelId, ProviderId};
+use mjolnr::core::provider::{Provider, ProviderCompletion, ProviderRequest};
+use mjolnr::core::runtime::MjolnrRuntime;
+use mjolnr::core::store::EventStore;
+use mjolnr::core::tool::{Tool, ToolContext, ToolTier};
+use mjolnr::runtime::Runtime;
+use mjolnr::runtime::budget::BudgetLimits;
+use mjolnr::store::memory::InMemoryEventStore;
+use mjolnr::tools::ToolRegistry;
 use tempfile::TempDir;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
@@ -216,7 +216,7 @@ async fn harness(
     arguments: serde_json::Value,
 ) -> (
     Runtime,
-    smed::core::runtime::RuntimeSubscription,
+    mjolnr::core::runtime::RuntimeSubscription,
     Arc<Mutex<Option<ToolOutcome>>>,
     TempDir,
 ) {
@@ -229,7 +229,7 @@ async fn harness_with_limits(
     limits: BudgetLimits,
 ) -> (
     Runtime,
-    smed::core::runtime::RuntimeSubscription,
+    mjolnr::core::runtime::RuntimeSubscription,
     Arc<Mutex<Option<ToolOutcome>>>,
     TempDir,
 ) {
@@ -248,22 +248,22 @@ async fn harness_with_limits(
     let events = runtime.subscribe();
     let workspace = TempDir::new().expect("workspace");
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: workspace.path().to_owned(),
         })
         .await
         .expect("open workspace");
     runtime
-        .dispatch(SmedCommand::CreateSession {
+        .dispatch(MjolnrCommand::CreateSession {
             provider: ProviderId::new(PROVIDER),
             model: ModelId::new(MODEL),
         })
         .await
         .expect("create session");
     runtime
-        .dispatch(SmedCommand::SendUserMessage {
+        .dispatch(MjolnrCommand::SendUserMessage {
             text: "exercise the guard".to_owned(),
-            source: smed::core::directive::DirectiveSource::Human,
+            source: mjolnr::core::directive::DirectiveSource::Human,
         })
         .await
         .expect("start run");
@@ -271,10 +271,10 @@ async fn harness_with_limits(
 }
 
 async fn wait_for(
-    events: &mut smed::core::runtime::RuntimeSubscription,
+    events: &mut mjolnr::core::runtime::RuntimeSubscription,
     label: &str,
-    mut predicate: impl FnMut(&SmedEvent) -> bool,
-) -> SmedEvent {
+    mut predicate: impl FnMut(&MjolnrEvent) -> bool,
+) -> MjolnrEvent {
     tokio::time::timeout(Duration::from_secs(5), async {
         loop {
             match events.recv().await {
@@ -300,7 +300,7 @@ async fn schema_invalid_arguments_never_reach_the_tool() {
     let (_runtime, mut events, observed, _workspace) =
         harness(tool, serde_json::json!({ "wrong": true })).await;
     wait_for(&mut events, "terminal event", |event| {
-        matches!(event, SmedEvent::RunFinished { .. })
+        matches!(event, MjolnrEvent::RunFinished { .. })
     })
     .await;
 
@@ -324,7 +324,7 @@ async fn arguments_are_revalidated_immediately_before_execute() {
     let (_runtime, mut events, observed, _workspace) =
         harness(tool, serde_json::json!({ "ok": "initially valid" })).await;
     wait_for(&mut events, "terminal event", |event| {
-        matches!(event, SmedEvent::RunFinished { .. })
+        matches!(event, MjolnrEvent::RunFinished { .. })
     })
     .await;
 
@@ -350,7 +350,7 @@ async fn unknown_tier_fails_closed_to_execute_approval() {
     let proposal = wait_for(&mut events, "execute approval", |event| {
         matches!(
             event,
-            SmedEvent::ToolProposed {
+            MjolnrEvent::ToolProposed {
                 approval: Some(_),
                 tier: ToolTier::Execute,
                 ..
@@ -359,7 +359,7 @@ async fn unknown_tier_fails_closed_to_execute_approval() {
     })
     .await;
     assert_eq!(executions.load(Ordering::SeqCst), 0);
-    let SmedEvent::ToolProposed {
+    let MjolnrEvent::ToolProposed {
         approval: Some(approval),
         ..
     } = proposal
@@ -367,7 +367,7 @@ async fn unknown_tier_fails_closed_to_execute_approval() {
         panic!("expected proposal")
     };
     runtime
-        .dispatch(SmedCommand::ResolveApproval {
+        .dispatch(MjolnrCommand::ResolveApproval {
             approval,
             decision: ApprovalDecision::Deny,
         })
@@ -389,14 +389,14 @@ async fn denied_tool_returns_a_structured_result_to_the_model() {
     let proposal = wait_for(&mut events, "write approval", |event| {
         matches!(
             event,
-            SmedEvent::ToolProposed {
+            MjolnrEvent::ToolProposed {
                 approval: Some(_),
                 ..
             }
         )
     })
     .await;
-    let SmedEvent::ToolProposed {
+    let MjolnrEvent::ToolProposed {
         approval: Some(approval),
         ..
     } = proposal
@@ -404,14 +404,14 @@ async fn denied_tool_returns_a_structured_result_to_the_model() {
         panic!("expected proposal")
     };
     runtime
-        .dispatch(SmedCommand::ResolveApproval {
+        .dispatch(MjolnrCommand::ResolveApproval {
             approval,
             decision: ApprovalDecision::Deny,
         })
         .await
         .expect("deny");
     wait_for(&mut events, "terminal event", |event| {
-        matches!(event, SmedEvent::RunFinished { .. })
+        matches!(event, MjolnrEvent::RunFinished { .. })
     })
     .await;
 
@@ -438,13 +438,13 @@ async fn tool_budget_exhaustion_fails_before_execute() {
     let (_runtime, mut events, observed, _workspace) =
         harness_with_limits(tool, serde_json::json!({ "ok": "value" }), limits).await;
     let terminal = wait_for(&mut events, "budget exhaustion", |event| {
-        matches!(event, SmedEvent::RunFailed { .. })
+        matches!(event, MjolnrEvent::RunFailed { .. })
     })
     .await;
 
     assert!(matches!(
         terminal,
-        SmedEvent::RunFailed {
+        MjolnrEvent::RunFailed {
             code: ReasonCode::BudgetExhausted,
             ..
         }
@@ -469,13 +469,13 @@ async fn provider_turn_budget_stops_before_a_second_request() {
     let (_runtime, mut events, observed, _workspace) =
         harness_with_limits(tool, serde_json::json!({ "ok": "value" }), limits).await;
     let terminal = wait_for(&mut events, "turn budget exhaustion", |event| {
-        matches!(event, SmedEvent::RunFailed { .. })
+        matches!(event, MjolnrEvent::RunFailed { .. })
     })
     .await;
 
     assert!(matches!(
         terminal,
-        SmedEvent::RunFailed {
+        MjolnrEvent::RunFailed {
             code: ReasonCode::BudgetExhausted,
             ..
         }
@@ -496,33 +496,33 @@ async fn wall_time_budget_cancels_a_hanging_provider() {
     let runtime = Runtime::spawn_with(vec![provider], store, ToolRegistry::new(vec![]), limits);
     let mut events = runtime.subscribe();
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: workspace.path().to_owned(),
         })
         .await
         .expect("open workspace");
     runtime
-        .dispatch(SmedCommand::CreateSession {
+        .dispatch(MjolnrCommand::CreateSession {
             provider: ProviderId::new(PROVIDER),
             model: ModelId::new(MODEL),
         })
         .await
         .expect("create session");
     runtime
-        .dispatch(SmedCommand::SendUserMessage {
+        .dispatch(MjolnrCommand::SendUserMessage {
             text: "hang until the budget fires".to_owned(),
-            source: smed::core::directive::DirectiveSource::Human,
+            source: mjolnr::core::directive::DirectiveSource::Human,
         })
         .await
         .expect("start run");
 
     let terminal = wait_for(&mut events, "wall budget exhaustion", |event| {
-        matches!(event, SmedEvent::RunFailed { .. })
+        matches!(event, MjolnrEvent::RunFailed { .. })
     })
     .await;
     assert!(matches!(
         terminal,
-        SmedEvent::RunFailed {
+        MjolnrEvent::RunFailed {
             code: ReasonCode::BudgetExhausted,
             ..
         }

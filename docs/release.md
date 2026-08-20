@@ -14,7 +14,7 @@ The checked-in release profile uses thin LTO, one codegen unit, symbol
 stripping, and abort-on-panic. The release binary is:
 
 ```text
-target/release/smed
+target/release/mjolnr
 ```
 
 ## Supported artifact targets
@@ -26,11 +26,11 @@ The CI workflow builds these targets when the hosted runner is available:
 - `x86_64-unknown-linux-gnu` — Linux x64
 - `aarch64-unknown-linux-gnu` — Linux arm64
 
-Each artifact is named `smed-<target>` and is accompanied by a SHA-256 file.
+Each artifact is named `mjolnr-<target>` and is accompanied by a SHA-256 file.
 Verify one with:
 
 ```bash
-shasum -a 256 -c smed-<target>.sha256
+shasum -a 256 -c mjolnr-<target>.sha256
 ```
 
 ## Install
@@ -38,8 +38,8 @@ shasum -a 256 -c smed-<target>.sha256
 Copy the native binary to a directory on `PATH`, for example:
 
 ```bash
-install -m 0755 smed-<target> "$HOME/.local/bin/smed"
-smed --version
+install -m 0755 mjolnr-<target> "$HOME/.local/bin/mjolnr"
+mjolnr --version
 ```
 
 The project does not currently claim Windows support, release signing,

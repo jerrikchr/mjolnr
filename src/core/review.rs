@@ -12,15 +12,15 @@
 //! # What this module deliberately cannot express
 //!
 //! - **A resolved, applied, or verified thread.** [`ReviewThreadStatus`] has two
-//!   variants and neither is a claim about the code. smed cannot know whether a
+//!   variants and neither is a claim about the code. mjolnr cannot know whether a
 //!   note was addressed — only that it was written, and that a request carrying
 //!   it was sent — so there is nowhere to record that it was (AGENTS.md §1.3).
 //!   `no_status_claims_the_change_was_addressed` pins that.
-//! - **A comment smed wrote.** [`ReviewComment`] has no author field because
-//!   every comment is a human act. smed answers a review request in the
+//! - **A comment mjolnr wrote.** [`ReviewComment`] has no author field because
+//!   every comment is a human act. mjolnr answers a review request in the
 //!   transcript, as an ordinary message, and the thread links to that message by
 //!   id. A thread that could hold a model-authored comment would let the review
-//!   surface show smed agreeing with itself.
+//!   surface show mjolnr agreeing with itself.
 //! - **A thread with no anchor.** There is no free-floating note: the anchor is
 //!   a required field, and the runtime derives its hunk context and digest from
 //!   its own capture rather than accepting them from a client.
@@ -123,7 +123,7 @@ pub struct ReviewComment {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ReviewThreadStatus {
-    /// Written down. smed has not been asked to do anything about it.
+    /// Written down. mjolnr has not been asked to do anything about it.
     Open,
     /// A durable revision request naming this thread was sent into the session.
     Sent,
@@ -147,10 +147,10 @@ pub struct ReviewThread {
     pub anchor: ReviewAnchor,
     pub comments: Vec<ReviewComment>,
     pub status: ReviewThreadStatus,
-    /// The message smed answered with, once a sent request produced one.
+    /// The message mjolnr answered with, once a sent request produced one.
     ///
     /// A `CanonicalMessage` id, which is what a client already keys its
-    /// transcript by — so "link to the resulting smed response" is a link the
+    /// transcript by — so "link to the resulting mjolnr response" is a link the
     /// surface can actually follow, not a run identifier no rendered message
     /// carries. `None` until an answer exists; a run that was cancelled or
     /// failed leaves it `None`, because there is no response to point at.
@@ -233,7 +233,7 @@ mod tests {
 
     /// The false-promotion guard §D3 asks for, at the type level. A thread may
     /// say it was written and that a request naming it was sent. It may not say
-    /// the change was applied, imported, or verified — smed does not know that,
+    /// the change was applied, imported, or verified — mjolnr does not know that,
     /// and a status string a surface could render as "done" would be the lie.
     #[test]
     fn no_status_claims_the_change_was_addressed() {
@@ -268,8 +268,8 @@ mod tests {
     }
 
     /// A comment carries no author, so a model-authored remark cannot be filed
-    /// as one. smed answers in the transcript and the thread links to that
-    /// message; the review surface never shows smed agreeing with itself.
+    /// as one. mjolnr answers in the transcript and the thread links to that
+    /// message; the review surface never shows mjolnr agreeing with itself.
     #[test]
     fn a_comment_has_nowhere_to_record_a_model_author() {
         let rendered = format!("{:?}", thread().comments);

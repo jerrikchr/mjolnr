@@ -7,10 +7,10 @@
 			(function () {
 				function show(msg) {
 					try {
-						var el = document.getElementById('smed-err');
+						var el = document.getElementById('mjolnr-err');
 						if (!el) {
 							el = document.createElement('div');
-							el.id = 'smed-err';
+							el.id = 'mjolnr-err';
 							el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#7f1d1d;color:#fff;font:12px/1.4 monospace;padding:10px;white-space:pre-wrap;';
 							(document.documentElement || document.body).appendChild(el);
 						}

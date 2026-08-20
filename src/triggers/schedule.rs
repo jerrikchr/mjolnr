@@ -5,7 +5,7 @@
 //! surface than parsing five comma-separated fields warrants. `next_after`
 //! walks minute-by-minute rather than solving each field analytically —
 //! slower, but the whole function fits in one screen and is trivial to audit,
-//! which matters more for a scheduler that decides when smed spends a
+//! which matters more for a scheduler that decides when mjolnr spends a
 //! provider turn unattended.
 
 use std::collections::BTreeSet;

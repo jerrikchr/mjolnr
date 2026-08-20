@@ -132,7 +132,7 @@ pub(crate) fn project_review_threads(
 /// capture (Phase D3 producer).
 ///
 /// The staleness decision lives here and only here, and it is a comparison, not
-/// a relocation: a thread whose `capture_digest` differs from the capture smed
+/// a relocation: a thread whose `capture_digest` differs from the capture mjolnr
 /// currently holds arrives with `anchor_stale: true` **and its original line,
 /// side, and hunk header untouched**. Nothing in this function can rewrite an
 /// anchor, which is how §D3's "cannot silently move to a different line" is
@@ -143,9 +143,9 @@ pub(crate) fn project_review_threads(
 /// current would be the exact claim `RepositoryFreshness` exists to refuse.
 ///
 /// The trust class is `OperatorControlled`: a review note is a human's remark
-/// about code. It is not a smed-governed observation, and labelling it one
+/// about code. It is not a mjolnr-governed observation, and labelling it one
 /// would let a surface show a person's opinion in the colour reserved for
-/// things smed verified.
+/// things mjolnr verified.
 pub(crate) fn project_review_thread_summaries(
     threads: &[ReviewThread],
     changes: &ChangeView,
@@ -337,10 +337,10 @@ pub(crate) fn build_workspace_capabilities() -> Vec<WorkspaceCapability> {
                 "Line notes anchored to file, side, line, hunk context, and the diff revision \
                  they were taken against. A note against a diff that has since moved is refused \
                  rather than relocated, and an existing note whose diff moved stays visible on \
-                 the line it was taken against, marked stale. Sending notes to smed is an \
+                 the line it was taken against, marked stale. Sending notes to mjolnr is an \
                  ordinary human directive that widens nothing; a thread links to the message \
-                 smed answered with. A thread is never marked resolved, applied, or verified — \
-                 smed cannot know a note was addressed"
+                 mjolnr answered with. A thread is never marked resolved, applied, or verified — \
+                 mjolnr cannot know a note was addressed"
                     .to_owned(),
             ),
         },
@@ -434,9 +434,9 @@ pub(crate) fn build_workspace_capabilities() -> Vec<WorkspaceCapability> {
 /// wire limit is applied exactly here, once, on the way out.
 ///
 /// The trust class is `OperatorControlled` and this is the only place it may be
-/// decided (ADR 0006). A file on disk is not a smed-governed observation —
-/// smed read it, it did not produce it — and `SmedGoverned` would show a
-/// human's own file in the colour reserved for things smed verified.
+/// decided (ADR 0006). A file on disk is not a mjolnr-governed observation —
+/// mjolnr read it, it did not produce it — and `MjolnrGoverned` would show a
+/// human's own file in the colour reserved for things mjolnr verified.
 pub(crate) fn project_directory_page(listing: &DirectoryListing) -> DirectoryPage {
     let limit = MAX_DIRECTORY_ENTRIES_PER_PAGE as usize;
     let truncated = listing.entries.len() > limit;
@@ -589,7 +589,7 @@ fn clamp_bytes(text: &str, max: usize) -> (String, bool) {
 /// A repository state that reports nothing, for when nothing was read.
 ///
 /// `ExternalUnverified` is deliberate: an empty state is not a governed
-/// observation of a clean repository, and labelling it `SmedGoverned` would
+/// observation of a clean repository, and labelling it `MjolnrGoverned` would
 /// dress up an absence of evidence as evidence.
 pub(crate) fn empty_repository_state(freshness: RepositoryFreshness) -> RepositoryState {
     RepositoryState {
@@ -644,14 +644,14 @@ fn project_sync_state(upstream: Option<&UpstreamPosition>) -> RepositorySyncStat
 ///
 /// `remote_sync` is computed locally (ADR 0008). `rev-list HEAD...@{upstream}`
 /// touches no network — it compares two commits that are both already local —
-/// so the counts are exact about the ref smed last saw. What no read path may
+/// so the counts are exact about the ref mjolnr last saw. What no read path may
 /// do is learn whether the remote has moved since, which is why the wire also
 /// carries `remote_sync_as_of` and why `Synced` must never render unqualified.
 ///
 /// An earlier version of this producer left `remote_sync` permanently `Unknown`
 /// on the grounds that a comparison needs a fetch. That is true of the remote's
 /// *current* state and false of ahead/behind against an already-fetched ref, so
-/// it discarded information smed held. ADR 0008 records the correction.
+/// it discarded information mjolnr held. ADR 0008 records the correction.
 pub(crate) fn project_repository_state(view: &RepositoryView) -> RepositoryState {
     let projection = match view {
         RepositoryView::NoProject => {
@@ -687,9 +687,9 @@ pub(crate) fn project_repository_state(view: &RepositoryView) -> RepositoryState
             trigger: projection.captured_after.as_str().to_owned(),
             sequence: projection.capture_sequence,
         },
-        // smed ran the git invocation itself, through its own argument vector,
+        // mjolnr ran the git invocation itself, through its own argument vector,
         // and re-read the result. That is what this label means here.
-        trust: TrustClass::SmedGoverned,
+        trust: TrustClass::MjolnrGoverned,
     }
 }
 
@@ -712,7 +712,7 @@ pub(crate) fn project_repository_history(
             .collect(),
         has_more: history.has_more,
         limit,
-        trust: TrustClass::SmedGoverned,
+        trust: TrustClass::MjolnrGoverned,
     }
 }
 
@@ -726,7 +726,7 @@ pub(crate) fn project_repository_history(
 /// Returns `None` for "no project" and for a repository that could not be read.
 /// That is the same `None` the D3 contract shipped with, and the surface's
 /// existing empty state still renders — an empty `ChangeSet` would instead
-/// assert that smed looked and nothing had changed.
+/// assert that mjolnr looked and nothing had changed.
 ///
 /// The state is always `CurrentWorkingTree`. `Proposed`, `Applied`, and
 /// `ExternallyImported` need provenance this producer does not have: it reads
@@ -767,7 +767,7 @@ pub(crate) fn project_change_set(
 /// collection: `MAX_FILES_IN_CHANGESET` already caps `files`, and `files_truncated`
 /// already says when that cap bit, so the evidence needs no second limit and no
 /// second truncation flag. It also happens to be the right meaning — evidence
-/// that smed read a file before editing it is only evidence *about* a file
+/// that mjolnr read a file before editing it is only evidence *about* a file
 /// under review.
 ///
 /// Matching is exact string equality between the effect's workspace-relative
@@ -818,7 +818,7 @@ fn project_changed_file(file: &FileChange) -> ChangedFile {
         hunks,
         // Binary wins when git reported both, which it does not: git either
         // declines to diff a file or hands over bytes. The order encodes that
-        // "git said binary" is a stronger statement than "smed could not
+        // "git said binary" is a stronger statement than "mjolnr could not
         // decode what git said".
         content: if file.binary {
             FileContent::Binary
@@ -1435,8 +1435,8 @@ mod tests {
         assert_eq!(state.branch.as_deref(), Some("main"));
         assert_eq!(state.index_revision.as_deref(), Some("tree789"));
         assert_eq!(state.staged_files, vec!["src/lib.rs".to_owned()]);
-        // smed ran the git invocation itself and re-read the result.
-        assert_eq!(state.trust, TrustClass::SmedGoverned);
+        // mjolnr ran the git invocation itself and re-read the result.
+        assert_eq!(state.trust, TrustClass::MjolnrGoverned);
         assert_eq!(
             state.freshness,
             RepositoryFreshness::CapturedAt {
@@ -1483,7 +1483,7 @@ mod tests {
     }
 
     /// The qualifier travels with the counts. A surface that renders `Synced`
-    /// without it is claiming currency smed never had — which is why the
+    /// without it is claiming currency mjolnr never had — which is why the
     /// timestamp reaches the wire on the same projection.
     #[test]
     fn the_as_of_marker_reaches_the_wire_beside_the_counts() {
@@ -1521,7 +1521,7 @@ mod tests {
     fn an_unreadable_repository_never_renders_as_a_clean_one() {
         // The failure this guards: `Unavailable` collapsing into an empty
         // projection would show branch `None`, zero dirty files, and no
-        // conflicts — a description of a clean repository, for one smed could
+        // conflicts — a description of a clean repository, for one mjolnr could
         // not read at all.
         let state = project_repository_state(&RepositoryView::Unavailable {
             code: ReasonCode::WorkspaceCapabilityUnavailable,

@@ -9,12 +9,12 @@ use std::process::{Command, Stdio};
 
 use super::error::RepositoryError;
 
-/// Largest stdout smed keeps from one invocation. `git status` on a very large
+/// Largest stdout mjolnr keeps from one invocation. `git status` on a very large
 /// tree is the realistic producer; the cap turns that into bounded truncation
 /// rather than unbounded memory (AGENTS.md §5).
 pub(super) const MAX_GIT_STDOUT_BYTES: usize = 1 << 20;
 
-/// Largest stderr smed keeps. Failure text is carried to the human verbatim,
+/// Largest stderr mjolnr keeps. Failure text is carried to the human verbatim,
 /// so it is bounded too.
 const MAX_GIT_STDERR_BYTES: usize = 8 << 10;
 
@@ -44,7 +44,7 @@ pub(super) fn run(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         // A git subprocess has no business inheriting provider credentials,
-        // and `GIT_*` variables from smed's own environment would silently
+        // and `GIT_*` variables from mjolnr's own environment would silently
         // redirect the operation. Clear, then add back only what is sanitized.
         .env_clear()
         .envs(crate::core::process::sanitized_environment())
@@ -145,7 +145,7 @@ fn bounded(raw: &[u8], limit: usize) -> String {
         end -= 1;
     }
     let mut truncated = text[..end].to_owned();
-    truncated.push_str("\n[truncated by smed: git output exceeded its bound]");
+    truncated.push_str("\n[truncated by mjolnr: git output exceeded its bound]");
     truncated
 }
 
@@ -157,7 +157,7 @@ mod tests {
     fn oversized_output_is_truncated_with_an_explicit_marker() {
         let raw = "x".repeat(MAX_GIT_STDOUT_BYTES + 10).into_bytes();
         let bounded = bounded(&raw, MAX_GIT_STDOUT_BYTES);
-        assert!(bounded.contains("[truncated by smed"));
+        assert!(bounded.contains("[truncated by mjolnr"));
         assert!(bounded.len() < MAX_GIT_STDOUT_BYTES + 100);
     }
 

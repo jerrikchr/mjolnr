@@ -8,18 +8,18 @@
 
 use tempfile::tempdir;
 
-use smed::context::DiscoveryLimits;
-use smed::context::plugins::PluginCatalog;
-use smed::core::context::SkillScope;
-use smed::core::error::ReasonCode;
-use smed::core::plugin::{
+use mjolnr::context::DiscoveryLimits;
+use mjolnr::context::plugins::PluginCatalog;
+use mjolnr::core::context::SkillScope;
+use mjolnr::core::error::ReasonCode;
+use mjolnr::core::plugin::{
     MAX_PLUGIN_CREDENTIALS, MAX_PLUGIN_TOOLS, PLUGIN_PROTOCOL_VERSION, PluginHook, PluginManifest,
 };
 
 const VALID_PLUGIN: &str = "name: acme.deploy
 version: 1.0.0
 publisher: acme-corp
-description: Continuous deployment plugin for smed.
+description: Continuous deployment plugin for mjolnr.
 protocol_version: 1
 run:
   program: node
@@ -44,7 +44,7 @@ views:
   - id: deployments
     title: Deployments
     view_type: table
-source_url: https://github.com/acme/smed-deploy
+source_url: https://github.com/acme/mjolnr-deploy
 ";
 
 #[test]
@@ -229,7 +229,7 @@ fn bounds_on_tools_and_credentials_are_enforced() {
 #[test]
 fn discovery_scans_and_reports_diagnostics_on_malformed_plugin() {
     let workspace = tempdir().expect("tempdir");
-    let plugins_dir = workspace.path().join(".smed").join("plugins");
+    let plugins_dir = workspace.path().join(".mjolnr").join("plugins");
     std::fs::create_dir_all(&plugins_dir).expect("create plugins dir");
 
     // Write one valid plugin

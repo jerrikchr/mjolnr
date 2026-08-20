@@ -12,19 +12,19 @@ use std::process::{Command, Stdio};
 use std::sync::Arc;
 use std::time::Duration;
 
-use smed::core::command::{ApprovalDecision, SmedCommand};
-use smed::core::error::ReasonCode;
-use smed::core::event::{FinishReason, SessionId, SmedEvent};
-use smed::core::message::{ToolOutcome, ToolResult};
-use smed::core::model::{ModelId, ProviderId};
-use smed::core::policy::PolicyMode;
-use smed::core::provider::Provider;
-use smed::core::runtime::{RuntimeSubscription, SmedRuntime};
-use smed::core::store::EventStore;
-use smed::providers::fake::{FakeProvider, FakeScript};
-use smed::runtime::Runtime;
-use smed::runtime::subagent::cleanup_orphans;
-use smed::store::memory::InMemoryEventStore;
+use mjolnr::core::command::{ApprovalDecision, MjolnrCommand};
+use mjolnr::core::error::ReasonCode;
+use mjolnr::core::event::{FinishReason, MjolnrEvent, SessionId};
+use mjolnr::core::message::{ToolOutcome, ToolResult};
+use mjolnr::core::model::{ModelId, ProviderId};
+use mjolnr::core::policy::PolicyMode;
+use mjolnr::core::provider::Provider;
+use mjolnr::core::runtime::{MjolnrRuntime, RuntimeSubscription};
+use mjolnr::core::store::EventStore;
+use mjolnr::providers::fake::{FakeProvider, FakeScript};
+use mjolnr::runtime::Runtime;
+use mjolnr::runtime::subagent::cleanup_orphans;
+use mjolnr::store::memory::InMemoryEventStore;
 use tempfile::TempDir;
 
 const DEADLINE: Duration = Duration::from_secs(30);
@@ -43,20 +43,20 @@ impl Harness {
         let runtime = Runtime::spawn(vec![provider], Arc::clone(&store) as Arc<dyn EventStore>);
 
         runtime
-            .dispatch(SmedCommand::OpenProject {
+            .dispatch(MjolnrCommand::OpenProject {
                 root: repository.path().to_path_buf(),
             })
             .await
             .expect("open project");
         runtime
-            .dispatch(SmedCommand::CreateSession {
+            .dispatch(MjolnrCommand::CreateSession {
                 provider: ProviderId::new(FakeProvider::ID),
                 model: ModelId::new(FakeProvider::MODEL),
             })
             .await
             .expect("create session");
         runtime
-            .dispatch(SmedCommand::SetPolicy { mode: policy })
+            .dispatch(MjolnrCommand::SetPolicy { mode: policy })
             .await
             .expect("set policy");
         wait_ready(&runtime, policy).await;
@@ -93,12 +93,12 @@ async fn wait_ready(runtime: &Runtime, policy: PolicyMode) {
 async fn approve_spawn(
     runtime: &Runtime,
     directive: &str,
-) -> (RuntimeSubscription, Vec<SmedEvent>) {
+) -> (RuntimeSubscription, Vec<MjolnrEvent>) {
     let mut events = runtime.subscribe();
     runtime
-        .dispatch(SmedCommand::SendUserMessage {
+        .dispatch(MjolnrCommand::SendUserMessage {
             text: directive.to_owned(),
-            source: smed::core::directive::DirectiveSource::Human,
+            source: mjolnr::core::directive::DirectiveSource::Human,
         })
         .await
         .expect("send directive");
@@ -108,7 +108,7 @@ async fn approve_spawn(
         loop {
             let event = events.recv().await.expect("event feed remains open");
             let approval = match &event {
-                SmedEvent::ToolProposed {
+                MjolnrEvent::ToolProposed {
                     approval: Some(approval),
                     call,
                     ..
@@ -125,7 +125,7 @@ async fn approve_spawn(
     .expect("spawn proposal arrives");
 
     runtime
-        .dispatch(SmedCommand::ResolveApproval {
+        .dispatch(MjolnrCommand::ResolveApproval {
             approval,
             decision: ApprovalDecision::ApproveOnce,
         })
@@ -137,8 +137,8 @@ async fn approve_spawn(
 /// Poll the snapshot until `ready`, or give up loudly.
 async fn settle(
     runtime: &Runtime,
-    ready: impl Fn(&smed::core::runtime::RuntimeSnapshot) -> bool,
-) -> smed::core::runtime::RuntimeSnapshot {
+    ready: impl Fn(&mjolnr::core::runtime::RuntimeSnapshot) -> bool,
+) -> mjolnr::core::runtime::RuntimeSnapshot {
     for _ in 0..400 {
         let snapshot = runtime.snapshot();
         if ready(&snapshot) {
@@ -153,12 +153,12 @@ async fn settle(
 ///
 /// Deliberately does not approve anything: used where the point is that no
 /// approval was needed, or that the run refused before asking for one.
-async fn run_to_completion(runtime: &Runtime, directive: &str) -> Vec<SmedEvent> {
+async fn run_to_completion(runtime: &Runtime, directive: &str) -> Vec<MjolnrEvent> {
     let mut events = runtime.subscribe();
     runtime
-        .dispatch(SmedCommand::SendUserMessage {
+        .dispatch(MjolnrCommand::SendUserMessage {
             text: directive.to_owned(),
-            source: smed::core::directive::DirectiveSource::Human,
+            source: mjolnr::core::directive::DirectiveSource::Human,
         })
         .await
         .expect("send directive");
@@ -168,7 +168,7 @@ async fn run_to_completion(runtime: &Runtime, directive: &str) -> Vec<SmedEvent>
             let event = events.recv().await.expect("event feed remains open");
             let terminal = matches!(
                 event,
-                SmedEvent::RunFinished { .. } | SmedEvent::RunFailed { .. }
+                MjolnrEvent::RunFinished { .. } | MjolnrEvent::RunFailed { .. }
             );
             seen.push(event);
             if terminal {
@@ -180,14 +180,14 @@ async fn run_to_completion(runtime: &Runtime, directive: &str) -> Vec<SmedEvent>
     .expect("the run settles")
 }
 
-async fn run_spawn(runtime: &Runtime, directive: &str) -> Vec<SmedEvent> {
+async fn run_spawn(runtime: &Runtime, directive: &str) -> Vec<MjolnrEvent> {
     let (mut events, mut observed) = approve_spawn(runtime, directive).await;
     tokio::time::timeout(DEADLINE, async {
         loop {
             let event = events.recv().await.expect("event feed remains open");
             let terminal = matches!(
                 event,
-                SmedEvent::RunFinished { .. } | SmedEvent::RunFailed { .. }
+                MjolnrEvent::RunFinished { .. } | MjolnrEvent::RunFailed { .. }
             );
             observed.push(event);
             if terminal {
@@ -204,10 +204,10 @@ fn repository() -> TempDir {
     let repository = tempfile::tempdir().expect("temporary repository");
     std::fs::write(repository.path().join("README.md"), "base\n").expect("seed file");
     git(repository.path(), &["init", "-q"]);
-    git(repository.path(), &["config", "user.name", "smed Test"]);
+    git(repository.path(), &["config", "user.name", "mjolnr Test"]);
     git(
         repository.path(),
-        &["config", "user.email", "smed-test@localhost"],
+        &["config", "user.email", "mjolnr-test@localhost"],
     );
     git(repository.path(), &["add", "README.md"]);
     git(repository.path(), &["commit", "-q", "-m", "seed"]);
@@ -229,11 +229,11 @@ fn git(root: &Path, arguments: &[&str]) -> String {
     String::from_utf8_lossy(&output.stdout).into_owned()
 }
 
-fn spawn_result(events: &[SmedEvent]) -> &ToolResult {
+fn spawn_result(events: &[MjolnrEvent]) -> &ToolResult {
     events
         .iter()
         .find_map(|event| match event {
-            SmedEvent::ToolCompleted { name, result, .. } if name == "spawn_subagent" => {
+            MjolnrEvent::ToolCompleted { name, result, .. } if name == "spawn_subagent" => {
                 Some(result)
             }
             _ => None,
@@ -241,11 +241,11 @@ fn spawn_result(events: &[SmedEvent]) -> &ToolResult {
         .expect("spawn result")
 }
 
-fn spawned(events: &[SmedEvent]) -> Vec<(SessionId, String, PathBuf, PolicyMode)> {
+fn spawned(events: &[MjolnrEvent]) -> Vec<(SessionId, String, PathBuf, PolicyMode)> {
     events
         .iter()
         .filter_map(|event| match event {
-            SmedEvent::SubagentSpawned {
+            MjolnrEvent::SubagentSpawned {
                 child,
                 branch,
                 worktree,
@@ -271,7 +271,7 @@ async fn two_children_use_isolated_worktrees_and_settle_once() {
             .iter()
             .filter(|event| matches!(
                 event,
-                SmedEvent::ToolCompleted { name, .. } if name == "spawn_subagent"
+                MjolnrEvent::ToolCompleted { name, .. } if name == "spawn_subagent"
             ))
             .count(),
         1,
@@ -345,12 +345,12 @@ async fn child_policy_is_clamped_to_the_parent() {
 
 #[tokio::test]
 async fn an_envelope_wider_than_the_session_is_refused_at_arm_time() {
-    use smed::core::envelope::SpawnEnvelope;
+    use mjolnr::core::envelope::SpawnEnvelope;
 
     let harness = Harness::new(PolicyMode::Ask).await;
     harness
         .runtime
-        .dispatch(SmedCommand::ArmSpawnEnvelope {
+        .dispatch(MjolnrCommand::ArmSpawnEnvelope {
             envelope: Box::new(SpawnEnvelope {
                 ceiling: PolicyMode::FullAuto,
                 max_children: 8,
@@ -383,12 +383,12 @@ async fn an_envelope_wider_than_the_session_is_refused_at_arm_time() {
 
 #[tokio::test]
 async fn a_spawn_inside_the_envelope_needs_no_approval_and_is_charged() {
-    use smed::core::envelope::SpawnEnvelope;
+    use mjolnr::core::envelope::SpawnEnvelope;
 
     let harness = Harness::new(PolicyMode::WorkspaceWrite).await;
     harness
         .runtime
-        .dispatch(SmedCommand::ArmSpawnEnvelope {
+        .dispatch(MjolnrCommand::ArmSpawnEnvelope {
             envelope: Box::new(SpawnEnvelope {
                 ceiling: PolicyMode::WorkspaceWrite,
                 max_children: 8,
@@ -407,7 +407,7 @@ async fn a_spawn_inside_the_envelope_needs_no_approval_and_is_charged() {
     let observed = run_to_completion(&harness.runtime, "spawn-two:").await;
 
     let drawn = observed.iter().find_map(|event| match event {
-        SmedEvent::SpawnEnvelopeDrawn {
+        MjolnrEvent::SpawnEnvelopeDrawn {
             children,
             children_remaining,
             ..
@@ -424,12 +424,12 @@ async fn a_spawn_inside_the_envelope_needs_no_approval_and_is_charged() {
 
 #[tokio::test]
 async fn a_draw_beyond_the_envelope_is_refused_with_a_typed_code() {
-    use smed::core::envelope::SpawnEnvelope;
+    use mjolnr::core::envelope::SpawnEnvelope;
 
     let harness = Harness::new(PolicyMode::WorkspaceWrite).await;
     harness
         .runtime
-        .dispatch(SmedCommand::ArmSpawnEnvelope {
+        .dispatch(MjolnrCommand::ArmSpawnEnvelope {
             envelope: Box::new(SpawnEnvelope {
                 ceiling: PolicyMode::WorkspaceWrite,
                 max_children: 8,
@@ -449,7 +449,7 @@ async fn a_draw_beyond_the_envelope_is_refused_with_a_typed_code() {
     // would be the previewability problem coming back through the door the
     // envelope showed it out of.
     let refusal = observed.iter().find_map(|event| match event {
-        SmedEvent::ToolCompleted { name, result, .. } if name == "spawn_subagent" => {
+        MjolnrEvent::ToolCompleted { name, result, .. } if name == "spawn_subagent" => {
             Some(result.clone())
         }
         _ => None,
@@ -467,7 +467,7 @@ async fn a_draw_beyond_the_envelope_is_refused_with_a_typed_code() {
 
 #[tokio::test]
 async fn the_aggregate_turn_budget_bites_before_the_child_count_does() {
-    use smed::core::envelope::SpawnEnvelope;
+    use mjolnr::core::envelope::SpawnEnvelope;
 
     // Spend is the binding constraint, not headcount: a fleet of cheap children
     // is still a fleet. Eight children remain, but the two this spawn wants
@@ -475,7 +475,7 @@ async fn the_aggregate_turn_budget_bites_before_the_child_count_does() {
     let harness = Harness::new(PolicyMode::WorkspaceWrite).await;
     harness
         .runtime
-        .dispatch(SmedCommand::ArmSpawnEnvelope {
+        .dispatch(MjolnrCommand::ArmSpawnEnvelope {
             envelope: Box::new(SpawnEnvelope {
                 ceiling: PolicyMode::WorkspaceWrite,
                 max_children: 8,
@@ -494,7 +494,7 @@ async fn the_aggregate_turn_budget_bites_before_the_child_count_does() {
     let refusal = events
         .iter()
         .find_map(|event| match event {
-            SmedEvent::ToolCompleted { name, result, .. } if name == "spawn_subagent" => {
+            MjolnrEvent::ToolCompleted { name, result, .. } if name == "spawn_subagent" => {
                 Some(result.clone())
             }
             _ => None,
@@ -514,8 +514,8 @@ async fn the_aggregate_turn_budget_bites_before_the_child_count_does() {
 
 #[tokio::test]
 async fn the_ledger_reconstructs_an_envelopes_whole_life() {
-    use smed::core::envelope::SpawnEnvelope;
-    use smed::core::event::EnvelopeEnd;
+    use mjolnr::core::envelope::SpawnEnvelope;
+    use mjolnr::core::event::EnvelopeEnd;
 
     // The audit's job is to answer "what did this human authorise, and what was
     // done with it?" — from the record alone, without the in-memory state that
@@ -523,7 +523,7 @@ async fn the_ledger_reconstructs_an_envelopes_whole_life() {
     let harness = Harness::new(PolicyMode::WorkspaceWrite).await;
     harness
         .runtime
-        .dispatch(SmedCommand::ArmSpawnEnvelope {
+        .dispatch(MjolnrCommand::ArmSpawnEnvelope {
             envelope: Box::new(SpawnEnvelope {
                 ceiling: PolicyMode::WorkspaceWrite,
                 max_children: 2,
@@ -548,7 +548,7 @@ async fn the_ledger_reconstructs_an_envelopes_whole_life() {
         .await
         .expect("read the ledger");
     let armed = stored.iter().find_map(|entry| match &entry.event {
-        SmedEvent::SpawnEnvelopeArmed {
+        MjolnrEvent::SpawnEnvelopeArmed {
             max_children,
             ceiling,
             ..
@@ -558,7 +558,7 @@ async fn the_ledger_reconstructs_an_envelopes_whole_life() {
     assert_eq!(armed, Some((2, PolicyMode::WorkspaceWrite)));
 
     let drawn = stored.iter().find_map(|entry| match &entry.event {
-        SmedEvent::SpawnEnvelopeDrawn {
+        MjolnrEvent::SpawnEnvelopeDrawn {
             children,
             children_remaining,
             ..
@@ -568,7 +568,7 @@ async fn the_ledger_reconstructs_an_envelopes_whole_life() {
     assert_eq!(drawn, Some((2, 0)));
 
     let cleared = stored.iter().find_map(|entry| match &entry.event {
-        SmedEvent::SpawnEnvelopeCleared { reason, .. } => Some(*reason),
+        MjolnrEvent::SpawnEnvelopeCleared { reason, .. } => Some(*reason),
         _ => None,
     });
     assert_eq!(
@@ -580,7 +580,7 @@ async fn the_ledger_reconstructs_an_envelopes_whole_life() {
 
 #[tokio::test]
 async fn an_envelope_lapses_and_the_next_spawn_asks_again() {
-    use smed::core::envelope::SpawnEnvelope;
+    use mjolnr::core::envelope::SpawnEnvelope;
 
     // Property 4: expiry is disclosed and returns the session to asking. An
     // envelope that quietly kept authorising past its turn budget would be the
@@ -588,7 +588,7 @@ async fn an_envelope_lapses_and_the_next_spawn_asks_again() {
     let harness = Harness::new(PolicyMode::WorkspaceWrite).await;
     harness
         .runtime
-        .dispatch(SmedCommand::ArmSpawnEnvelope {
+        .dispatch(MjolnrCommand::ArmSpawnEnvelope {
             envelope: Box::new(SpawnEnvelope {
                 ceiling: PolicyMode::WorkspaceWrite,
                 max_children: 8,
@@ -616,7 +616,7 @@ async fn an_envelope_lapses_and_the_next_spawn_asks_again() {
     assert!(
         observed.iter().any(|event| matches!(
             event,
-            SmedEvent::ToolProposed {
+            MjolnrEvent::ToolProposed {
                 approval: Some(_),
                 ..
             }
@@ -627,12 +627,12 @@ async fn an_envelope_lapses_and_the_next_spawn_asks_again() {
 
 #[tokio::test]
 async fn narrowing_the_policy_clears_an_envelope_it_no_longer_justifies() {
-    use smed::core::envelope::SpawnEnvelope;
+    use mjolnr::core::envelope::SpawnEnvelope;
 
     let harness = Harness::new(PolicyMode::WorkspaceWrite).await;
     harness
         .runtime
-        .dispatch(SmedCommand::ArmSpawnEnvelope {
+        .dispatch(MjolnrCommand::ArmSpawnEnvelope {
             envelope: Box::new(SpawnEnvelope {
                 ceiling: PolicyMode::WorkspaceWrite,
                 max_children: 8,
@@ -648,7 +648,7 @@ async fn narrowing_the_policy_clears_an_envelope_it_no_longer_justifies() {
 
     harness
         .runtime
-        .dispatch(SmedCommand::SetPolicy {
+        .dispatch(MjolnrCommand::SetPolicy {
             mode: PolicyMode::ReadOnly,
         })
         .await
@@ -682,7 +682,7 @@ async fn a_child_reading_its_own_record_cannot_see_its_parents() {
     let window = child_events
         .iter()
         .find_map(|stored| match &stored.event {
-            SmedEvent::ToolCompleted { name, result, .. } if name == "query_session" => {
+            MjolnrEvent::ToolCompleted { name, result, .. } if name == "query_session" => {
                 Some(result.content.clone())
             }
             _ => None,
@@ -699,7 +699,7 @@ async fn a_child_reading_its_own_record_cannot_see_its_parents() {
         "the parent's spawn proposal must not appear in the child's window:\n{window}"
     );
     assert!(
-        window.contains("You are a smed subagent"),
+        window.contains("You are a mjolnr subagent"),
         "the child should still see its own session — the window is scoped, not empty:\n{window}"
     );
     assert!(
@@ -737,7 +737,7 @@ async fn cancelling_the_parent_cancels_and_cleans_the_child() {
 
     let worktree = tokio::time::timeout(DEADLINE, async {
         loop {
-            if let SmedEvent::SubagentSpawned { worktree, .. } =
+            if let MjolnrEvent::SubagentSpawned { worktree, .. } =
                 events.recv().await.expect("event feed remains open")
             {
                 break PathBuf::from(worktree);
@@ -750,14 +750,14 @@ async fn cancelling_the_parent_cancels_and_cleans_the_child() {
 
     harness
         .runtime
-        .dispatch(SmedCommand::CancelRun)
+        .dispatch(MjolnrCommand::CancelRun)
         .await
         .expect("cancel parent");
     let reason = tokio::time::timeout(DEADLINE, async {
         loop {
             match events.recv().await.expect("event feed remains open") {
-                SmedEvent::RunFinished { reason, .. } => break reason,
-                SmedEvent::RunFailed { code, detail, .. } => {
+                MjolnrEvent::RunFinished { reason, .. } => break reason,
+                MjolnrEvent::RunFailed { code, detail, .. } => {
                     panic!("cancellation failed as {code}: {detail}")
                 }
                 _ => {}
@@ -777,12 +777,12 @@ async fn cancelling_the_parent_cancels_and_cleans_the_child() {
 #[tokio::test]
 async fn orphan_cleanup_removes_dead_owners_but_preserves_live_ones() {
     let repository = repository();
-    let namespace = std::env::temp_dir().join("smed-worktrees");
+    let namespace = std::env::temp_dir().join("mjolnr-worktrees");
     std::fs::create_dir_all(&namespace).expect("worktree namespace");
     let dead_path = namespace.join(SessionId::new().to_string());
     let live_path = namespace.join(SessionId::new().to_string());
-    let dead_branch = format!("smed/test-dead-{}", SessionId::new());
-    let live_branch = format!("smed/test-live-{}", SessionId::new());
+    let dead_branch = format!("mjolnr/test-dead-{}", SessionId::new());
+    let live_branch = format!("mjolnr/test-live-{}", SessionId::new());
 
     git(
         repository.path(),
@@ -856,30 +856,30 @@ async fn child_run_commands_are_refused_not_panicked() {
     let runtime = Runtime::spawn(Vec::new(), Arc::clone(&store) as Arc<dyn EventStore>);
 
     let commands = [
-        SmedCommand::CreateWorktree {
+        MjolnrCommand::CreateWorktree {
             name: "child".to_owned(),
             base_revision: "HEAD".to_owned(),
         },
-        SmedCommand::ForkWork {
+        MjolnrCommand::ForkWork {
             name: "child".to_owned(),
             base_revision: "HEAD".to_owned(),
         },
-        SmedCommand::StartChild {
+        MjolnrCommand::StartChild {
             name: "child".to_owned(),
             directive: "implement the feature".to_owned(),
             policy_ceiling: None,
             budget: None,
         },
-        SmedCommand::CancelChild {
+        MjolnrCommand::CancelChild {
             name: "child".to_owned(),
         },
-        SmedCommand::PreserveBranch {
+        MjolnrCommand::PreserveBranch {
             name: "child".to_owned(),
         },
-        SmedCommand::SettleChild {
+        MjolnrCommand::SettleChild {
             name: "child".to_owned(),
         },
-        SmedCommand::DiscardSettledWorktree {
+        MjolnrCommand::DiscardSettledWorktree {
             name: "child".to_owned(),
         },
     ];

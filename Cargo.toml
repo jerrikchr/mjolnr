@@ -18,7 +18,7 @@ strip = "symbols"
 panic = "abort"
 
 [lib]
-name = "smed"
+name = "mjolnr"
 path = "src/lib.rs"
 
 [[bin]]
@@ -29,7 +29,7 @@ path = "src/main.rs"
 async-trait = "0.1.89"
 # Image payloads on the wire. Every image-capable provider
 # takes base64 — as a bare string, or wrapped in a `data:` URI. Already present
-# transitively; named here because smed calls it directly and a transitive
+# transitively; named here because mjolnr calls it directly and a transitive
 # dependency is not a contract.
 base64 = "0.22.1"
 clap = { version = "4.6.1", features = ["derive"] }
@@ -75,7 +75,7 @@ sha2 = "0.11.0"
 similar = "3.1.1"
 # Syntax highlighting for transcript code blocks and diffs (Phase 20). Minimal
 # feature set: binary-dump default syntaxes plus the pure-Rust fancy-regex
-# engine — no oniguruma C dependency, no theme/assets loading (smed builds its
+# engine — no oniguruma C dependency, no theme/assets loading (mjolnr builds its
 # own palette), no html or yaml/plist loaders.
 syntect = { version = "5.3.0", default-features = false, features = ["parsing", "default-syntaxes", "regex-fancy"] }
 thiserror = "2.0.18"

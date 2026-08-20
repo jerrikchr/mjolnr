@@ -1,4 +1,4 @@
-//! Responsive Workspace Shell for smed.
+//! Responsive Workspace Shell for mjolnr.
 //!
 //! Provides spatial navigation, top navigation tabs, left work rail, primary
 //! surfaces, right attention queue rail, and telemetry bottom status line.

@@ -7,7 +7,7 @@
 
 ## Context
 
-An open planning question asked whether the map model and smed's plan family
+An open planning question asked whether the map model and mjolnr's plan family
 should "merge or coexist", and recorded why the question was open: "Nothing has
 been designed that tests whether the plan family's revision and stage model fits
 a frontier-and-fog map."
@@ -83,12 +83,12 @@ them. `AGENTS.md`'s durability rules make the second direction the expensive one
   projection of recorded state rather than a second source of truth". A merged
   model would have made the board's own storage the question; a projection makes
   it a non-question.
-- **The property that makes this smed's.** Every hosted board asks a human or a
-  model what comes next; smed derives it from recorded state and shows its
+- **The property that makes this mjolnr's.** Every hosted board asks a human or a
+  model what comes next; mjolnr derives it from recorded state and shows its
   working. A derivation needs recorded state underneath it that it did not
   itself author.
 - **Trust classes stay separate.** Imported work items are
-  `externalUnverified`; plan and decision state is smed-owned. One merged model
+  `externalUnverified`; plan and decision state is mjolnr-owned. One merged model
   would have to carry a trust class per node anyway — the projection carries it
   per source, which is where it actually comes from.
 

@@ -1,21 +1,21 @@
 [package]
-name = "smed-desktop"
+name = "mjolnr-desktop"
 version = "0.0.0"
-description = "Tauri 2 desktop client for smed"
+description = "Tauri 2 desktop client for mjolnr"
 edition = "2024"
 license = "Apache-2.0"
 # See the root manifest: publishing is a separate, still-open decision.
 publish = false
 
 [lib]
-name = "smed_desktop_lib"
+name = "mjolnr_desktop_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
 tauri-build = { version = "2.0.5", features = [] }
 
 [dependencies]
-smed = { path = "../../" }
+mjolnr = { path = "../../" }
 tauri = { version = "2.1.1", features = [] }
 tauri-plugin-dialog = "2"
 serde = { version = "1.0.228", features = ["derive"] }

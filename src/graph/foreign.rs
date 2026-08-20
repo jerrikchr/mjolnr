@@ -1,6 +1,6 @@
 //! Syntax extraction for source languages other than Rust.
 //!
-//! One reason to change: the tree-sitter node shapes smed understands for
+//! One reason to change: the tree-sitter node shapes mjolnr understands for
 //! foreign-language imports and definitions. This module deliberately stops
 //! at syntax. It does not run a compiler, load a language server, or infer a
 //! dependency from a name that was not present in the source tree.

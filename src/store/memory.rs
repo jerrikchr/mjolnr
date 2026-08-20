@@ -31,7 +31,7 @@ use time::OffsetDateTime;
 use uuid::Uuid;
 
 use crate::core::checkpoint::SessionCheckpoint;
-use crate::core::event::{EventId, SessionId, SmedEvent, StoredEvent};
+use crate::core::event::{EventId, MjolnrEvent, SessionId, StoredEvent};
 use crate::core::store::{
     EventStore, ProjectId, SessionLease, SessionStatus, SessionSummary, StoreError,
     StoredCheckpoint, WorkspaceSearchFilter, WorkspaceSearchPage,
@@ -177,7 +177,7 @@ impl EventStore for InMemoryEventStore {
             .collect())
     }
 
-    async fn append(&self, event: SmedEvent) -> Result<StoredEvent, StoreError> {
+    async fn append(&self, event: MjolnrEvent) -> Result<StoredEvent, StoreError> {
         debug_assert!(
             event.is_durable(),
             "ephemeral events must not reach the store"
@@ -328,10 +328,10 @@ fn active_model(
     events: &[StoredEvent],
 ) -> Option<(crate::core::model::ProviderId, crate::core::model::ModelId)> {
     events.iter().rev().find_map(|stored| match &stored.event {
-        SmedEvent::SessionCreated {
+        MjolnrEvent::SessionCreated {
             provider, model, ..
         }
-        | SmedEvent::ModelChanged {
+        | MjolnrEvent::ModelChanged {
             provider, model, ..
         } => Some((provider.clone(), model.clone())),
         _ => None,
@@ -344,8 +344,8 @@ mod tests {
     use crate::core::event::{FinishReason, RunId};
     use crate::core::model::{ModelId, ProviderId};
 
-    fn session_created(session: SessionId) -> SmedEvent {
-        SmedEvent::SessionCreated {
+    fn session_created(session: SessionId) -> MjolnrEvent {
+        MjolnrEvent::SessionCreated {
             session,
             provider: ProviderId::new("fake"),
             model: ModelId::new("fake-1"),
@@ -381,7 +381,7 @@ mod tests {
 
         let a = store.append(session_created(first)).await.expect("append");
         let b = store
-            .append(SmedEvent::RunStarted {
+            .append(MjolnrEvent::RunStarted {
                 session: first,
                 run: RunId::new(),
             })
@@ -406,11 +406,11 @@ mod tests {
             .await
             .expect("append");
         store
-            .append(SmedEvent::RunStarted { session, run })
+            .append(MjolnrEvent::RunStarted { session, run })
             .await
             .expect("append");
         store
-            .append(SmedEvent::RunFinished {
+            .append(MjolnrEvent::RunFinished {
                 session,
                 run,
                 reason: FinishReason::Stop,
@@ -477,7 +477,7 @@ mod tests {
             .await
             .expect("append");
         store
-            .append(SmedEvent::RunStarted {
+            .append(MjolnrEvent::RunStarted {
                 session,
                 run: RunId::new(),
             })
@@ -515,7 +515,7 @@ mod tests {
             .expect("checkpoint");
 
         store
-            .append(SmedEvent::RunStarted {
+            .append(MjolnrEvent::RunStarted {
                 session,
                 run: RunId::new(),
             })

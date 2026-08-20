@@ -15,8 +15,8 @@
 //!    charset GitHub itself allows, so a caller's text cannot walk the path into
 //!    another endpoint.
 //! 3. **The response is bounded while it is read**, not after. A remote decides
-//!    how many bytes to send, so the cap is applied to the stream — a body smed
-//!    would refuse is a body smed never finishes downloading.
+//!    how many bytes to send, so the cap is applied to the stream — a body mjolnr
+//!    would refuse is a body mjolnr never finishes downloading.
 //! 4. **Every outcome is typed.** A rejected credential, a rate limit, a missing
 //!    issue, and a transport failure are four different things a human does four
 //!    different things about, and `Result<_, String>` erases all of it.
@@ -31,7 +31,7 @@ use super::{IntegrationError, IntegrationId, RemoteChangeRequest, RemoteTask, Ta
 /// uses — no test in this repository talks to the network (AGENTS.md §7).
 const DEFAULT_BASE_URL: &str = "https://api.github.com";
 
-/// How many bytes of a response smed will read before refusing it.
+/// How many bytes of a response mjolnr will read before refusing it.
 ///
 /// Generous next to a real issue and small next to what a hostile or broken
 /// remote can send. Applied while reading, so an oversized body costs the cap,
@@ -446,7 +446,7 @@ impl TaskAddress {
     }
 }
 
-/// The fields smed reads from an issue. Everything else GitHub sends is
+/// The fields mjolnr reads from an issue. Everything else GitHub sends is
 /// ignored by construction — `serde` skips unknown keys here deliberately,
 /// because a remote adding a field must not break a read.
 #[derive(serde::Deserialize)]
@@ -458,7 +458,7 @@ struct IssueResponse {
     html_url: String,
     updated_at: String,
     /// `"open"` or `"closed"`, and `Option` because a response that omits it is
-    /// a response smed did not learn the state from — which is a real outcome
+    /// a response mjolnr did not learn the state from — which is a real outcome
     /// with its own name, not a reason to guess.
     state: Option<String>,
     /// Present only on a pull request. `merged_at` is the only way to tell a
@@ -507,7 +507,7 @@ impl IssueResponse {
     /// work is outstanding, and defaulting to it would turn "we did not learn"
     /// into "we checked and it is open", durably, in the board's own record.
     /// The same applies to a state string GitHub might add later: an
-    /// unrecognised value is something smed did not understand, not something
+    /// unrecognised value is something mjolnr did not understand, not something
     /// it can round down to a state it likes.
     ///
     /// Contract (b) is the other half: a merged pull request is an *observed
@@ -532,7 +532,7 @@ impl IssueResponse {
 ///
 /// Chunk by chunk rather than `Response::bytes()`: the size a remote sends is
 /// the remote's choice, and buffering it all before checking would mean a
-/// hostile or broken endpoint decides how much memory smed spends. A declared
+/// hostile or broken endpoint decides how much memory mjolnr spends. A declared
 /// `Content-Length` is not trusted for this — it is a claim, and the check is
 /// against what actually arrives.
 async fn bounded_body(mut response: reqwest::Response) -> Result<Vec<u8>, IntegrationError> {
@@ -903,7 +903,7 @@ mod tests {
             .await,
             ImportedItemState::Unknown
         );
-        // A value this version of smed does not know. GitHub may add one; a
+        // A value this version of mjolnr does not know. GitHub may add one; a
         // value we cannot interpret is not a value we may round down.
         assert_eq!(
             state_from(issue_with(&serde_json::json!({"state": "draft-archived"}))).await,
@@ -1020,7 +1020,7 @@ mod tests {
     }
 
     /// The cap is applied while reading, so an oversized body costs the cap and
-    /// not the body. A remote decides how many bytes it sends; smed decides
+    /// not the body. A remote decides how many bytes it sends; mjolnr decides
     /// how many it will hold.
     #[tokio::test]
     async fn an_oversized_response_is_refused_rather_than_buffered_whole() {
@@ -1063,7 +1063,7 @@ mod tests {
 
     /// Every refusal this module can produce, checked for token material in one
     /// place. `Transport` is the one that matters: its text comes from a
-    /// dependency, so this is pinning `reqwest`'s behaviour, not smed's.
+    /// dependency, so this is pinning `reqwest`'s behaviour, not mjolnr's.
     #[tokio::test]
     async fn no_refusal_carries_token_material() {
         let mut errors = vec![
@@ -1110,7 +1110,7 @@ mod tests {
             .with_base_url(server.uri())
             .fetch_task("octocat/hello#13")
             .await
-            .expect("hostile text still reads — smed shows it, framed");
+            .expect("hostile text still reads — mjolnr shows it, framed");
         let framed = task.framed_for_model();
         assert!(framed.contains("untrusted data"));
         assert!(framed.contains("cannot approve a tool"));

@@ -76,7 +76,7 @@ impl PluginTransport {
         // Stderr must be drained, not merely piped: an unread pipe fills its
         // OS buffer (~64 KiB) and then blocks the plugin's next write to
         // stderr forever, which surfaces as a hung plugin. Drained line-wise
-        // and discarded — plugin diagnostics have no route into smed's own
+        // and discarded — plugin diagnostics have no route into mjolnr's own
         // output (stdout is the alternate screen) and no tracing subscriber
         // exists to file them yet.
         tokio::spawn(async move {

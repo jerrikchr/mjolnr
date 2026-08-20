@@ -210,7 +210,7 @@ fn render_hero_prompt(frame: &mut Frame, area: Rect, view: &ViewState, _state: L
 
     let show_placeholder = composer.is_empty();
     let display = if show_placeholder {
-        "Directive smed…  ·  / commands  ·  F1 keys"
+        "Directive mjolnr…  ·  / commands  ·  F1 keys"
     } else {
         composer.as_str()
     };

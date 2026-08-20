@@ -1,4 +1,4 @@
-//! Structured Plan Surface component for smed (Phase UX 3).
+//! Structured Plan Surface component for mjolnr (Phase UX 3).
 //!
 //! Visualizes structured plan execution steps in a 2-column split layout:
 //! - Left column: Step list with state badges ([ ], [▶], [✓], [✗], [⛔])
@@ -372,7 +372,7 @@ fn build_detail_lines(
         Line::from(Span::styled("Rationale:", theme::title())),
         Line::from(Span::styled(
             format!(
-                "  Step {} resolves target objectives under smed's governed execution policy.",
+                "  Step {} resolves target objectives under mjolnr's governed execution policy.",
                 step.number
             ),
             theme::text(),

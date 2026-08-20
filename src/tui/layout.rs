@@ -1,6 +1,6 @@
 //! Pure Ratatui rendering: view state in, frame out.
 //!
-//! smed's visual language is a cyber-noir mission-control console, but colour
+//! mjolnr's visual language is a cyber-noir mission-control console, but colour
 //! is operational rather than ornamental: cyan proposes, amber asks, phosphor
 //! confirms, and magenta refuses. Untrusted text is sanitised before it reaches
 //! the terminal buffer.
@@ -314,7 +314,7 @@ fn render_resume_advisor(frame: &mut Frame, area: Rect, view: &ViewState) {
 
 /// The recovery gate.
 ///
-/// Says exactly what smed knows and exactly what it does not. 's
+/// Says exactly what mjolnr knows and exactly what it does not. 's
 /// anti-pattern is inferring that an interrupted command failed; the wording
 /// here is the user-facing half of refusing to do that.
 fn render_recovery(frame: &mut Frame, area: Rect, view: &ViewState) {
@@ -334,7 +334,7 @@ fn render_recovery(frame: &mut Frame, area: Rect, view: &ViewState) {
     append_preview(&mut lines, &sanitize(&work.summary()), "", theme::text());
     lines.push(Line::from(""));
 
-    // The distinction that matters: whether smed can prove nothing happened.
+    // The distinction that matters: whether mjolnr can prove nothing happened.
     // Colour follows meaning — phosphor confirms, magenta refuses to.
     let (verdict, style) = if work.effect_is_certain() {
         (
@@ -493,7 +493,7 @@ fn render_composer(frame: &mut Frame, area: Rect, view: &ViewState) {
 
     let show_placeholder = composer.is_empty() && !view.snapshot.run_active && !blocked;
     let display = if show_placeholder {
-        "Directive smed…  ·  / commands  ·  F1 keys"
+        "Directive mjolnr…  ·  / commands  ·  F1 keys"
     } else {
         composer.as_str()
     };

@@ -1,4 +1,4 @@
-//! Translation from `ClientCommand` to runtime `SmedCommand`.
+//! Translation from `ClientCommand` to runtime `MjolnrCommand`.
 
 use std::path::PathBuf;
 
@@ -9,7 +9,7 @@ use crate::core::client::{
     MAX_REPOSITORY_PATH_BYTES, MAX_REPOSITORY_PATHS, MAX_REVIEW_NOTE_BYTES,
     MAX_REVIEW_THREADS_PER_REQUEST, MAX_SAVE_TEXT_BYTES,
 };
-use crate::core::command::{ApprovalId, SmedCommand};
+use crate::core::command::{ApprovalId, MjolnrCommand};
 use crate::core::directive::DirectiveSource;
 use crate::core::error::ReasonCode;
 use crate::core::event::SessionId;
@@ -22,11 +22,11 @@ fn map_save_file(
     path: &str,
     expected_digest: &str,
     text: &str,
-) -> Result<SmedCommand, ClientBridgeError> {
+) -> Result<MjolnrCommand, ClientBridgeError> {
     validate_workspace_file_path(path)?;
     validate_capture_digest(expected_digest)?;
     validate_save_text(text)?;
-    Ok(SmedCommand::SaveFile {
+    Ok(MjolnrCommand::SaveFile {
         path: path.to_owned(),
         expected_digest: expected_digest.to_owned(),
         text: text.to_owned(),
@@ -35,7 +35,7 @@ fn map_save_file(
 
 fn map_session_control_command(
     command: &ClientCommand,
-) -> Result<Option<SmedCommand>, ClientBridgeError> {
+) -> Result<Option<MjolnrCommand>, ClientBridgeError> {
     let mapped = match command {
         ClientCommand::CreateSession { provider, model } => {
             if provider.trim().is_empty() || model.trim().is_empty() {
@@ -44,52 +44,52 @@ fn map_session_control_command(
                     "a provider and model are required to create a session",
                 ));
             }
-            SmedCommand::CreateSession {
+            MjolnrCommand::CreateSession {
                 provider: crate::core::model::ProviderId::new(provider),
                 model: crate::core::model::ModelId::new(model),
             }
         }
-        ClientCommand::ResumeSession { session } => SmedCommand::ResumeSession {
+        ClientCommand::ResumeSession { session } => MjolnrCommand::ResumeSession {
             session: parse_session(session)?,
         },
-        ClientCommand::ResolveResume { choice } => SmedCommand::ResolveResume {
+        ClientCommand::ResolveResume { choice } => MjolnrCommand::ResolveResume {
             choice: (*choice).into(),
         },
         ClientCommand::SendMessage { text } => {
             if text.trim().is_empty() {
                 return Err(invalid("text", "an empty message is not a directive"));
             }
-            SmedCommand::SendUserMessage {
+            MjolnrCommand::SendUserMessage {
                 text: text.clone(),
                 source: DirectiveSource::Human,
             }
         }
-        ClientCommand::CancelRun => SmedCommand::CancelRun,
-        ClientCommand::ResolveApproval { approval, decision } => SmedCommand::ResolveApproval {
+        ClientCommand::CancelRun => MjolnrCommand::CancelRun,
+        ClientCommand::ResolveApproval { approval, decision } => MjolnrCommand::ResolveApproval {
             approval: parse_approval(approval)?,
             decision: (*decision).into(),
         },
-        ClientCommand::ResolveRecovery { decision } => SmedCommand::ResolveRecovery {
+        ClientCommand::ResolveRecovery { decision } => MjolnrCommand::ResolveRecovery {
             decision: (*decision).into(),
         },
-        ClientCommand::SetPolicy { policy } => SmedCommand::SetPolicy {
+        ClientCommand::SetPolicy { policy } => MjolnrCommand::SetPolicy {
             mode: (*policy).into(),
         },
-        ClientCommand::EndSession => SmedCommand::EndSession,
+        ClientCommand::EndSession => MjolnrCommand::EndSession,
         _ => return Ok(None),
     };
     Ok(Some(mapped))
 }
 
-pub(super) fn command_to_smed(
+pub(super) fn command_to_mjolnr(
     command: &ClientCommand,
-) -> Result<Option<SmedCommand>, ClientBridgeError> {
+) -> Result<Option<MjolnrCommand>, ClientBridgeError> {
     if let Some(session_cmd) = map_session_control_command(command)? {
         return Ok(Some(session_cmd));
     }
     let mapped = match command {
         ClientCommand::OpenProject { root } => map_open_project(root)?,
-        ClientCommand::RefreshRepository => SmedCommand::RefreshRepository,
+        ClientCommand::RefreshRepository => MjolnrCommand::RefreshRepository,
         ClientCommand::SaveFile {
             path,
             expected_digest,
@@ -137,7 +137,7 @@ pub(super) fn command_to_smed(
         ClientCommand::RollbackToCheckpoint {
             target_sequence,
             expected_head,
-        } => SmedCommand::RollbackToCheckpoint {
+        } => MjolnrCommand::RollbackToCheckpoint {
             target_sequence: *target_sequence,
             expected_head: expected_head.clone(),
         },
@@ -160,7 +160,7 @@ pub(super) fn command_to_smed(
 /// directive `sendReviewNotes` assembles from it. The thread-count bound on a
 /// send exists for the second of those; without it the per-note ceiling bounds
 /// nothing that matters.
-fn map_review_command(command: &ClientCommand) -> Result<SmedCommand, ClientBridgeError> {
+fn map_review_command(command: &ClientCommand) -> Result<MjolnrCommand, ClientBridgeError> {
     let mapped = match command {
         ClientCommand::AddReviewNote {
             path,
@@ -178,7 +178,7 @@ fn map_review_command(command: &ClientCommand) -> Result<SmedCommand, ClientBrid
                 // lookup that would simply fail to match.
                 return Err(invalid("line", "a diff line number starts at 1"));
             }
-            SmedCommand::AddReviewNote {
+            MjolnrCommand::AddReviewNote {
                 path: path.clone(),
                 side: (*side).into(),
                 line: *line,
@@ -188,7 +188,7 @@ fn map_review_command(command: &ClientCommand) -> Result<SmedCommand, ClientBrid
         }
         ClientCommand::AddReviewComment { thread_id, body } => {
             validate_review_body(body)?;
-            SmedCommand::AddReviewComment {
+            MjolnrCommand::AddReviewComment {
                 thread: parse_review_thread(thread_id)?,
                 body: body.clone(),
             }
@@ -197,7 +197,7 @@ fn map_review_command(command: &ClientCommand) -> Result<SmedCommand, ClientBrid
             if thread_ids.is_empty() {
                 return Err(invalid(
                     "threadIds",
-                    "at least one review thread is required: an empty request asks smed for \
+                    "at least one review thread is required: an empty request asks mjolnr for \
                      nothing",
                 ));
             }
@@ -214,7 +214,7 @@ fn map_review_command(command: &ClientCommand) -> Result<SmedCommand, ClientBrid
                 .iter()
                 .map(|id| parse_review_thread(id))
                 .collect::<Result<Vec<_>, _>>()?;
-            SmedCommand::SendReviewNotes { threads }
+            MjolnrCommand::SendReviewNotes { threads }
         }
         ClientCommand::ResolveCouncilFinding {
             review_id,
@@ -223,7 +223,7 @@ fn map_review_command(command: &ClientCommand) -> Result<SmedCommand, ClientBrid
             note,
         } => {
             validate_council_note(note.as_deref())?;
-            SmedCommand::ResolveCouncilFinding {
+            MjolnrCommand::ResolveCouncilFinding {
                 review_id: parse_council_review_id(review_id)?,
                 finding_id: parse_council_finding_id(finding_id)?,
                 disposition: match disposition {
@@ -241,7 +241,7 @@ fn map_review_command(command: &ClientCommand) -> Result<SmedCommand, ClientBrid
             }
         }
         ClientCommand::ProposeCouncilAmendment { review_id } => {
-            SmedCommand::ProposeCouncilAmendment {
+            MjolnrCommand::ProposeCouncilAmendment {
                 review_id: parse_council_review_id(review_id)?,
             }
         }
@@ -266,7 +266,7 @@ fn map_review_command(command: &ClientCommand) -> Result<SmedCommand, ClientBrid
 /// What the bridge *cannot* know — whether the named tickets exist, and
 /// whether the chosen option is recorded on the ticket — is the runtime's,
 /// because both questions need state.
-fn map_board_command(command: &ClientCommand) -> Result<SmedCommand, ClientBridgeError> {
+fn map_board_command(command: &ClientCommand) -> Result<MjolnrCommand, ClientBridgeError> {
     let mapped = match command {
         ClientCommand::SubmitImportedComment {
             integration,
@@ -278,7 +278,7 @@ fn map_board_command(command: &ClientCommand) -> Result<SmedCommand, ClientBridg
             validate_remote_task_id(remote_id)?;
             validate_revision_pin_named("expectedRevision", expected_revision)?;
             validate_remote_text("body", body, MAX_REMOTE_BODY_BYTES)?;
-            SmedCommand::SubmitImportedComment {
+            MjolnrCommand::SubmitImportedComment {
                 integration: integration.clone(),
                 remote_id: remote_id.clone(),
                 expected_revision: expected_revision.clone(),
@@ -294,7 +294,7 @@ fn map_board_command(command: &ClientCommand) -> Result<SmedCommand, ClientBridg
             validate_ticket_question(question)?;
             validate_ticket_options(options)?;
             let blockers = parse_ticket_blockers(blocked_by)?;
-            SmedCommand::OpenDecisionTicket {
+            MjolnrCommand::OpenDecisionTicket {
                 question: question.clone(),
                 kind: (*kind).into(),
                 options: options.clone(),
@@ -307,7 +307,7 @@ fn map_board_command(command: &ClientCommand) -> Result<SmedCommand, ClientBridg
             note,
         } => {
             validate_ticket_note(note.as_deref())?;
-            SmedCommand::ResolveDecisionTicket {
+            MjolnrCommand::ResolveDecisionTicket {
                 ticket: parse_ticket_id(ticket)?,
                 chosen_option: usize::try_from(*chosen_option).map_err(|_| {
                     invalid("chosenOption", "the option index does not fit this build")
@@ -317,7 +317,7 @@ fn map_board_command(command: &ClientCommand) -> Result<SmedCommand, ClientBridg
         }
         ClientCommand::ImportWorkItem { item } => {
             validate_imported_item(item)?;
-            SmedCommand::ImportWorkItem { item: item.clone() }
+            MjolnrCommand::ImportWorkItem { item: item.clone() }
         }
         ClientCommand::RefreshImportedItem {
             expected_revision,
@@ -325,7 +325,7 @@ fn map_board_command(command: &ClientCommand) -> Result<SmedCommand, ClientBridg
         } => {
             validate_imported_item(item)?;
             validate_revision_pin(expected_revision)?;
-            SmedCommand::RefreshImportedItem {
+            MjolnrCommand::RefreshImportedItem {
                 expected_revision: expected_revision.clone(),
                 item: item.clone(),
             }
@@ -457,7 +457,7 @@ fn validate_revision_pin_named(
 /// Map and validate the Phase D2 child-run family. Inputs are bounded here,
 /// at the bridge, so `git worktree` and the agent loop never receive a
 /// hostile identifier when execution lands.
-fn map_child_run_command(command: &ClientCommand) -> Result<SmedCommand, ClientBridgeError> {
+fn map_child_run_command(command: &ClientCommand) -> Result<MjolnrCommand, ClientBridgeError> {
     let mapped = match command {
         ClientCommand::CreateWorktree {
             name,
@@ -465,7 +465,7 @@ fn map_child_run_command(command: &ClientCommand) -> Result<SmedCommand, ClientB
         } => {
             validate_child_run_name(name)?;
             validate_base_revision(base_revision)?;
-            SmedCommand::CreateWorktree {
+            MjolnrCommand::CreateWorktree {
                 name: name.clone(),
                 base_revision: base_revision.clone(),
             }
@@ -476,7 +476,7 @@ fn map_child_run_command(command: &ClientCommand) -> Result<SmedCommand, ClientB
         } => {
             validate_child_run_name(name)?;
             validate_base_revision(base_revision)?;
-            SmedCommand::ForkWork {
+            MjolnrCommand::ForkWork {
                 name: name.clone(),
                 base_revision: base_revision.clone(),
             }
@@ -489,7 +489,7 @@ fn map_child_run_command(command: &ClientCommand) -> Result<SmedCommand, ClientB
         } => {
             validate_child_run_name(name)?;
             validate_child_directive(directive)?;
-            SmedCommand::StartChild {
+            MjolnrCommand::StartChild {
                 name: name.clone(),
                 directive: directive.clone(),
                 policy_ceiling: policy_ceiling.map(Into::into),
@@ -498,19 +498,19 @@ fn map_child_run_command(command: &ClientCommand) -> Result<SmedCommand, ClientB
         }
         ClientCommand::CancelChild { name } => {
             validate_child_run_name(name)?;
-            SmedCommand::CancelChild { name: name.clone() }
+            MjolnrCommand::CancelChild { name: name.clone() }
         }
         ClientCommand::PreserveBranch { name } => {
             validate_child_run_name(name)?;
-            SmedCommand::PreserveBranch { name: name.clone() }
+            MjolnrCommand::PreserveBranch { name: name.clone() }
         }
         ClientCommand::SettleChild { name } => {
             validate_child_run_name(name)?;
-            SmedCommand::SettleChild { name: name.clone() }
+            MjolnrCommand::SettleChild { name: name.clone() }
         }
         ClientCommand::DiscardSettledWorktree { name } => {
             validate_child_run_name(name)?;
-            SmedCommand::DiscardSettledWorktree { name: name.clone() }
+            MjolnrCommand::DiscardSettledWorktree { name: name.clone() }
         }
         // The caller's match guarantees a child-run variant; a bug there must
         // surface as a typed refusal, not a panic.
@@ -528,11 +528,11 @@ fn map_child_run_command(command: &ClientCommand) -> Result<SmedCommand, ClientB
 /// an argv element of a `git` invocation, so the bridge is where it stops
 /// being arbitrary client text: bounded, flag-safe, and control-character
 /// free before the runtime ever spawns a process.
-fn map_repository_command(command: &ClientCommand) -> Result<SmedCommand, ClientBridgeError> {
+fn map_repository_command(command: &ClientCommand) -> Result<MjolnrCommand, ClientBridgeError> {
     let mapped = match command {
         ClientCommand::StagePaths { paths } => {
             validate_repository_paths(paths)?;
-            SmedCommand::StagePaths {
+            MjolnrCommand::StagePaths {
                 paths: paths.clone(),
             }
         }
@@ -547,14 +547,14 @@ fn map_repository_command(command: &ClientCommand) -> Result<SmedCommand, Client
                     &format!("at most {MAX_REPOSITORY_PATHS} hunks may be staged in one command"),
                 ));
             }
-            SmedCommand::StageHunks {
+            MjolnrCommand::StageHunks {
                 path: path.clone(),
                 hunk_indices: hunk_indices.clone(),
             }
         }
         ClientCommand::Unstage { paths } => {
             validate_repository_paths(paths)?;
-            SmedCommand::Unstage {
+            MjolnrCommand::Unstage {
                 paths: paths.clone(),
             }
         }
@@ -564,7 +564,7 @@ fn map_repository_command(command: &ClientCommand) -> Result<SmedCommand, Client
         } => {
             validate_branch_name(name)?;
             validate_base_revision(base_revision)?;
-            SmedCommand::CreateBranch {
+            MjolnrCommand::CreateBranch {
                 name: name.clone(),
                 base_revision: base_revision.clone(),
             }
@@ -575,7 +575,7 @@ fn map_repository_command(command: &ClientCommand) -> Result<SmedCommand, Client
         } => {
             validate_commit_message(message)?;
             validate_base_revision(expected_index_revision)?;
-            SmedCommand::Commit {
+            MjolnrCommand::Commit {
                 message: message.clone(),
                 expected_index_revision: expected_index_revision.clone(),
             }
@@ -588,16 +588,16 @@ fn map_repository_command(command: &ClientCommand) -> Result<SmedCommand, Client
             validate_branch_name(name)?;
             validate_commit_message(message)?;
             validate_base_revision(expected_head)?;
-            SmedCommand::IntegrateChildBranch {
+            MjolnrCommand::IntegrateChildBranch {
                 name: name.clone(),
                 message: message.clone(),
                 expected_head: expected_head.clone(),
             }
         }
-        ClientCommand::Fetch => SmedCommand::Fetch,
+        ClientCommand::Fetch => MjolnrCommand::Fetch,
         ClientCommand::Push { expected_head } => {
             validate_base_revision(expected_head)?;
-            SmedCommand::Push {
+            MjolnrCommand::Push {
                 expected_head: expected_head.clone(),
             }
         }
@@ -609,7 +609,7 @@ fn map_repository_command(command: &ClientCommand) -> Result<SmedCommand, Client
             // absent expected revision makes the staleness guard opt-in.
             validate_commit_message(message)?;
             validate_base_revision(expected_head)?;
-            SmedCommand::IntegrateUpstream {
+            MjolnrCommand::IntegrateUpstream {
                 message: message.clone(),
                 expected_head: expected_head.clone(),
             }
@@ -622,7 +622,7 @@ fn map_repository_command(command: &ClientCommand) -> Result<SmedCommand, Client
             onto,
             expected_head,
         } => map_rebase_command(onto, expected_head)?,
-        ClientCommand::AbortRebase => SmedCommand::AbortRebase,
+        ClientCommand::AbortRebase => MjolnrCommand::AbortRebase,
         // The caller's match guarantees a repository variant; a bug there must
         // surface as a typed refusal, not a panic.
         _ => {
@@ -635,7 +635,7 @@ fn map_repository_command(command: &ClientCommand) -> Result<SmedCommand, Client
     Ok(mapped)
 }
 
-fn map_clone_project(source: &str, destination: &str) -> Result<SmedCommand, ClientBridgeError> {
+fn map_clone_project(source: &str, destination: &str) -> Result<MjolnrCommand, ClientBridgeError> {
     validate_clone_source(source)?;
     let destination_path = PathBuf::from(destination);
     if !destination_path.is_absolute() {
@@ -650,16 +650,16 @@ fn map_clone_project(source: &str, destination: &str) -> Result<SmedCommand, Cli
             &format!("a clone destination may not exceed {MAX_CLONE_DESTINATION_BYTES} bytes"),
         ));
     }
-    Ok(SmedCommand::CloneProject {
+    Ok(MjolnrCommand::CloneProject {
         source: source.to_owned(),
         destination: destination_path,
     })
 }
 
-fn map_rebase_command(onto: &str, expected_head: &str) -> Result<SmedCommand, ClientBridgeError> {
+fn map_rebase_command(onto: &str, expected_head: &str) -> Result<MjolnrCommand, ClientBridgeError> {
     validate_rebase_target(onto)?;
     validate_base_revision(expected_head)?;
-    Ok(SmedCommand::Rebase {
+    Ok(MjolnrCommand::Rebase {
         onto: onto.to_owned(),
         expected_head: expected_head.to_owned(),
     })
@@ -672,12 +672,12 @@ fn map_rebase_command(onto: &str, expected_head: &str) -> Result<SmedCommand, Cl
 /// so they arrive in the durable record as data, not as something that could
 /// reformat a terminal or a log line. They are never treated as authority —
 /// that contract lives in `integrations::RemoteTask::framed_for_model`.
-fn map_integration_command(command: &ClientCommand) -> Result<SmedCommand, ClientBridgeError> {
+fn map_integration_command(command: &ClientCommand) -> Result<MjolnrCommand, ClientBridgeError> {
     let mapped = match command {
         ClientCommand::FetchTask { source, task_id } => {
             validate_integration_id(source)?;
             validate_remote_task_id(task_id)?;
-            SmedCommand::FetchTask {
+            MjolnrCommand::FetchTask {
                 source: source.clone(),
                 task_id: task_id.clone(),
             }
@@ -702,7 +702,7 @@ fn map_integration_command(command: &ClientCommand) -> Result<SmedCommand, Clien
             for task_id in task_ids {
                 validate_remote_task_id(task_id)?;
             }
-            SmedCommand::FetchTasks {
+            MjolnrCommand::FetchTasks {
                 source: source.clone(),
                 task_ids: task_ids.clone(),
             }
@@ -716,7 +716,7 @@ fn map_integration_command(command: &ClientCommand) -> Result<SmedCommand, Clien
             validate_branch_name(&request.base_branch)?;
             validate_remote_text("title", &request.title, MAX_REMOTE_TITLE_BYTES)?;
             validate_remote_text("body", &request.body, MAX_REMOTE_BODY_BYTES)?;
-            SmedCommand::SubmitChange {
+            MjolnrCommand::SubmitChange {
                 source: source.clone(),
                 remote_id: request.remote_id.clone(),
                 expected_revision: request.expected_revision.clone(),
@@ -737,7 +737,7 @@ fn map_integration_command(command: &ClientCommand) -> Result<SmedCommand, Clien
             validate_remote_task_id(remote_id)?;
             validate_revision_pin_named("expectedRevision", expected_revision)?;
             validate_remote_text("body", body, MAX_REMOTE_BODY_BYTES)?;
-            SmedCommand::SubmitImportedComment {
+            MjolnrCommand::SubmitImportedComment {
                 integration: integration.clone(),
                 remote_id: remote_id.clone(),
                 expected_revision: expected_revision.clone(),
@@ -756,7 +756,7 @@ fn map_integration_command(command: &ClientCommand) -> Result<SmedCommand, Clien
     Ok(mapped)
 }
 
-fn map_plan_command(command: &ClientCommand) -> Result<SmedCommand, ClientBridgeError> {
+fn map_plan_command(command: &ClientCommand) -> Result<MjolnrCommand, ClientBridgeError> {
     if let ClientCommand::StartPlanInterview { goal } = command {
         return map_start_plan_interview(goal);
     }
@@ -766,7 +766,7 @@ fn map_plan_command(command: &ClientCommand) -> Result<SmedCommand, ClientBridge
             prompt,
             options,
             is_multi_select,
-        } => SmedCommand::AskPlanQuestion {
+        } => MjolnrCommand::AskPlanQuestion {
             plan_id: parse_plan_id(plan_id)?,
             question: crate::core::plan::Question {
                 id: crate::core::plan::QuestionId::new(),
@@ -781,7 +781,7 @@ fn map_plan_command(command: &ClientCommand) -> Result<SmedCommand, ClientBridge
             question_id,
             selected_options,
             freeform_text,
-        } => SmedCommand::AnswerPlanQuestion {
+        } => MjolnrCommand::AnswerPlanQuestion {
             plan_id: parse_plan_id(plan_id)?,
             answer: crate::core::plan::QuestionAnswer {
                 question_id: parse_question_id(question_id)?,
@@ -796,7 +796,7 @@ fn map_plan_command(command: &ClientCommand) -> Result<SmedCommand, ClientBridge
             title,
             summary,
             steps,
-        } => SmedCommand::ProposePlan {
+        } => MjolnrCommand::ProposePlan {
             proposal: crate::core::plan::PlanProposal {
                 plan_id: parse_plan_id(plan_id)?,
                 revision_id: crate::core::plan::RevisionId::new(*revision),
@@ -812,7 +812,7 @@ fn map_plan_command(command: &ClientCommand) -> Result<SmedCommand, ClientBridge
             reviewer,
             verdict,
             feedback,
-        } => SmedCommand::ReviewPlan {
+        } => MjolnrCommand::ReviewPlan {
             review: crate::core::plan::PlanReview {
                 plan_id: parse_plan_id(plan_id)?,
                 revision_id: crate::core::plan::RevisionId::new(*revision),
@@ -827,7 +827,7 @@ fn map_plan_command(command: &ClientCommand) -> Result<SmedCommand, ClientBridge
             revision,
             decision,
             note,
-        } => SmedCommand::ApprovePlan {
+        } => MjolnrCommand::ApprovePlan {
             approval: crate::core::plan::PlanApproval {
                 plan_id: parse_plan_id(plan_id)?,
                 revision_id: crate::core::plan::RevisionId::new(*revision),
@@ -841,7 +841,7 @@ fn map_plan_command(command: &ClientCommand) -> Result<SmedCommand, ClientBridge
             plan_id,
             revision,
             note,
-        } => SmedCommand::HandoffPlan {
+        } => MjolnrCommand::HandoffPlan {
             handoff: crate::core::plan::PlanHandoff {
                 plan_id: parse_plan_id(plan_id)?,
                 revision_id: crate::core::plan::RevisionId::new(*revision),
@@ -859,7 +859,7 @@ fn map_plan_command(command: &ClientCommand) -> Result<SmedCommand, ClientBridge
     Ok(mapped)
 }
 
-fn map_start_plan_interview(goal: &str) -> Result<SmedCommand, ClientBridgeError> {
+fn map_start_plan_interview(goal: &str) -> Result<MjolnrCommand, ClientBridgeError> {
     let goal = goal.trim();
     if goal.is_empty() {
         return Err(invalid("goal", "an interview goal is required"));
@@ -870,16 +870,16 @@ fn map_start_plan_interview(goal: &str) -> Result<SmedCommand, ClientBridgeError
             "an interview goal exceeds the 8000 character limit",
         ));
     }
-    Ok(SmedCommand::StartPlanInterview {
+    Ok(MjolnrCommand::StartPlanInterview {
         goal: goal.to_owned(),
     })
 }
 
-fn map_open_project(root: &str) -> Result<SmedCommand, ClientBridgeError> {
+fn map_open_project(root: &str) -> Result<MjolnrCommand, ClientBridgeError> {
     if root.trim().is_empty() {
         return Err(invalid("root", "a project path is required"));
     }
-    Ok(SmedCommand::OpenProject {
+    Ok(MjolnrCommand::OpenProject {
         root: PathBuf::from(root),
     })
 }
@@ -1225,7 +1225,7 @@ fn validate_save_text(text: &str) -> Result<(), ClientBridgeError> {
 
 /// Branch names reach `git branch` and `git merge` as argv, and land in
 /// `.git/refs/heads/`. `git check-ref-format`'s rules are the contract; this
-/// enforces the subset smed needs and refuses the rest.
+/// enforces the subset mjolnr needs and refuses the rest.
 fn validate_branch_name(name: &str) -> Result<(), ClientBridgeError> {
     if name.trim().is_empty() {
         return Err(invalid("name", "a branch name is required"));
@@ -1277,7 +1277,7 @@ fn validate_commit_message(message: &str) -> Result<(), ClientBridgeError> {
     if message.trim().is_empty() {
         return Err(invalid(
             "message",
-            "a commit message is required: smed does not author a commit record for you",
+            "a commit message is required: mjolnr does not author a commit record for you",
         ));
     }
     if message.len() > MAX_COMMIT_MESSAGE_BYTES {
@@ -1386,8 +1386,8 @@ fn validate_review_body(body: &str) -> Result<(), ClientBridgeError> {
     Ok(())
 }
 
-/// The digest is smed's own SHA-256 hex, handed back. Requiring hex is not
-/// decoration: it is the difference between echoing a value smed produced and
+/// The digest is mjolnr's own SHA-256 hex, handed back. Requiring hex is not
+/// decoration: it is the difference between echoing a value mjolnr produced and
 /// accepting arbitrary text into the staleness comparison.
 fn validate_capture_digest(digest: &str) -> Result<(), ClientBridgeError> {
     if digest.is_empty() || digest.len() > MAX_CAPTURE_DIGEST_BYTES {
@@ -1429,7 +1429,7 @@ fn parse_approval(raw: &str) -> Result<ApprovalId, ClientBridgeError> {
         .map_err(|_| invalid("approval", "an approval id is its UUID text form"))
 }
 
-fn map_external_agent_command(command: &ClientCommand) -> Result<SmedCommand, ClientBridgeError> {
+fn map_external_agent_command(command: &ClientCommand) -> Result<MjolnrCommand, ClientBridgeError> {
     match command {
         ClientCommand::ExternalAgentList => Err(invalid(
             "command",
@@ -1437,17 +1437,17 @@ fn map_external_agent_command(command: &ClientCommand) -> Result<SmedCommand, Cl
         )),
         ClientCommand::ExternalAgentLaunch { profile } => {
             validate_external_agent_profile_name(profile)?;
-            Ok(SmedCommand::LaunchExternalAgent {
+            Ok(MjolnrCommand::LaunchExternalAgent {
                 profile: profile.clone(),
             })
         }
         ClientCommand::ExternalAgentStop { id } => {
             let _ = parse_external_agent_id(id)?;
-            Ok(SmedCommand::StopExternalAgent { id: id.clone() })
+            Ok(MjolnrCommand::StopExternalAgent { id: id.clone() })
         }
         ClientCommand::ExternalAgentImport { id } => {
             let _ = parse_external_agent_id(id)?;
-            Ok(SmedCommand::ImportExternalAgentChanges { id: id.clone() })
+            Ok(MjolnrCommand::ImportExternalAgentChanges { id: id.clone() })
         }
         _ => Err(invalid("command", "not an external-agent command")),
     }

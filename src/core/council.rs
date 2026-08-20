@@ -13,7 +13,7 @@ use uuid::Uuid;
 /// The absolute ceiling on deliberation rounds, applied on top of a config's
 /// own `max_rounds` so cost is bounded by construction, not by hope.
 pub const MAX_ROUNDS_CEILING: usize = 4;
-/// The one project-local council configuration smed reads.
+/// The one project-local council configuration mjolnr reads.
 pub const COUNCIL_CONFIG_PATH: &str = ".mjolnr/council.yaml";
 /// Maximum number of independently dispositionable sections in one artifact.
 /// Larger documents are grouped into one bounded remainder section so the
@@ -83,7 +83,7 @@ impl std::fmt::Display for CouncilFindingId {
     }
 }
 
-/// Configuration for the one advisory council smed reads from
+/// Configuration for the one advisory council mjolnr reads from
 /// [`COUNCIL_CONFIG_PATH`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CouncilConfig {
@@ -282,7 +282,7 @@ pub struct CouncilAmendment {
 
 /// Marker opening an amendment block, chosen so it survives a Markdown render
 /// as visible text rather than disappearing into the document's own prose.
-const AMENDMENT_MARKER: &str = "<!-- smed:council-amendment -->";
+const AMENDMENT_MARKER: &str = "<!-- mjolnr:council-amendment -->";
 
 impl CouncilReview {
     /// Compose a human-reviewable amended artifact from the findings a human
@@ -424,7 +424,7 @@ fn append_finding(out: &mut String, finding: &CouncilFinding) {
         }
     }
     out.push_str(
-        "> \n> smed marked this up; it did not rewrite the section. Edit this block into the document and save it yourself.\n",
+        "> \n> mjolnr marked this up; it did not rewrite the section. Edit this block into the document and save it yourself.\n",
     );
 }
 
@@ -435,7 +435,7 @@ impl CouncilReview {
     pub fn render(&self) -> String {
         use std::fmt::Write as _;
         let mut out = format!(
-            "SMED COUNCIL // {} member(s), {} round(s)\n\nQuestion: {}\n",
+            "MJOLNR COUNCIL // {} member(s), {} round(s)\n\nQuestion: {}\n",
             self.contributions.len(),
             self.rounds_conducted,
             self.question
@@ -550,7 +550,7 @@ mod tests {
             .expect("accepted finding composes");
 
         assert_eq!(amendment.accepted_findings, 1);
-        // Every original line survives; smed marks up rather than rewrites.
+        // Every original line survives; mjolnr marks up rather than rewrites.
         for line in ARTIFACT.lines() {
             assert!(amendment.text.contains(line), "lost original line: {line}");
         }

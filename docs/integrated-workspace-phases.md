@@ -1,4 +1,4 @@
-# smed integrated developer workspace phases
+# mjolnr integrated developer workspace phases
 
 Status: **D0–D8 have landed in bounded slices. Repository, task integration,
 editor, and terminal capabilities exist, with documented breadth and live-
@@ -51,7 +51,7 @@ Engineering contract: [`AGENTS.md`](../AGENTS.md)
 ## 1. Requirements summary and outcome
 
 Turn the Phase C desktop client into a daily-driver developer workspace without
-creating a TypeScript agent engine or weakening smed’s governed-execution
+creating a TypeScript agent engine or weakening mjolnr’s governed-execution
 claim.
 
 The completed A0–C work provides an in-process Tauri bridge, runtime-owned plan
@@ -99,10 +99,10 @@ require separate evidence and decisions.
 
 1. **Authority before controls.** A visible action is not enabled until a typed
    Rust command, refusal path, durable intent, and verified outcome exist.
-2. **Trust class is always visible.** smed-governed, operator-controlled, and
+2. **Trust class is always visible.** mjolnr-governed, operator-controlled, and
    external-unverified work must never share an ambiguous status vocabulary.
 3. **Work is the organizing object.** GitHub, Linear, terminals, files,
-   browsers, and external agents attach to smed work items.
+   browsers, and external agents attach to mjolnr work items.
 4. **Read first, mutate later.** Each integration lands as a bounded read-only
    projection before its modifying commands.
 5. **One phase, one checkpoint.** Each phase receives its own Lore commit,
@@ -240,7 +240,7 @@ truth, then let the human send anchored review notes into the governed session.
   and exact proposal/applied/verified labels.
 - Add review threads anchored to file, side, line, hunk context, and diff
   revision.
-- Route “send to smed” as a durable human message/revision request referencing
+- Route “send to mjolnr” as a durable human message/revision request referencing
   the review-thread IDs. Stale anchors remain visible but cannot silently move
   to a different line.
 
@@ -251,7 +251,7 @@ truth, then let the human send anchored review notes into the governed session.
 - A diff whose base changed is marked stale and cannot accept a line note as if
   current.
 - Notes survive restart, keep their original anchor, and link to the resulting
-  smed response.
+  mjolnr response.
 - Proposed, applied, imported, and verified states have negative tests against
   false promotion.
 - Reviewing a multi-file change requires no external `git diff` invocation by
@@ -292,7 +292,7 @@ actions.
 #### Objective
 
 Make repository status, staging, committing, branch operations, and local
-integration of selected child work available without bypassing smed’s gates.
+integration of selected child work available without bypassing mjolnr’s gates.
 
 #### Implementation
 
@@ -323,7 +323,7 @@ integration of selected child work available without bypassing smed’s gates.
 #### Objective
 
 Use GitHub, Linear, Vercel and Supabase as task sources (and GitHub as result
-destination) while preserving smed work items as the organizing identity.
+destination) while preserving mjolnr work items as the organizing identity.
 
 #### Implementation
 
@@ -344,7 +344,7 @@ destination) while preserving smed work items as the organizing identity.
   taxonomy, `SUPABASE_TOKEN`. Read-only, same refusal.
 - Treat issue, PR, and comment text as externally supplied data, never owner
   authority. Frame and escape it before it reaches model context.
-- Store tokens only in smed’s credential boundary. Snapshots expose account
+- Store tokens only in mjolnr’s credential boundary. Snapshots expose account
   labels and scopes, never tokens.
 - Require an explicit human action to create work from a task and record the
   source URL, immutable remote ID, fetched revision, and selected policy.
@@ -377,7 +377,7 @@ editing distinct from model-proposed mutations.
 - Add tabs, go-to-file, find, syntax highlighting, diagnostics display,
   autosave preference, and explicit save.
 - Human saves are recorded as operator-controlled edits. Agent suggestions still
-  use smed’s ordinary write/edit tool gate.
+  use mjolnr’s ordinary write/edit tool gate.
 - Feed saved changes into the D3 change-set model and D5 repository projection.
 
 #### Acceptance
@@ -429,7 +429,7 @@ control as an operator surface.
 #### Objective
 
 Allow Codex, Claude Code, Gemini CLI, OpenCode, Cursor CLI, and user-defined CLI
-profiles to run or attach inside smed’s workspace without false governance
+profiles to run or attach inside mjolnr’s workspace without false governance
 claims.
 
 #### Implementation
@@ -438,27 +438,27 @@ claims.
   auth mode, working-directory rules, resume capability, completion signals,
   and declared features.
 - Require an explicit executable allowlist and resolved absolute executable
-  path. Profiles live in diffable `.smed/` configuration; secrets do not.
+  path. Profiles live in diffable `.mjolnr/` configuration; secrets do not.
 - Launch external agents in dedicated worktrees by default and classify them as
   `ExternalUnverified`.
 - Record bounded terminal activity, lifecycle, branch, and produced working-tree
-  changes separately from the smed transcript.
+  changes separately from the mjolnr transcript.
 - Import external changes into D3 for review; stage/commit through D5 only after
   explicit human selection.
 - Permit a future `SmedGoverned` adapter only when tests prove all agent tool
-  effects are forced through a smed-owned proxy. Marketing/UI copy may not
+  effects are forced through a mjolnr-owned proxy. Marketing/UI copy may not
   imply this before proof.
 
 #### Acceptance
 
 - Unknown executables, unresolved paths, undeclared environment requirements,
   and unsupported resume requests fail closed.
-- An external agent can never emit a smed approval, verification, plan
+- An external agent can never emit a mjolnr approval, verification, plan
   transition, or governed tool event.
-- Stopping one external agent does not terminate sibling panes or smed-native
+- Stopping one external agent does not terminate sibling panes or mjolnr-native
   sessions.
 - Imported changes retain external provenance through review, commit, and PR.
-- A generic custom profile works without smed claiming feature parity with
+- A generic custom profile works without mjolnr claiming feature parity with
   specifically tested CLIs.
 
 ### Phase D10 — Embedded browser and bounded design mode
@@ -466,7 +466,7 @@ claims.
 #### Objective
 
 Provide a per-worktree browser and opt-in UI inspection that can send bounded
-visual/DOM context into a governed smed session.
+visual/DOM context into a governed mjolnr session.
 
 #### Implementation
 
@@ -478,7 +478,7 @@ visual/DOM context into a governed smed session.
   sanitized DOM excerpt, computed-style allowlist, page URL, and viewport.
 - Inject inspection code only into opted-in allowed origins. Isolate browser
   storage and permissions by workspace where Tauri/WebKit permits it.
-- Send captured context as a human attachment to smed; capture itself grants no
+- Send captured context as a human attachment to mjolnr; capture itself grants no
   authority to modify files or click further elements.
 - Record an explicit feasibility/security checkpoint before supporting remote
   authenticated origins.
@@ -533,7 +533,7 @@ laundering.
 
 #### Objective
 
-Prove the expanded desktop works as one coherent smed journey rather than a
+Prove the expanded desktop works as one coherent mjolnr journey rather than a
 collection of disconnected tools.
 
 #### Implementation
@@ -559,7 +559,7 @@ collection of disconnected tools.
 - A second journey completes:
   local browser capture → governed session → file edit → diff review → verify.
 - A third journey runs an external CLI agent, preserves its unverified label,
-  imports selected changes, and verifies them through smed before commit.
+  imports selected changes, and verifies them through mjolnr before commit.
 - Restart restores views and durable work truth but does not silently resume
   terminals, browsers, external agents, or uncertain side effects.
 - All Rust, desktop unit/component, bridge, architecture, accessibility, and
@@ -600,7 +600,7 @@ These paths are planning targets, not permission to bypass the extraction test:
 | D6 | `src/integrations/github/`, `src/integrations/linear/`, `src/integrations/vercel/`, `src/integrations/supabase/`, `examples/plugins/vercel-deployments/`, `src/store/secrets.rs`, and desktop task/PR surfaces. [`ADR 0009`](./adr/0009-mockup-layout-as-structural-target.md) records why the original mockup did not govern this surface. |
 | D7 | `src/core/workspace_files.rs`, `src/workspace_files/`, `Repository::ignored_under`, client commands/projections, desktop Files/Editor surfaces, and stale-save/containment tests. UI boundary: [`ADR 0009`](./adr/0009-mockup-layout-as-structural-target.md); editor dependency: [`ADR 0010`](./adr/0010-codemirror-6-as-the-editor-dependency.md). |
 | D8 | `src/runtime/terminal/`, Tauri terminal transport glue, desktop Terminal surface, and PTY/process tests. UI boundary: [`ADR 0009`](./adr/0009-mockup-layout-as-structural-target.md). |
-| D9 | proposed `src/runtime/external_agent/`, `.smed/` profile loader, desktop external-agent panes, provenance tests |
+| D9 | proposed `src/runtime/external_agent/`, `.mjolnr/` profile loader, desktop external-agent panes, provenance tests |
 | D10 | proposed `src/runtime/browser/`, `desktop/src-tauri/` webview glue, desktop Browser/Design surfaces, redaction/origin tests |
 | D11 | proposed `src/runtime/remote/`, `src/store/secrets.rs`, desktop remote/account surfaces, SSH/reconnect tests |
 | D12 | desktop shell/onboarding/status integration, packaged smoke tests, report |
@@ -613,8 +613,8 @@ in that report.
 
 | Risk | Mitigation |
 |---|---|
-| The roadmap turns smed into an unfocused IDE | Keep work items and governed review as the organizing flow; ship and assess each phase independently |
-| External agents appear to inherit smed guarantees | Runtime-owned trust classes, permanent provenance, import boundary, and negative claim tests |
+| The roadmap turns mjolnr into an unfocused IDE | Keep work items and governed review as the organizing flow; ship and assess each phase independently |
+| External agents appear to inherit mjolnr guarantees | Runtime-owned trust classes, permanent provenance, import boundary, and negative claim tests |
 | Svelte accumulates filesystem/process/network authority | Typed Rust commands only, architecture scans, and no frontend implementation of effects |
 | Stale diffs or Git state cause the wrong mutation | Stable object/revision IDs, compare-before-effect, stale refusal, and post-effect reread |
 | Task text becomes prompt authority | Treat all remote text as framed untrusted data and require explicit human launch |

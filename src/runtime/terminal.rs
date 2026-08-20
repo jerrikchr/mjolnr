@@ -1,7 +1,7 @@
 //! Rust-owned operator terminal sessions (Phase D8).
 //!
 //! One reason to change: the lifecycle and bounded screen projection of a PTY
-//! owned by smed. The model cannot reach this manager; the desktop client is
+//! owned by mjolnr. The model cannot reach this manager; the desktop client is
 //! the operator surface and receives only [`ClientTerminalSnapshot`].
 
 use std::collections::BTreeMap;

@@ -1,4 +1,4 @@
-//! `ChatGPT` subscription adapter using smed-owned OAuth credentials.
+//! `ChatGPT` subscription adapter using mjolnr-owned OAuth credentials.
 //!
 //! This is deliberately a distinct provider from `openai`: it has a different
 //! endpoint, credential lifecycle, model catalogue, and quota semantics. Only

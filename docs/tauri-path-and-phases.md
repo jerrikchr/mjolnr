@@ -52,13 +52,13 @@ system—not on possible Konva use. Svelte 5 compiles reactive dependencies into
 targeted update effects, and its compiler accessibility warnings directly
 support the design-system work.
 
-Vanilla TypeScript was rejected because smed already needs component
+Vanilla TypeScript was rejected because mjolnr already needs component
 composition, lifecycle, reactive state, routing, accessibility, testable
 primitives, and a durable design system. Avoiding a framework would move those
-responsibilities into smed-owned infrastructure.
+responsibilities into mjolnr-owned infrastructure.
 
 shadcn-svelte is the starting source for selected primitives, not the design
-system itself. smed owns the resulting components, semantic tokens, behavior,
+system itself. mjolnr owns the resulting components, semantic tokens, behavior,
 tests, and provenance. The Tauri client uses no SvelteKit server machinery.
 
 Konva remains unevaluated. If a later canvas phase selects it, use raw Konva
@@ -108,7 +108,7 @@ building product surfaces.
   [`docs/tauri-design-system.md`](./tauri-design-system.md).
 - Build the component gallery before assembling the first workspace screen.
 - Seed only the required primitives from shadcn-svelte, backed by Bits UI and
-  restyled through smed's tokens. Do not import its demo identity wholesale.
+  restyled through mjolnr's tokens. Do not import its demo identity wholesale.
 - Keep semantic governance states aligned across clients without forcing the
   desktop and terminal clients to share rendering code.
 

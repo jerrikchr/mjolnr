@@ -8,7 +8,7 @@
 //! 1. An imported item is `ExternalUnverified` data. Its title and body arrive
 //!    from outside the session — they are never authority (AGENTS.md §11.6).
 //! 2. Its state is **observed outcome, never a gate signal**. A remote gate is
-//!    not smed's gate (the E5 contract (b)): the frontier
+//!    not mjolnr's gate (the E5 contract (b)): the frontier
 //!    settles an imported item only on a terminal *outcome* it observed,
 //!    never on a claim about enforcement.
 //! 3. `Unknown` is a real state, never `Open`, and never cached as a value
@@ -65,7 +65,7 @@ impl std::fmt::Display for ImportedItemId {
 /// What the remote says about this item, as observed at `fetched_revision`.
 ///
 /// Only *outcomes* — never an enforcement signal. A provider-side gate varies
-/// by caller privilege in ways smed cannot verify, so "the forge would refuse
+/// by caller privilege in ways mjolnr cannot verify, so "the forge would refuse
 /// it" is not a fact the type can carry (the E5 contract (b)).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -208,18 +208,18 @@ impl ImportedItemRecord {
     }
 }
 
-/// Why an act over an imported item was refused *before* it left smed.
+/// Why an act over an imported item was refused *before* it left mjolnr.
 ///
 /// The act path's half of contract (a). `RefreshRefusal` guards what enters the
 /// record; this guards what leaves for the remote — a post is pinned to the
 /// revision the human was looking at when they approved it, and a pin that no
-/// longer matches what smed recorded is refused rather than posted against
+/// longer matches what mjolnr recorded is refused rather than posted against
 /// whatever the remote holds now.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ActRefusal {
-    /// No imported item names this remote, so there is no revision smed
+    /// No imported item names this remote, so there is no revision mjolnr
     /// rendered and nothing the pin could honestly refer to. Fail closed: a
-    /// post smed cannot tie to something a human saw is not a post it makes.
+    /// post mjolnr cannot tie to something a human saw is not a post it makes.
     NeverImported {
         integration: String,
         remote_id: String,
@@ -237,7 +237,7 @@ impl std::fmt::Display for ActRefusal {
             } => write!(
                 formatter,
                 "no imported item names {integration} item {remote_id} in this session, so the \
-                 revision pin refers to nothing smed rendered; import it first — nothing was \
+                 revision pin refers to nothing mjolnr rendered; import it first — nothing was \
                  posted"
             ),
             Self::StaleRevision { expected, current } => write!(
@@ -250,7 +250,7 @@ impl std::fmt::Display for ActRefusal {
 }
 
 /// Contract (a) on the act path: a mutating act names the revision it was
-/// rendered for, and smed refuses it if that is not what it recorded.
+/// rendered for, and mjolnr refuses it if that is not what it recorded.
 ///
 /// One implementation, called before any network work exists to call it, so the
 /// producers that arrive with §D6 inherit the guard rather than each re-deriving
@@ -365,12 +365,12 @@ pub enum ImportedActKind {
     PullRequest,
 }
 
-/// The outcome of a submitted act, as smed can honestly state it.
+/// The outcome of a submitted act, as mjolnr can honestly state it.
 ///
 /// `Submitted` carries the remote identity (a PR's `html_url`) the provider
 /// returned *after* the accepting response — the same evidence boundary as
 /// every other imported fact. `Uncertain` is the recovery path: the accepting
-/// call went out but its result protocol was not proven, so smed records the
+/// call went out but its result protocol was not proven, so mjolnr records the
 /// attempt without claiming a success it cannot evidence, and recovery
 /// governance owns the ambiguity.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -380,7 +380,7 @@ pub enum ImportedActOutcome {
     Uncertain,
 }
 
-/// A durable record of a mutating act smed performed on an imported work
+/// A durable record of a mutating act mjolnr performed on an imported work
 /// item (phase D6, step 5) — submitted pull requests and, explicitly, the
 /// attempts whose outcome is unknown.
 ///
@@ -412,7 +412,7 @@ pub struct ImportedAct {
     pub head_branch: String,
     /// The base branch the change targeted.
     pub base_branch: String,
-    /// What smed can prove happened.
+    /// What mjolnr can prove happened.
     pub outcome: ImportedActOutcome,
 }
 
@@ -575,7 +575,7 @@ mod tests {
                 integration: "github".to_owned(),
                 remote_id: "43".to_owned(),
             }),
-            "a pin smed cannot tie to a revision it rendered proves nothing"
+            "a pin mjolnr cannot tie to a revision it rendered proves nothing"
         );
         assert_eq!(
             check_act_pin([&item], "linear", "42", "rev1"),
@@ -741,7 +741,7 @@ mod tests {
                 r#"{"actId":"019a0000-0000-7000-8000-000000000001","itemId":"019a0000-0000-7000-8000-000000000002","kind":"pull-request","expectedRevision":"rev1","headBranch":"feat/x","baseBranch":"main","outcome":"gone"}"#
             )
             .is_err(),
-            "an outcome word smed never defined is refused, not mapped to Uncertain"
+            "an outcome word mjolnr never defined is refused, not mapped to Uncertain"
         );
     }
 }

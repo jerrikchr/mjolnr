@@ -90,7 +90,7 @@ pub(super) fn capture(
             continue;
         }
         // `--no-index` names the left side `/dev/null`, and its right-hand path
-        // is whatever argv said. The path smed already knows is authoritative;
+        // is whatever argv said. The path mjolnr already knows is authoritative;
         // trusting the header here would let a crafted filename rewrite it.
         for file in &mut parsed {
             file.path.clone_from(path);
@@ -633,7 +633,7 @@ Binary files a/src b/lib.rs and b/src b/lib.rs differ\n";
         assert!(bad.undecodable);
         assert!(
             bad.hunks.is_empty(),
-            "no content is projected from bytes smed could not decode"
+            "no content is projected from bytes mjolnr could not decode"
         );
         assert_eq!(bad.path, "latin.txt");
 

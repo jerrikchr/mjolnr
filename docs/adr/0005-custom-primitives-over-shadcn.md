@@ -24,7 +24,7 @@ where it fits and record any new dependency or provenance obligations.
 ADR-0004 specified:
 
 > Use **shadcn-svelte** as the source-owned starting point for accessible
-> primitives. Bring in only components smed needs.
+> primitives. Bring in only components mjolnr needs.
 
 The design-system contract (`docs/tauri-design-system.md`) further states:
 
@@ -36,17 +36,17 @@ inventory was evaluated against shadcn-svelte's source. The evaluation
 concluded that seeding from shadcn-svelte would introduce more adaptation
 cost than writing bespoke primitives for these reasons:
 
-1. **shadcn-svelte requires Tailwind CSS.** smed's design system uses
+1. **shadcn-svelte requires Tailwind CSS.** mjolnr's design system uses
    semantic CSS custom properties (tokens), not utility classes. Adapting
    shadcn-svelte source would require stripping Tailwind and rebuilding all
    styling against the token contract — effectively rewriting the component.
 
 2. **Bits UI (shadcn-svelte's runtime dependency) adds ~40 kB to the
    frontend bundle.** The entire Phase A0 client output is ~110 kB
-   uncompressed. Bits UI would nearly double it for primitives that smed
+   uncompressed. Bits UI would nearly double it for primitives that mjolnr
    already implements with correct ARIA attributes and keyboard handling.
 
-3. **smed's primitives have governance-specific semantics.** `StatusMark`,
+3. **mjolnr's primitives have governance-specific semantics.** `StatusMark`,
    `CommandPalette`, and approval/destructive `Button` variants carry
    meaning that shadcn-svelte components do not model. The adaptation
    surface is larger than the shared surface.
@@ -71,11 +71,11 @@ automated keyboard-navigation tests, and ARIA attribute assertions.
 
 The desktop `deny.toml` (`desktop/src-tauri/deny.toml`) accepts the following transitives from Tauri 2:
 
-- **MPL-2.0 licence**: Added to the licence allow-list for `webkit2gtk`, `option-ext`, and other Tauri desktop transitives. MPL-2.0 is a file-level weak copyleft that does not restrict smed's core licensing or impose copyleft on surrounding code.
+- **MPL-2.0 licence**: Added to the licence allow-list for `webkit2gtk`, `option-ext`, and other Tauri desktop transitives. MPL-2.0 is a file-level weak copyleft that does not restrict mjolnr's core licensing or impose copyleft on surrounding code.
 - **17 unmaintained advisories**: All are transitive, unmaintained-only, and have no safe upgrade path within the Tauri 2 release series (e.g. `urlpattern`, `tauri-utils`, `glib-macros`, `wry`, `syntect` transitive chains). Each is ignored individually by RUSTSEC id with a dated reason in `desktop/src-tauri/deny.toml`.
-- **Wildcard policy**: `wildcards = "deny"` is in force globally. The single carve-out is cargo-deny's `allow-wildcard-paths = true`, which permits a wildcard version requirement **only on path dependencies**. Today the sole path dependency is the local governance core (`smed = { path = "../../" }`), which always appears as a wildcard while referenced by path. A future registry wildcard dependency is refused mechanically; a future path wildcard means adding a path dependency at all, which requires the AGENTS.md §8 justification and an update to this section.
+- **Wildcard policy**: `wildcards = "deny"` is in force globally. The single carve-out is cargo-deny's `allow-wildcard-paths = true`, which permits a wildcard version requirement **only on path dependencies**. Today the sole path dependency is the local governance core (`mjolnr = { path = "../../" }`), which always appears as a wildcard while referenced by path. A future registry wildcard dependency is refused mechanically; a future path wildcard means adding a path dependency at all, which requires the AGENTS.md §8 justification and an update to this section.
 
-These exceptions are recorded here because the desktop crate depends on `smed` as a local path reference, and Tauri's transitive dependency graph necessarily pulls in these licences and unmaintained crates. Before adding any new Tauri transitive exceptions or wildcard allowances, update this section and ensure the desktop `deny.toml` reflects the change.
+These exceptions are recorded here because the desktop crate depends on `mjolnr` as a local path reference, and Tauri's transitive dependency graph necessarily pulls in these licences and unmaintained crates. Before adding any new Tauri transitive exceptions or wildcard allowances, update this section and ensure the desktop `deny.toml` reflects the change.
 
 ## Historical Phase A0 consequences
 
@@ -83,7 +83,7 @@ These exceptions are recorded here because the desktop crate depends on `smed` a
   dependency** in `desktop/package.json`; the bundle was ~110 kB uncompressed.
 - **At the Phase A0 checkpoint there was no Tailwind CSS dependency.**
   Styling used semantic CSS custom properties.
-- **At the Phase A0 checkpoint smed owned all primitive source.** The later
+- **At the Phase A0 checkpoint mjolnr owned all primitive source.** The later
   shadcn standardization superseded this condition.
 - **Accessibility behavior must be tested independently** rather than
   inherited from Bits UI. The Phase A0 test suite includes focus-trap,

@@ -74,7 +74,7 @@ impl RouteDefinition {
     }
 }
 
-/// The role names smed gives meaning to out of the box.
+/// The role names mjolnr gives meaning to out of the box.
 ///
 /// A project may tag a route with any name it likes; these are the ones a
 /// tool or spawn can expect to mean something across projects, so they are

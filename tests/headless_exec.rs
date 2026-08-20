@@ -10,17 +10,17 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use smed::core::command::SmedCommand;
-use smed::core::event::SessionId;
-use smed::core::model::{ModelId, ProviderId};
-use smed::core::policy::PolicyMode;
-use smed::core::provider::Provider;
-use smed::core::runtime::SmedRuntime;
-use smed::core::store::EventStore;
-use smed::headless::{EXIT_REFUSED, EXIT_VERIFIED, HeadlessOutcome};
-use smed::providers::fake::{FakeProvider, FakeScript};
-use smed::runtime::Runtime;
-use smed::store::sqlite::SqliteEventStore;
+use mjolnr::core::command::MjolnrCommand;
+use mjolnr::core::event::SessionId;
+use mjolnr::core::model::{ModelId, ProviderId};
+use mjolnr::core::policy::PolicyMode;
+use mjolnr::core::provider::Provider;
+use mjolnr::core::runtime::MjolnrRuntime;
+use mjolnr::core::store::EventStore;
+use mjolnr::headless::{EXIT_REFUSED, EXIT_VERIFIED, HeadlessOutcome};
+use mjolnr::providers::fake::{FakeProvider, FakeScript};
+use mjolnr::runtime::Runtime;
+use mjolnr::store::sqlite::SqliteEventStore;
 
 async fn ready(runtime: &Runtime, policy: PolicyMode) {
     let mut snapshots = runtime.snapshots();
@@ -45,20 +45,20 @@ async fn configured_runtime(
     let provider: Arc<dyn Provider> = Arc::new(FakeProvider::new(FakeScript::GuardedLoop));
     let runtime = Runtime::spawn(vec![provider], store as Arc<dyn EventStore>);
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: workspace.to_path_buf(),
         })
         .await
         .expect("open project");
     runtime
-        .dispatch(SmedCommand::CreateSession {
+        .dispatch(MjolnrCommand::CreateSession {
             provider: ProviderId::new(FakeProvider::ID),
             model: ModelId::new(FakeProvider::MODEL),
         })
         .await
         .expect("create session");
     runtime
-        .dispatch(SmedCommand::SetPolicy { mode: policy })
+        .dispatch(MjolnrCommand::SetPolicy { mode: policy })
         .await
         .expect("policy");
     ready(&runtime, policy).await;
@@ -76,12 +76,12 @@ async fn full_auto_headless_run_is_verified_durable_and_resumable() {
         .status()
         .expect("git init");
     assert!(status.success());
-    let database = workspace.path().join("smed.db");
+    let database = workspace.path().join("mjolnr.db");
     let store = Arc::new(SqliteEventStore::open(&database).await.expect("store"));
     let runtime =
         configured_runtime(workspace.path(), Arc::clone(&store), PolicyMode::FullAuto).await;
 
-    let report = smed::headless::run(&runtime, "update the fixture".to_owned())
+    let report = mjolnr::headless::run(&runtime, "update the fixture".to_owned())
         .await
         .expect("headless run");
     assert_eq!(report.outcome, HeadlessOutcome::Verified);
@@ -105,13 +105,13 @@ async fn full_auto_headless_run_is_verified_durable_and_resumable() {
         Arc::clone(&resumed_store) as Arc<dyn EventStore>,
     );
     resumed
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: workspace.path().to_path_buf(),
         })
         .await
         .expect("open resumed project");
     resumed
-        .dispatch(SmedCommand::ResumeSession { session })
+        .dispatch(MjolnrCommand::ResumeSession { session })
         .await
         .expect("resume");
     let mut snapshots = resumed.snapshots();
@@ -135,14 +135,14 @@ async fn approval_dependent_headless_step_refuses_instead_of_hanging() {
     let workspace = tempfile::tempdir().expect("workspace");
     std::fs::write(workspace.path().join("fixture.txt"), "before\n").expect("fixture");
     let store = Arc::new(
-        SqliteEventStore::open(&workspace.path().join("smed.db"))
+        SqliteEventStore::open(&workspace.path().join("mjolnr.db"))
             .await
             .expect("store"),
     );
     let runtime = configured_runtime(workspace.path(), store, PolicyMode::WorkspaceWrite).await;
     let report = tokio::time::timeout(
         Duration::from_secs(2),
-        smed::headless::run(&runtime, "update the fixture".to_owned()),
+        mjolnr::headless::run(&runtime, "update the fixture".to_owned()),
     )
     .await
     .expect("headless must not hang")

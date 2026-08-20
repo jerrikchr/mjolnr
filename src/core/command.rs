@@ -35,7 +35,7 @@ impl Eq for CredentialSecret {}
 
 /// A client's request to the runtime.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SmedCommand {
+pub enum MjolnrCommand {
     RegisterCredential {
         provider: ProviderId,
         secret: CredentialSecret,
@@ -57,7 +57,7 @@ pub enum SmedCommand {
     ///
     /// Carries no arguments: it reads the project already open, and letting a
     /// caller name a different root would make this a second, ungoverned way to
-    /// point smed at a directory.
+    /// point mjolnr at a directory.
     RefreshRepository,
     /// Run an explicit bounded repository discovery pass and write its OKF
     /// projection under `.mjolnr/discovery/`.
@@ -229,7 +229,7 @@ pub enum SmedCommand {
     /// Delivered after the current tool calls settle and before the next
     /// provider request, so it redirects work underway rather than waiting for
     /// it to finish. A steering message never resolves an approval and never
-    /// widens a policy: it changes what smed is asked to do, not what it is
+    /// widens a policy: it changes what mjolnr is asked to do, not what it is
     /// allowed to do. With no run in flight it is an ordinary user message.
     QueueSteeringMessage {
         text: String,
@@ -241,7 +241,7 @@ pub enum SmedCommand {
     /// Load a discovered extension into the session's tool registry, making it
     /// callable. Inert until this explicit act: discovery only
     /// makes an extension visible. The load is trust-gated for a project-scoped
-    /// extension and recorded as an [`ExtensionLoaded`](crate::core::event::SmedEvent::ExtensionLoaded)
+    /// extension and recorded as an [`ExtensionLoaded`](crate::core::event::MjolnrEvent::ExtensionLoaded)
     /// event.
     LoadExtension {
         name: String,
@@ -364,7 +364,7 @@ pub enum SmedCommand {
         expected_index_revision: String,
     },
     /// Merge an explicitly selected child branch. `message` is required and
-    /// human-supplied: smed never authors the merge commit's record.
+    /// human-supplied: mjolnr never authors the merge commit's record.
     IntegrateChildBranch {
         name: String,
         message: String,
@@ -434,7 +434,7 @@ pub enum SmedCommand {
     /// every producer (§E5 contract (a)).
     ///
     /// The local commit and branch fields are required because a remote pull
-    /// request must identify the exact verified commit smed is offering. A
+    /// request must identify the exact verified commit mjolnr is offering. A
     /// title/body-only request cannot prove what local work the PR contains.
     SubmitChange {
         source: String,
@@ -447,7 +447,7 @@ pub enum SmedCommand {
         base_branch: String,
     },
     /// Phase D3 review family. A human pins a note to one line of the diff
-    /// smed last captured.
+    /// mjolnr last captured.
     ///
     /// `capture_digest` is the diff revision the human was looking at, and it
     /// is required rather than optional: an opt-in staleness check is not a
@@ -465,12 +465,12 @@ pub enum SmedCommand {
         body: String,
     },
     /// A further human remark on an existing thread. Never a model's: a review
-    /// comment is a human act, and smed answers in the transcript.
+    /// comment is a human act, and mjolnr answers in the transcript.
     AddReviewComment {
         thread: crate::core::review::ReviewThreadId,
         body: String,
     },
-    /// Send the selected threads to smed as a durable revision request.
+    /// Send the selected threads to mjolnr as a durable revision request.
     ///
     /// An ordinary human directive carrying the notes, so it passes every gate
     /// a typed message passes and widens nothing. The threads are named in the
@@ -527,7 +527,7 @@ pub enum SmedCommand {
         body: String,
     },
     /// Phase D9 external-agent family. Every agent is `ExternalUnverified` — its
-    /// internal side effects never become `SmedEvent`s until a human imports the
+    /// internal side effects never become `MjolnrEvent`s until a human imports the
     /// working-tree diff through the ordinary review + stage/commit gates.
     LaunchExternalAgent {
         profile: String,

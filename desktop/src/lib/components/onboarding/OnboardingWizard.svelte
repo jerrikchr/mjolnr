@@ -42,9 +42,9 @@
     { value: 'workspace-write', label: 'Workspace write', detail: 'Allow declared workspace writes; keep other effects gated.' }
   ];
 
-  const starterSoul = `# SOUL.md — smed's identity
+  const starterSoul = `# SOUL.md — mjolnr's identity
 
-You are smed, a local-first, governed coding harness. Be deliberate and honest:
+You are mjolnr, a local-first, governed coding harness. Be deliberate and honest:
 say what you did and did not do, and seek approval before any side effect.
 `;
 
@@ -105,7 +105,7 @@ say what you did and did not do, and seek approval before any side effect.
     return {
       root: projectPath.trim(),
       soul: soulText,
-      userProfile: userProfile.trim() ? `# USER.md — who smed works for\n\n${userProfile.trim()}\n` : undefined
+      userProfile: userProfile.trim() ? `# USER.md — who mjolnr works for\n\n${userProfile.trim()}\n` : undefined
     };
   }
 
@@ -161,7 +161,7 @@ say what you did and did not do, and seek approval before any side effect.
 </script>
 
 <svelte:head>
-  <title>smed · Guided setup</title>
+  <title>mjolnr · Guided setup</title>
 </svelte:head>
 
 <main class="min-h-screen bg-background px-4 py-8 text-foreground sm:px-8">
@@ -170,7 +170,7 @@ say what you did and did not do, and seek approval before any side effect.
       <div class="flex items-center gap-3">
         <AppEmblem size={28} />
         <div>
-          <h1 class="font-semibold">Welcome to smed</h1>
+          <h1 class="font-semibold">Welcome to mjolnr</h1>
           <p class="text-xs text-muted-foreground">Guided setup · about 3 minutes</p>
         </div>
       </div>
@@ -200,7 +200,7 @@ say what you did and did not do, and seek approval before any side effect.
           <div>
             <h2 class="text-xl font-semibold">Setup is ready</h2>
             <p class="mt-2 max-w-lg text-sm text-muted-foreground">
-              Missing setup files were written under <code class="font-mono">.smed/</code>; existing files were preserved.
+              Missing setup files were written under <code class="font-mono">.mjolnr/</code>; existing files were preserved.
               The next step is still yours: a new project can begin the PRD interview, while an existing project can begin bounded discovery.
             </p>
           </div>
@@ -211,7 +211,7 @@ say what you did and did not do, and seek approval before any side effect.
           <div>
             <h2 class="text-xl font-semibold">Select your target workspace</h2>
             <p class="mt-2 max-w-2xl text-sm text-muted-foreground">
-              smed works locally on a directory you choose. The wizard only offers to create missing, diffable files under <code class="font-mono">.smed/</code>; it does not change git history or merge branches.
+              mjolnr works locally on a directory you choose. The wizard only offers to create missing, diffable files under <code class="font-mono">.mjolnr/</code>; it does not change git history or merge branches.
             </p>
           </div>
           <Card.Root>
@@ -235,7 +235,7 @@ say what you did and did not do, and seek approval before any side effect.
             </Card.Content>
           </Card.Root>
           <div class="grid gap-3 sm:grid-cols-4">
-            {#each [['Git', 'Rust core'], ['Local-first', 'No cloud state'], ['Diffable', '.smed files'], ['Governed', 'Rust owns effects']] as check}
+            {#each [['Git', 'Rust core'], ['Local-first', 'No cloud state'], ['Diffable', '.mjolnr files'], ['Governed', 'Rust owns effects']] as check}
               <div class="rounded-md border bg-muted/10 px-3 py-2 text-xs"><div class="font-medium">{check[0]}</div><div class="mt-1 text-muted-foreground">{check[1]}</div></div>
             {/each}
           </div>
@@ -250,9 +250,9 @@ say what you did and did not do, and seek approval before any side effect.
           <div class="rounded-md border border-accent-bright/30 bg-accent-muted/30 p-4 text-sm">
             <div class="flex items-start gap-3">
               <HugeiconsIcon icon={Key01Icon} class="mt-0.5 size-4 text-accent-bright" />
-              <p>In a terminal, run the provider's owner-authenticated login once, then press "Check status". smed reads the result from your credential files.</p>
+              <p>In a terminal, run the provider's owner-authenticated login once, then press "Check status". mjolnr reads the result from your credential files.</p>
             </div>
-            <code class="mt-3 block rounded bg-background/70 p-2 font-mono text-xs">smed auth login openai-codex   # also: openai, anthropic, gemini, openrouter, ollama</code>
+            <code class="mt-3 block rounded bg-background/70 p-2 font-mono text-xs">mjolnr auth login openai-codex   # also: openai, anthropic, gemini, openrouter, ollama</code>
             <Button variant="outline" size="sm" class="mt-3" onclick={refreshProviders}>Check status</Button>
           </div>
 
@@ -278,7 +278,7 @@ say what you did and did not do, and seek approval before any side effect.
         <div class="space-y-6">
           <div>
             <h2 class="text-xl font-semibold">Shape your identity contract</h2>
-            <p class="mt-2 max-w-2xl text-sm text-muted-foreground">Answer two small questions to draft inert plain text. You can edit it before writing <code class="font-mono">.smed/SOUL.md</code>.</p>
+            <p class="mt-2 max-w-2xl text-sm text-muted-foreground">Answer two small questions to draft inert plain text. You can edit it before writing <code class="font-mono">.mjolnr/SOUL.md</code>.</p>
           </div>
           <Card.Root>
             <Card.Header><Card.Title>Project shape</Card.Title></Card.Header>
@@ -303,7 +303,7 @@ say what you did and did not do, and seek approval before any side effect.
           </Field.Field>
           <Field.Field>
             <Field.Label for="onboarding-user">Optional working profile</Field.Label>
-            <Textarea id="onboarding-user" class="min-h-20" bind:value={userProfile} placeholder="How should smed work with you?" />
+            <Textarea id="onboarding-user" class="min-h-20" bind:value={userProfile} placeholder="How should mjolnr work with you?" />
           </Field.Field>
         </div>
       {:else if currentStep === 4}

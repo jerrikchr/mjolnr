@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>smed — Guided Onboarding & Workspace Setup</title>
+  <title>mjolnr — Guided Onboarding & Workspace Setup</title>
   <!-- Google Fonts: Inter & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -401,7 +401,7 @@
           <path d="M9.3 14.5 L18.7 14.5" fill="none" stroke="currentColor"
             stroke-width="2.2" stroke-linecap="round" />
         </svg>
-        <span class="brand-title">Welcome to smed</span>
+        <span class="brand-title">Welcome to mjolnr</span>
       </div>
 
       <div style="display: flex; align-items: center; gap: 10px;">
@@ -444,13 +444,13 @@
             <svg class="icon-svg" style="color: var(--accent-cyan); width: 20px; height: 20px;" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L8.6 3.3A2 2 0 0 0 6.9 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
             <span>Select Your Target Code Workspace</span>
           </h2>
-          <p class="step-subtitle">smed operates local-first directly on your codebase. We will create a clean <code>.smed/</code> directory in your project root to hold your persona contract, routes, and advisory council review settings safely in diffable text files.</p>
+          <p class="step-subtitle">mjolnr operates local-first directly on your codebase. We will create a clean <code>.mjolnr/</code> directory in your project root to hold your persona contract, routes, and advisory council review settings safely in diffable text files.</p>
         </div>
 
         <div class="info-callout">
           <svg class="icon-svg" style="color: var(--accent-cyan); margin-top: 2px;" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
           <div>
-            <strong>How smed Works With Your Repo:</strong> smed never alters your git history or merges branches automatically. Everything smed proposes must pass your deterministic policy gates first. You stay in 100% control.
+            <strong>How mjolnr Works With Your Repo:</strong> mjolnr never alters your git history or merges branches automatically. Everything mjolnr proposes must pass your deterministic policy gates first. You stay in 100% control.
           </div>
         </div>
 
@@ -495,13 +495,13 @@
             <svg class="icon-svg" style="color: var(--accent-cyan); width: 20px; height: 20px;" viewBox="0 0 24 24"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
             <span>Connect Model Providers</span>
           </h2>
-          <p class="step-subtitle">smed connects directly to model provider APIs. Credentials are saved exclusively to local owner-only files (<code>.smed/credentials/</code>). They never leave your machine into logs, SQLite, or telemetry.</p>
+          <p class="step-subtitle">mjolnr connects directly to model provider APIs. Credentials are saved exclusively to local owner-only files (<code>.mjolnr/credentials/</code>). They never leave your machine into logs, SQLite, or telemetry.</p>
         </div>
 
         <div class="info-callout verified">
           <svg class="icon-svg" style="color: var(--gov-verified); margin-top: 2px;" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
           <div>
-            <strong>Strict Secret Isolation Guarantee:</strong> Provider API keys are zeroized on drop and scrubbed from child process environments. smed does not use remote cloud keychains or third-party telemetry.
+            <strong>Strict Secret Isolation Guarantee:</strong> Provider API keys are zeroized on drop and scrubbed from child process environments. mjolnr does not use remote cloud keychains or third-party telemetry.
           </div>
         </div>
 
@@ -555,7 +555,7 @@
             <svg class="icon-svg" style="color: var(--accent-cyan); width: 20px; height: 20px;" viewBox="0 0 24 24"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/></svg>
             <span>Guided Persona & SOUL Contract Assistant</span>
           </h2>
-          <p class="step-subtitle">Not sure what rules your agent should follow? Answer two quick questions below and smed will generate a customized <code>.smed/SOUL.md</code> persona contract tailored to your stack and coding style.</p>
+          <p class="step-subtitle">Not sure what rules your agent should follow? Answer two quick questions below and mjolnr will generate a customized <code>.mjolnr/SOUL.md</code> persona contract tailored to your stack and coding style.</p>
         </div>
 
         <!-- INTERACTIVE QUESTIONNAIRE TO HELP WRITE SOUL.MD -->
@@ -582,7 +582,7 @@
 
         <div class="field-group" style="margin-top: 4px;">
           <div class="field-label">
-            <span>Generated Contract Preview • .smed/SOUL.md</span>
+            <span>Generated Contract Preview • .mjolnr/SOUL.md</span>
             <span style="color: var(--text-muted); font-family: var(--font-mono);">editable plain-text</span>
           </div>
           <textarea class="input-text" id="soul-editor-preview" style="height: 120px; line-height: 1.6; resize: none;"># SOUL.md — Rust Systems Architect Persona
@@ -600,7 +600,7 @@
             <svg class="icon-svg" style="color: var(--accent-cyan); width: 20px; height: 20px;" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
             <span>Model-to-Role Routing & Multi-Model Council</span>
           </h2>
-          <p class="step-subtitle">smed doesn't rely on a single model's blind spots. You can assign specific provider models to specialized roles under <code>.smed/routes/*.yaml</code> and configure one bounded advisory council under <code>.smed/council.yaml</code>.</p>
+          <p class="step-subtitle">mjolnr doesn't rely on a single model's blind spots. You can assign specific provider models to specialized roles under <code>.mjolnr/routes/*.yaml</code> and configure one bounded advisory council under <code>.mjolnr/council.yaml</code>.</p>
         </div>
 
         <div class="info-callout">
@@ -614,7 +614,7 @@
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
           <!-- CARD 1: ROLE ROUTING -->
           <div style="background: var(--bg-card); border: 1px solid var(--border-hairline); border-radius: var(--radius-md); padding: 14px; display: flex; flex-direction: column; gap: 8px;">
-            <div style="font-weight: 600; color: var(--text-bright); font-size: 12px;">1. Role Routing Matrix (.smed/routes/*.yaml)</div>
+            <div style="font-weight: 600; color: var(--text-bright); font-size: 12px;">1. Role Routing Matrix (.mjolnr/routes/*.yaml)</div>
             <div style="font-size: 11px; color: var(--text-muted);">Assign dedicated models to developer tasks:</div>
 
             <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 4px;">
@@ -635,7 +635,7 @@
 
           <!-- CARD 2: ADVISORY COUNCIL DEPTH -->
           <div style="background: var(--bg-card); border: 1px solid var(--border-hairline); border-radius: var(--radius-md); padding: 14px; display: flex; flex-direction: column; gap: 8px;">
-            <div style="font-weight: 600; color: var(--text-bright); font-size: 12px;">2. Advisory Council Review (.smed/council.yaml)</div>
+            <div style="font-weight: 600; color: var(--text-bright); font-size: 12px;">2. Advisory Council Review (.mjolnr/council.yaml)</div>
             <div style="font-size: 11px; color: var(--text-muted);">Pick the bounded review depth:</div>
 
             <div class="option-grid" style="grid-template-columns: 1fr; gap: 6px; margin-top: 4px;">
@@ -662,13 +662,13 @@
             <svg class="icon-svg" style="color: var(--accent-cyan); width: 20px; height: 20px;" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
             <span>Set Default Policy Gate Tier</span>
           </h2>
-          <p class="step-subtitle">smed's core promise is <strong>governed execution</strong>: code proposes, smed disposes. Pick your default operating policy gate tier.</p>
+          <p class="step-subtitle">mjolnr's core promise is <strong>governed execution</strong>: code proposes, mjolnr disposes. Pick your default operating policy gate tier.</p>
         </div>
 
         <div class="option-grid">
           <div class="option-card" onclick="selectPolicyTier(this, 'read-only')">
             <div class="option-title">read-only</div>
-            <div class="option-desc">smed can inspect state and read files, but cannot execute commands or mutate code.</div>
+            <div class="option-desc">mjolnr can inspect state and read files, but cannot execute commands or mutate code.</div>
           </div>
 
           <div class="option-card selected" onclick="selectPolicyTier(this, 'ask')">
@@ -676,7 +676,7 @@
               <span>ask (Recommended)</span>
               <span style="color: var(--gov-approval);">★ Default</span>
             </div>
-            <div class="option-desc">smed prompts for human approval before executing any file mutation or shell command.</div>
+            <div class="option-desc">mjolnr prompts for human approval before executing any file mutation or shell command.</div>
           </div>
 
           <div class="option-card" onclick="selectPolicyTier(this, 'write')">

@@ -124,7 +124,7 @@
             onclick={() => open(entry)}
             disabled={entry.kind !== 'file' || entry.symlink?.escaping === true}
             aria-current={openPath === entry.path ? 'true' : undefined}
-            title={entry.symlink?.escaping ? 'smed refused this escaping symlink' : undefined}
+            title={entry.symlink?.escaping ? 'mjolnr refused this escaping symlink' : undefined}
             data-testid="explorer-node"
           >
             <span class="w-3.5 shrink-0"></span>

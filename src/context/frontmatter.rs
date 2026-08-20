@@ -1,4 +1,4 @@
-//! Strict, bounded frontmatter parsing for the Agent Skills fields smed uses.
+//! Strict, bounded frontmatter parsing for the Agent Skills fields mjolnr uses.
 
 use std::collections::BTreeMap;
 
@@ -63,7 +63,7 @@ pub(super) fn parse(contents: &str, directory_name: &str) -> Result<ParsedSkill,
 
     // These standard fields are parsed to validate their YAML types, but they
     // deliberately confer no runtime authority. In particular, allowed-tools
-    // never bypasses smed's deterministic tool policy.
+    // never bypasses mjolnr's deterministic tool policy.
     let _ = (fields.license, fields.allowed_tools, fields.metadata);
 
     Ok(ParsedSkill {

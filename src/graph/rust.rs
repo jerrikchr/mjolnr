@@ -1,6 +1,6 @@
 //! Rust source extraction: text in, declarations out.
 //!
-//! One reason to change: the syntax of the declarations smed reads.
+//! One reason to change: the syntax of the declarations mjolnr reads.
 //!
 //! This is a bounded line scanner, not a parser, and the distinction is load
 //! bearing. It reads `use`, `mod`, and item-definition lines and understands

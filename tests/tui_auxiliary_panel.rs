@@ -8,13 +8,13 @@
     reason = "AGENTS.md §7: tests may panic freely — a failing assertion is a failing test"
 )]
 
+use mjolnr::core::model::{ModelId, ProviderId, Usage};
+use mjolnr::tui::auxiliary_panel::format_negative_space_telemetry;
+use mjolnr::tui::reducer::{FleetAgent, ViewState};
+use mjolnr::tui::shell::render_workspace_shell;
+use mjolnr::tui::workspace_types::WorkspaceSurface;
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
-use smed::core::model::{ModelId, ProviderId, Usage};
-use smed::tui::auxiliary_panel::format_negative_space_telemetry;
-use smed::tui::reducer::{FleetAgent, ViewState};
-use smed::tui::shell::render_workspace_shell;
-use smed::tui::workspace_types::WorkspaceSurface;
 
 fn render_shell_to_string(width: u16, height: u16, view: &ViewState) -> String {
     let backend = TestBackend::new(width, height);
@@ -56,7 +56,7 @@ fn negative_space_telemetry_formatting() {
         output_tokens: 75,
     };
     view.fleet.push(FleetAgent {
-        child: smed::core::event::SessionId::new(),
+        child: mjolnr::core::event::SessionId::new(),
         short: "sub-1".to_owned(),
         latest: "indexing".to_owned(),
         feed: Vec::new(),

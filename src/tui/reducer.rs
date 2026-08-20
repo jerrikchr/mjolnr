@@ -1,6 +1,6 @@
 //! View state, reduced from runtime events.
 //!
-//! > "The TUI reduces `SmedEvent` values into view state and sends commands
+//! > "The TUI reduces `MjolnrEvent` values into view state and sends commands
 //! > back. It cannot hold the authoritative session transcript."
 //!
 //! So this holds a *view*: finished messages come from the snapshot the runtime
@@ -14,7 +14,7 @@ use std::cell::RefCell;
 use std::time::{Duration, Instant};
 
 use crate::core::command::ApprovalDecision;
-use crate::core::event::{FinishReason, SmedEvent};
+use crate::core::event::{FinishReason, MjolnrEvent};
 #[cfg(test)]
 use crate::core::message::ContentBlock;
 use crate::core::model::QuotaSnapshot;
@@ -569,9 +569,9 @@ impl ViewState {
         clippy::too_many_lines,
         reason = "one flat event-to-view-state mapping;  added the routing/breaker arms alongside the existing ones"
     )]
-    pub fn apply(&mut self, event: &SmedEvent) {
+    pub fn apply(&mut self, event: &MjolnrEvent) {
         match event {
-            SmedEvent::RunStarted { .. } => {
+            MjolnrEvent::RunStarted { .. } => {
                 self.streaming_text.clear();
                 self.status = RunStatus::Streaming;
                 self.timeline_scroll_from_bottom = 0;
@@ -584,17 +584,17 @@ impl ViewState {
                 self.thought_for = None;
                 self.last_intent = None;
             }
-            event @ (SmedEvent::TextDelta { .. }
-            | SmedEvent::ReasoningDelta { .. }
-            | SmedEvent::ToolAssembling { .. }) => self.apply_live_event(event),
-            SmedEvent::RunFinished { reason, .. } => {
+            event @ (MjolnrEvent::TextDelta { .. }
+            | MjolnrEvent::ReasoningDelta { .. }
+            | MjolnrEvent::ToolAssembling { .. }) => self.apply_live_event(event),
+            MjolnrEvent::RunFinished { reason, .. } => {
                 // The finished message is in the snapshot now; drop the
                 // in-flight copy rather than rendering it twice.
                 self.streaming_text.clear();
                 self.status = RunStatus::Finished((*reason).into());
                 self.finish_activity();
             }
-            SmedEvent::RunFailed { code, detail, .. } => {
+            MjolnrEvent::RunFailed { code, detail, .. } => {
                 self.streaming_text.clear();
                 self.status = RunStatus::Failed {
                     code: code.to_string(),
@@ -607,15 +607,15 @@ impl ViewState {
             // miss the event, and a guard a subscriber can miss is not a guard.
             // Clearing the stream is still right — whatever was mid-render when
             // the process died is not this session's text.
-            SmedEvent::RecoveryRequired { .. } => {
+            MjolnrEvent::RecoveryRequired { .. } => {
                 self.streaming_text.clear();
                 self.status = RunStatus::Idle;
             }
-            SmedEvent::RecoveryResolved { .. } => self.status = RunStatus::Idle,
-            SmedEvent::QuotaReported { snapshot, .. } => {
+            MjolnrEvent::RecoveryResolved { .. } => self.status = RunStatus::Idle,
+            MjolnrEvent::QuotaReported { snapshot, .. } => {
                 self.quota = Some(snapshot.clone());
             }
-            SmedEvent::QuotaBoundaryReached { reserve, .. } => {
+            MjolnrEvent::QuotaBoundaryReached { reserve, .. } => {
                 self.model_notice = Some(format!(
                     "QUOTA {:?} // basis {:?} // reset {:?}",
                     reserve.phase, reserve.basis, reserve.resets_at
@@ -626,19 +626,19 @@ impl ViewState {
                     });
                 }
             }
-            SmedEvent::HandoffCreated { handoff, .. } => {
+            MjolnrEvent::HandoffCreated { handoff, .. } => {
                 self.model_notice = Some(format!("HANDOFF SAVED — {}", handoff.id));
             }
-            event @ (SmedEvent::ToolProposed { .. }
-            | SmedEvent::ApprovalResolved { .. }
-            | SmedEvent::ToolCompleted { .. }
-            | SmedEvent::ToolFailed { .. }) => self.apply_tool_event(event),
-            SmedEvent::BudgetExhausted { .. } => {
+            event @ (MjolnrEvent::ToolProposed { .. }
+            | MjolnrEvent::ApprovalResolved { .. }
+            | MjolnrEvent::ToolCompleted { .. }
+            | MjolnrEvent::ToolFailed { .. }) => self.apply_tool_event(event),
+            MjolnrEvent::BudgetExhausted { .. } => {
                 self.model_notice = Some(
                     "BUDGET EXHAUSTED — no further provider or tool work was started".to_owned(),
                 );
             }
-            SmedEvent::ModelChanged {
+            MjolnrEvent::ModelChanged {
                 provider, model, ..
             } => {
                 self.quota = None;
@@ -646,7 +646,7 @@ impl ViewState {
                     "MODEL CHANGED — {provider}:{model} · provider-private reasoning and cache state were not migrated"
                 ));
             }
-            SmedEvent::ModelChangeRefused { code, detail, .. } => {
+            MjolnrEvent::ModelChangeRefused { code, detail, .. } => {
                 self.model_notice = Some(format!("{code} — {detail}"));
             }
             // Shown, not swallowed. `PolicyChanged` is silent because the
@@ -654,7 +654,7 @@ impl ViewState {
             // narrowing a policy *they* set, and the model's tier is the only
             // explanation for why the header no longer says what they chose.
             // It reuses the model notice deliberately: the cause is the model.
-            SmedEvent::PolicyClamped {
+            MjolnrEvent::PolicyClamped {
                 from, to, tier, ..
             } => {
                 self.model_notice = Some(format!(
@@ -664,12 +664,12 @@ impl ViewState {
                     tier.label()
                 ));
             }
-            SmedEvent::SessionCreated { .. } => self.quota = None,
-            event @ (SmedEvent::SubagentSpawned { .. }
-            | SmedEvent::SubagentResultLate { .. }
-            | SmedEvent::ReadSetCollision { .. }
-            | SmedEvent::SubagentActivity { .. }) => self.apply_subagent_event(event),
-            SmedEvent::RouteSelected {
+            MjolnrEvent::SessionCreated { .. } => self.quota = None,
+            event @ (MjolnrEvent::SubagentSpawned { .. }
+            | MjolnrEvent::SubagentResultLate { .. }
+            | MjolnrEvent::ReadSetCollision { .. }
+            | MjolnrEvent::SubagentActivity { .. }) => self.apply_subagent_event(event),
+            MjolnrEvent::RouteSelected {
                 child: None,
                 route,
                 position,
@@ -681,7 +681,7 @@ impl ViewState {
                     "ROUTE SELECTED — {route}[{position}] · {provider}:{model}"
                 ));
             }
-            SmedEvent::RouteAdvanced {
+            MjolnrEvent::RouteAdvanced {
                 route,
                 to_position,
                 provider,
@@ -694,13 +694,13 @@ impl ViewState {
                     condition.label()
                 ));
             }
-            SmedEvent::RouteExhausted { route, condition, .. } => {
+            MjolnrEvent::RouteExhausted { route, condition, .. } => {
                 self.model_notice = Some(format!(
                     "ROUTE EXHAUSTED — {route} · {}",
                     condition.label()
                 ));
             }
-            SmedEvent::BreakerStateChanged {
+            MjolnrEvent::BreakerStateChanged {
                 provider, from, to, ..
             } => {
                 self.model_notice = Some(format!(
@@ -709,72 +709,72 @@ impl ViewState {
                     to.label()
                 ));
             }
-            SmedEvent::MessageAppended { .. }
-            | SmedEvent::UsageReported { .. }
-            | SmedEvent::PolicyChanged { .. }
-            | SmedEvent::FileSaved { .. }
+            MjolnrEvent::MessageAppended { .. }
+            | MjolnrEvent::UsageReported { .. }
+            | MjolnrEvent::PolicyChanged { .. }
+            | MjolnrEvent::FileSaved { .. }
             // A load is acknowledged through `snapshot.last_extension_load`, the
             // same way `/reload` reports through `snapshot.last_reload`, rather
             // than as a transcript entry.
-            | SmedEvent::ExtensionLoaded { .. }
-            | SmedEvent::SessionEnded { .. }
+            | MjolnrEvent::ExtensionLoaded { .. }
+            | MjolnrEvent::SessionEnded { .. }
             // Trigger lifecycle events narrate a trigger's control session, a
             // different session from any this runtime instance's TUI has open.
             // The `/triggers` overlay reads `snapshot.triggers` instead, the
             // same pattern `/mcp` uses for `snapshot.mcp_servers`.
-            | SmedEvent::TriggerFired { .. }
-            | SmedEvent::TriggerSettled { .. }
-            | SmedEvent::TriggerSkipped { .. }
-            | SmedEvent::TriggerQueued { .. }
-            | SmedEvent::TriggerReplaced { .. }
-            | SmedEvent::TriggerDisabled { .. }
-            | SmedEvent::TriggerRearmed { .. }
+            | MjolnrEvent::TriggerFired { .. }
+            | MjolnrEvent::TriggerSettled { .. }
+            | MjolnrEvent::TriggerSkipped { .. }
+            | MjolnrEvent::TriggerQueued { .. }
+            | MjolnrEvent::TriggerReplaced { .. }
+            | MjolnrEvent::TriggerDisabled { .. }
+            | MjolnrEvent::TriggerRearmed { .. }
             // A child's route selection narrates the parent's transcript; the
             // child's own session shows its selection via its own event feed.
-            | SmedEvent::RouteSelected { child: Some(_), .. }
+            | MjolnrEvent::RouteSelected { child: Some(_), .. }
             // The envelope's live state reaches the view on the snapshot, which
             // carries what remains rather than a tally the view would have to
             // rebuild. These are its durable record, read from the event log.
-            | SmedEvent::SpawnEnvelopeArmed { .. }
-            | SmedEvent::SpawnEnvelopeDrawn { .. }
-            | SmedEvent::SpawnEnvelopeCleared { .. }
-            | SmedEvent::PlanQuestionAsked { .. }
-            | SmedEvent::PlanQuestionAnswered { .. }
-            | SmedEvent::PlanProposed { .. }
-            | SmedEvent::PlanReviewed { .. }
-            | SmedEvent::PlanApproved { .. }
-            | SmedEvent::PlanHandoffCreated { .. }
-            | SmedEvent::CouncilReviewed { .. }
-            | SmedEvent::PlanInterviewStarted { .. }
-            | SmedEvent::PlanPrdProposed { .. }
-            | SmedEvent::CouncilFindingDispositionRecorded { .. }
+            | MjolnrEvent::SpawnEnvelopeArmed { .. }
+            | MjolnrEvent::SpawnEnvelopeDrawn { .. }
+            | MjolnrEvent::SpawnEnvelopeCleared { .. }
+            | MjolnrEvent::PlanQuestionAsked { .. }
+            | MjolnrEvent::PlanQuestionAnswered { .. }
+            | MjolnrEvent::PlanProposed { .. }
+            | MjolnrEvent::PlanReviewed { .. }
+            | MjolnrEvent::PlanApproved { .. }
+            | MjolnrEvent::PlanHandoffCreated { .. }
+            | MjolnrEvent::CouncilReviewed { .. }
+            | MjolnrEvent::PlanInterviewStarted { .. }
+            | MjolnrEvent::PlanPrdProposed { .. }
+            | MjolnrEvent::CouncilFindingDispositionRecorded { .. }
             // An amendment is a proposal a human reads and edits in the
             // desktop editor; the TUI has no editor to open it in.
-            | SmedEvent::CouncilAmendmentProposed { .. }
+            | MjolnrEvent::CouncilAmendmentProposed { .. }
             // Review threads are a desktop surface. The TUI
             // has no diff gutter to pin a note to, so it renders none rather
             // than inventing a second, weaker review vocabulary.
-            | SmedEvent::ReviewNoteRecorded { .. }
-            | SmedEvent::ReviewCommentAdded { .. }
-            | SmedEvent::ReviewRequestSent { .. }
-            | SmedEvent::ReviewRequestAnswered { .. }
+            | MjolnrEvent::ReviewNoteRecorded { .. }
+            | MjolnrEvent::ReviewCommentAdded { .. }
+            | MjolnrEvent::ReviewRequestSent { .. }
+            | MjolnrEvent::ReviewRequestAnswered { .. }
             // Decision tickets and imported items are durable records the E5 board
             // will project (Tauri, design steps 3–4); there is no per-event
             // delta and no TUI board to render one into, so the view folds
             // nothing here.
-            | SmedEvent::DecisionTicketOpened { .. }
-            | SmedEvent::DecisionTicketResolved { .. }
-            | SmedEvent::ImportedItemFetched { .. }
-            | SmedEvent::ImportedItemRefreshed { .. }
-            | SmedEvent::ImportedActRecorded { .. }
-            | SmedEvent::ImportedCommentRecorded { .. } => {}
+            | MjolnrEvent::DecisionTicketOpened { .. }
+            | MjolnrEvent::DecisionTicketResolved { .. }
+            | MjolnrEvent::ImportedItemFetched { .. }
+            | MjolnrEvent::ImportedItemRefreshed { .. }
+            | MjolnrEvent::ImportedActRecorded { .. }
+            | MjolnrEvent::ImportedCommentRecorded { .. } => {}
         }
         self.update_plan_steps();
     }
 
-    fn apply_subagent_event(&mut self, event: &SmedEvent) {
+    fn apply_subagent_event(&mut self, event: &MjolnrEvent) {
         match event {
-            SmedEvent::SubagentSpawned {
+            MjolnrEvent::SubagentSpawned {
                 child,
                 policy,
                 branch,
@@ -786,13 +786,13 @@ impl ViewState {
                     policy.label()
                 ));
             }
-            SmedEvent::SubagentResultLate { child, .. } => {
+            MjolnrEvent::SubagentResultLate { child, .. } => {
                 self.model_notice = Some(format!(
                     "LATE SUBAGENT RESULT — {} settled after its group",
                     short_id(child)
                 ));
             }
-            SmedEvent::ReadSetCollision {
+            MjolnrEvent::ReadSetCollision {
                 reader,
                 writer,
                 path,
@@ -804,7 +804,7 @@ impl ViewState {
                     short_id(writer)
                 ));
             }
-            SmedEvent::SubagentActivity { child, label, .. } => {
+            MjolnrEvent::SubagentActivity { child, label, .. } => {
                 self.set_activity(Activity::Subagent {
                     label: format!("{} {label}", short_id(child)),
                 });
@@ -899,14 +899,14 @@ impl ViewState {
         self.focused_agent.and_then(|index| self.fleet.get(index))
     }
 
-    fn apply_live_event(&mut self, event: &SmedEvent) {
+    fn apply_live_event(&mut self, event: &MjolnrEvent) {
         match event {
-            SmedEvent::TextDelta { text, .. } => {
+            MjolnrEvent::TextDelta { text, .. } => {
                 self.collapse_reasoning();
                 self.streaming_text.push_str(text);
                 self.set_activity(Activity::Responding);
             }
-            SmedEvent::ReasoningDelta { text, .. } => {
+            MjolnrEvent::ReasoningDelta { text, .. } => {
                 if self.reasoning_started_at.is_none() {
                     self.reasoning_started_at = Some(Instant::now());
                 }
@@ -915,7 +915,7 @@ impl ViewState {
                 self.reasoning_text.extend(text.chars().take(remaining));
                 self.set_activity(Activity::Thinking);
             }
-            SmedEvent::ToolAssembling { name, .. } => {
+            MjolnrEvent::ToolAssembling { name, .. } => {
                 self.collapse_reasoning();
                 self.last_intent = Some(name.clone());
                 self.set_activity(Activity::ToolAssembling { name: name.clone() });
@@ -924,9 +924,9 @@ impl ViewState {
         }
     }
 
-    fn apply_tool_event(&mut self, event: &SmedEvent) {
+    fn apply_tool_event(&mut self, event: &MjolnrEvent) {
         match event {
-            SmedEvent::ToolProposed { approval, call, .. } => {
+            MjolnrEvent::ToolProposed { approval, call, .. } => {
                 self.collapse_reasoning();
                 self.last_intent = Some(call.name.clone());
                 let activity = if approval.is_some() {
@@ -940,7 +940,7 @@ impl ViewState {
                 };
                 self.set_activity(activity);
             }
-            SmedEvent::ApprovalResolved { decision, .. } => {
+            MjolnrEvent::ApprovalResolved { decision, .. } => {
                 if *decision == ApprovalDecision::Deny {
                     self.set_activity(Activity::Waiting { on: "model" });
                     return;
@@ -952,7 +952,7 @@ impl ViewState {
                 let name = self.last_intent.clone().unwrap_or_default();
                 self.set_activity(Activity::ToolRunning { name });
             }
-            SmedEvent::ToolCompleted { .. } | SmedEvent::ToolFailed { .. } => {
+            MjolnrEvent::ToolCompleted { .. } | MjolnrEvent::ToolFailed { .. } => {
                 self.set_activity(Activity::Waiting { on: "next step" });
             }
             _ => {}
@@ -1727,16 +1727,16 @@ mod tests {
     use crate::core::event::{RunId, SessionId};
     use crate::core::message::CanonicalMessage;
 
-    fn delta(text: &str) -> SmedEvent {
-        SmedEvent::TextDelta {
+    fn delta(text: &str) -> MjolnrEvent {
+        MjolnrEvent::TextDelta {
             session: SessionId::new(),
             run: RunId::new(),
             text: text.to_owned(),
         }
     }
 
-    fn activity(child: SessionId, label: &str) -> SmedEvent {
-        SmedEvent::SubagentActivity {
+    fn activity(child: SessionId, label: &str) -> MjolnrEvent {
+        MjolnrEvent::SubagentActivity {
             session: SessionId::new(),
             run: RunId::new(),
             child,
@@ -1875,13 +1875,13 @@ mod tests {
         let session = SessionId::new();
         let run = RunId::new();
 
-        view.apply(&SmedEvent::RunStarted { session, run });
+        view.apply(&MjolnrEvent::RunStarted { session, run });
         view.apply(&delta("Hel"));
         view.apply(&delta("lo"));
         assert_eq!(view.streaming_text, "Hello");
         assert_eq!(view.status, RunStatus::Streaming);
 
-        view.apply(&SmedEvent::RunFinished {
+        view.apply(&MjolnrEvent::RunFinished {
             session,
             run,
             reason: FinishReason::Stop,
@@ -1905,7 +1905,7 @@ mod tests {
     #[test]
     fn a_failed_run_shows_its_stable_code() {
         let mut view = ViewState::default();
-        view.apply(&SmedEvent::RunFailed {
+        view.apply(&MjolnrEvent::RunFailed {
             session: SessionId::new(),
             run: RunId::new(),
             code: crate::core::error::ReasonCode::ProviderAuth,
@@ -1922,7 +1922,7 @@ mod tests {
     fn a_new_run_clears_the_previous_stream() {
         let mut view = ViewState::default();
         view.apply(&delta("stale"));
-        view.apply(&SmedEvent::RunStarted {
+        view.apply(&MjolnrEvent::RunStarted {
             session: SessionId::new(),
             run: RunId::new(),
         });
@@ -2034,7 +2034,7 @@ mod tests {
     fn numbered_answer_without_a_plan_heading_is_not_an_execution_plan() {
         let mut view = ViewState::default();
         let text = "\
-I am smed, a local-first coding harness.
+I am mjolnr, a local-first coding harness.
 
 1. **Enforce strict standards** from `AGENTS.md`.
 2. **Manage sessions and tools** across providers.

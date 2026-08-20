@@ -1,9 +1,9 @@
 //! Deterministic discovery of the agent Soul and user profile.
 //!
-//! The Soul is smed's own identity — how the orchestrator behaves and sounds —
+//! The Soul is mjolnr's own identity — how the orchestrator behaves and sounds —
 //! and the user profile is who it works for. Both are **inert prose**: they
 //! shape voice and preference and confer no capability. Every side effect they
-//! might inspire still crosses smed's normal deterministic tool and policy
+//! might inspire still crosses mjolnr's normal deterministic tool and policy
 //! gates, exactly as project instructions do. This module owns no gate and
 //! grants no tool; it only produces text for the stable system-prompt prefix.
 //!
@@ -22,7 +22,7 @@ use crate::core::error::ReasonCode;
 /// default applied when the file is absent. That is `AGENTS.md` §11 law 7: a
 /// default soul that is not on disk is a hidden config blob the user cannot
 /// read, diff, or delete, and the diff-and-revert guarantee is the entire
-/// safety case for letting smed evolve its own identity at all. An absent
+/// safety case for letting mjolnr evolve its own identity at all. An absent
 /// `SOUL.md` therefore keeps meaning exactly what it means today — no Soul.
 ///
 /// The text is voice and preference only. It confers no capability, and every
@@ -41,8 +41,8 @@ pub fn default_soul() -> (std::path::PathBuf, String) {
 const DEFAULT_SOUL: &str = "\
 # Soul
 
-How smed works, in this project. Edit freely — this file is yours, it is only
-text, and it grants nothing. Delete it and smed runs without a Soul.
+How mjolnr works, in this project. Edit freely — this file is yours, it is only
+text, and it grants nothing. Delete it and mjolnr runs without a Soul.
 
 ## Voice
 
@@ -69,7 +69,7 @@ then the reasoning if it is needed.
 pub(super) enum SoulKind {
     /// `SOUL.md` — the orchestrator's standing identity and voice.
     Soul,
-    /// `USER.md` — the profile of who smed works for.
+    /// `USER.md` — the profile of who mjolnr works for.
     UserProfile,
 }
 
@@ -216,7 +216,7 @@ mod tests {
         std::fs::create_dir_all(project.path().join(".mjolnr")).unwrap();
         std::fs::write(
             config.path().join("SOUL.md"),
-            "I am smed, terse and exact.\n",
+            "I am mjolnr, terse and exact.\n",
         )
         .unwrap();
         std::fs::write(

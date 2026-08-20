@@ -7,15 +7,15 @@
 
 #![allow(clippy::indexing_slicing, clippy::expect_used)]
 
-use smed::core::mcp::McpConnectionState;
-use smed::mcp::connect_project;
+use mjolnr::core::mcp::McpConnectionState;
+use mjolnr::mcp::connect_project;
 
-/// Write an `.smed/mcp.yaml` into a fresh workspace and connect it.
-async fn connect_with(yaml: &str) -> smed::mcp::McpCatalog {
+/// Write an `.mjolnr/mcp.yaml` into a fresh workspace and connect it.
+async fn connect_with(yaml: &str) -> mjolnr::mcp::McpCatalog {
     let temp = tempfile::tempdir().expect("tempdir");
-    let smed_dir = temp.path().join(".smed");
-    std::fs::create_dir_all(&smed_dir).expect("create_dir_all");
-    std::fs::write(smed_dir.join("mcp.yaml"), yaml).expect("write yaml");
+    let mjolnr_dir = temp.path().join(".mjolnr");
+    std::fs::create_dir_all(&mjolnr_dir).expect("create_dir_all");
+    std::fs::write(mjolnr_dir.join("mcp.yaml"), yaml).expect("write yaml");
     connect_project(temp.path()).await.expect("connect project")
 }
 
@@ -44,7 +44,7 @@ async fn a_remote_server_with_bearer_and_headers_still_reports_honestly_when_dea
     // `Unavailable` still results.
     let catalog = connect_with(
         "servers:\n  - name: remote-auth\n    url: \"http://127.0.0.1:1/mcp\"\n    \
-         bearer_token_env_var: \"MJOLNR_TEST_MCP_TOKEN\"\n    headers:\n      X-Client: \"smed\"\n",
+         bearer_token_env_var: \"MJOLNR_TEST_MCP_TOKEN\"\n    headers:\n      X-Client: \"mjolnr\"\n",
     )
     .await;
     assert_eq!(catalog.servers[0].state, McpConnectionState::Unavailable);
@@ -53,10 +53,10 @@ async fn a_remote_server_with_bearer_and_headers_still_reports_honestly_when_dea
 #[tokio::test]
 async fn a_remote_url_with_a_bad_scheme_is_rejected_before_any_connection() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let smed_dir = temp.path().join(".smed");
-    std::fs::create_dir_all(&smed_dir).expect("create_dir_all");
+    let mjolnr_dir = temp.path().join(".mjolnr");
+    std::fs::create_dir_all(&mjolnr_dir).expect("create_dir_all");
     std::fs::write(
-        smed_dir.join("mcp.yaml"),
+        mjolnr_dir.join("mcp.yaml"),
         "servers:\n  - name: bad\n    url: \"ftp://example.com/mcp\"\n",
     )
     .expect("write yaml");

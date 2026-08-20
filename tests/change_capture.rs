@@ -18,15 +18,15 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
 
-use smed::core::changes::{ChangeSet, ChangeState, FileContent, FileStatus, LineKind};
-use smed::core::command::SmedCommand;
-use smed::core::provider::Provider;
-use smed::core::runtime::SmedRuntime;
-use smed::core::store::EventStore;
-use smed::providers::fake::FakeProvider;
-use smed::runtime::Runtime;
-use smed::runtime::client_bridge::snapshot_to_client;
-use smed::store::memory::InMemoryEventStore;
+use mjolnr::core::changes::{ChangeSet, ChangeState, FileContent, FileStatus, LineKind};
+use mjolnr::core::command::MjolnrCommand;
+use mjolnr::core::provider::Provider;
+use mjolnr::core::runtime::MjolnrRuntime;
+use mjolnr::core::store::EventStore;
+use mjolnr::providers::fake::FakeProvider;
+use mjolnr::runtime::Runtime;
+use mjolnr::runtime::client_bridge::snapshot_to_client;
+use mjolnr::store::memory::InMemoryEventStore;
 
 fn spawn_runtime() -> Runtime {
     Runtime::spawn(
@@ -36,14 +36,14 @@ fn spawn_runtime() -> Runtime {
 }
 
 fn setup_repo(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("smed-d3-producer-{name}"));
+    let dir = std::env::temp_dir().join(format!("mjolnr-d3-producer-{name}"));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).expect("temp dir");
     let dir = dir.canonicalize().expect("canonical temp dir");
 
     git(&dir, &["init", "--initial-branch=main"]);
-    git(&dir, &["config", "user.email", "test@smed.invalid"]);
-    git(&dir, &["config", "user.name", "smed Test"]);
+    git(&dir, &["config", "user.email", "test@mjolnr.invalid"]);
+    git(&dir, &["config", "user.name", "mjolnr Test"]);
     git(&dir, &["config", "commit.gpgsign", "false"]);
 
     fs::write(dir.join("README.md"), "one\ntwo\nthree\n").expect("write");
@@ -72,7 +72,7 @@ fn client_changes(runtime: &Runtime) -> Option<ChangeSet> {
 
 async fn open(runtime: &Runtime, root: &Path) {
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: root.to_path_buf(),
         })
         .await
@@ -152,7 +152,7 @@ async fn a_change_set_and_its_repository_status_share_one_capture_sequence() {
     let changes = snapshot.changes.expect("a change set");
 
     match snapshot.repository.freshness {
-        smed::core::client::workspace::RepositoryFreshness::CapturedAt { sequence, .. } => {
+        mjolnr::core::client::workspace::RepositoryFreshness::CapturedAt { sequence, .. } => {
             assert_eq!(changes.capture_sequence, sequence);
         }
         other => panic!("expected a capture, got {other:?}"),
@@ -179,7 +179,7 @@ async fn the_capture_digest_moves_when_the_working_tree_does_though_head_does_no
 
     fs::write(dir.join("README.md"), "second edit\n").expect("write");
     runtime
-        .dispatch(SmedCommand::RefreshRepository)
+        .dispatch(MjolnrCommand::RefreshRepository)
         .await
         .expect("refresh");
     let after = client_changes(&runtime).expect("a change set");
@@ -297,7 +297,7 @@ async fn a_deleted_file_is_reported_as_deleted() {
 }
 
 /// A directory that is not a repository must not produce an empty change set:
-/// zero changed files reads as "smed looked and nothing had changed", which is
+/// zero changed files reads as "mjolnr looked and nothing had changed", which is
 /// a claim about a tree it could not read at all.
 #[tokio::test]
 async fn a_directory_that_is_not_a_repository_yields_no_change_set() {

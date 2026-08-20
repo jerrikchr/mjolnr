@@ -17,10 +17,10 @@ self-declaration. Views are data-only (`view_type: table`).
 
 ```bash
 # scaffold a copy to discover, or copy this example directly:
-smed plugin create vercel.deployments --template node --yes
+mjolnr plugin create vercel.deployments --template node --yes
 # or manually:
-mkdir -p .smed/plugins
-cp examples/plugins/vercel-deployments/smed-plugin.yaml .smed/plugins/vercel.deployments.yaml
+mkdir -p .mjolnr/plugins
+cp examples/plugins/vercel-deployments/mjolnr-plugin.yaml .mjolnr/plugins/vercel.deployments.yaml
 ```
 
 Grant the credential (owner-only file, `0o600`, `Debug`-redacted):
@@ -36,11 +36,11 @@ Grant the credential (owner-only file, `0o600`, `Debug`-redacted):
   (`src/plugins/transport.rs`).
 - Only `VERCEL_TOKEN` is injected; provider keys (`OPENAI_API_KEY`, etc.) are
   absent.
-- `smed-plugin.yaml` uses `required_credentials: ["VERCEL_TOKEN"]` — exact
+- `mjolnr-plugin.yaml` uses `required_credentials: ["VERCEL_TOKEN"]` — exact
   `UPPER_SNAKE` name, validated by `validate_credential_name`.
 
 ## Notes
 
 - No SDK — `fetch` against `api.vercel.com` directly; wiremock in tests.
-- `source_url` provenance: `https://github.com/jerrikchr/smed/tree/main/examples/plugins/vercel-deployments`.
+- `source_url` provenance: `https://github.com/jerrikchr/mjolnr/tree/main/examples/plugins/vercel-deployments`.
 - Trust class: `THIRDPARTY · EXECUTE` badge in TUI `/plugins`.

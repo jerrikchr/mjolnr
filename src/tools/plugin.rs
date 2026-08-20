@@ -6,7 +6,7 @@
 //! - **Namespacing:** plugin tools are registered as `plugin:<plugin_name>:<tool_name>`.
 //! - **Fixed Tier:** strictly pinned at `ToolTier::Execute` — a plugin cannot self-declare
 //!   a lower tier (such as Read or Mutate).
-//! - **Governed Execution:** every invocation routes through smed's deterministic policy
+//! - **Governed Execution:** every invocation routes through mjolnr's deterministic policy
 //!   gate, preview generation, human approval, and post-mutation evidence recording.
 
 use std::sync::Arc;

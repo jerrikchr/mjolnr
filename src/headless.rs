@@ -2,11 +2,11 @@
 
 use serde::Serialize;
 
-use crate::core::command::{ApprovalDecision, SmedCommand};
-use crate::core::error::{ReasonCode, SmedError};
-use crate::core::event::SmedEvent;
+use crate::core::command::{ApprovalDecision, MjolnrCommand};
+use crate::core::error::{MjolnrError, ReasonCode};
+use crate::core::event::MjolnrEvent;
 use crate::core::message::{ToolEffect, ToolOutcome};
-use crate::core::runtime::SmedRuntime;
+use crate::core::runtime::MjolnrRuntime;
 
 pub const EXIT_VERIFIED: i32 = 0;
 pub const EXIT_REFUSED: i32 = 10;
@@ -57,12 +57,12 @@ struct Observation {
 /// Drive one directive to its terminal event. Approval requests are denied
 /// immediately using the ordinary runtime command; headless has no hidden yes.
 pub async fn run(
-    runtime: &dyn SmedRuntime,
+    runtime: &dyn MjolnrRuntime,
     directive: String,
-) -> Result<HeadlessReport, SmedError> {
+) -> Result<HeadlessReport, MjolnrError> {
     let mut events = runtime.subscribe();
     runtime
-        .dispatch(SmedCommand::SendUserMessage {
+        .dispatch(MjolnrCommand::SendUserMessage {
             text: directive,
             // `mjolnr exec` is run by the person at the keyboard, or by a CI job
             // they configured. Either way the directive is theirs.
@@ -71,15 +71,18 @@ pub async fn run(
         .await?;
     let mut observation = Observation::default();
     loop {
-        let event = events.recv().await.map_err(|_| SmedError::RuntimeClosed)?;
+        let event = events
+            .recv()
+            .await
+            .map_err(|_| MjolnrError::RuntimeClosed)?;
         observe(&mut observation, &event);
-        if let SmedEvent::ToolProposed {
+        if let MjolnrEvent::ToolProposed {
             approval: Some(approval),
             ..
         } = event
         {
             runtime
-                .dispatch(SmedCommand::ResolveApproval {
+                .dispatch(MjolnrCommand::ResolveApproval {
                     approval,
                     decision: ApprovalDecision::Deny,
                 })
@@ -91,10 +94,10 @@ pub async fn run(
     }
 }
 
-fn observe(observation: &mut Observation, event: &SmedEvent) {
+fn observe(observation: &mut Observation, event: &MjolnrEvent) {
     match event {
-        SmedEvent::RunStarted { session, .. } => observation.session_id = session.to_string(),
-        SmedEvent::ToolCompleted { result, .. } => {
+        MjolnrEvent::RunStarted { session, .. } => observation.session_id = session.to_string(),
+        MjolnrEvent::ToolCompleted { result, .. } => {
             match result.outcome {
                 ToolOutcome::Refused(code) => observation.refusal = Some(code),
                 ToolOutcome::Failed(code) => observation.failure = Some(code),
@@ -107,13 +110,13 @@ fn observe(observation: &mut Observation, event: &SmedEvent) {
                 observation.verified = true;
             }
         }
-        SmedEvent::ToolFailed { code, .. } | SmedEvent::RunFailed { code, .. } => {
+        MjolnrEvent::ToolFailed { code, .. } | MjolnrEvent::RunFailed { code, .. } => {
             observation.failure = Some(*code);
         }
-        SmedEvent::BudgetExhausted { .. } => {
+        MjolnrEvent::BudgetExhausted { .. } => {
             observation.stopped = Some(ReasonCode::BudgetExhausted);
         }
-        SmedEvent::QuotaBoundaryReached { reserve, .. }
+        MjolnrEvent::QuotaBoundaryReached { reserve, .. }
             if reserve.phase == crate::core::continuation::QuotaReservePhase::Stopped =>
         {
             observation.stopped = Some(ReasonCode::ProviderPlanQuota);
@@ -122,10 +125,10 @@ fn observe(observation: &mut Observation, event: &SmedEvent) {
     }
 }
 
-fn is_terminal(event: &SmedEvent) -> bool {
+fn is_terminal(event: &MjolnrEvent) -> bool {
     matches!(
         event,
-        SmedEvent::RunFinished { .. } | SmedEvent::RunFailed { .. }
+        MjolnrEvent::RunFinished { .. } | MjolnrEvent::RunFailed { .. }
     )
 }
 

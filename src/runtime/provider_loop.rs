@@ -7,7 +7,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::core::continuation::{QuotaReserveBasis, QuotaReservePhase, QuotaReserveStatus};
 use crate::core::error::{ProviderError, ReasonCode};
-use crate::core::event::{FinishReason, ProviderEvent, RunId, SmedEvent};
+use crate::core::event::{FinishReason, MjolnrEvent, ProviderEvent, RunId};
 use crate::core::provider::{Provider, ProviderRequest};
 use crate::runtime::routing::{RouteAttemptOutcome, RouteGateOutcome};
 use crate::runtime::session::StreamAccumulator;
@@ -172,7 +172,7 @@ impl Actor {
         while let Some(text) = self.state.steering.pop_front() {
             let message = crate::core::message::CanonicalMessage::user(text);
             let stored = match self
-                .persist(SmedEvent::MessageAppended {
+                .persist(MjolnrEvent::MessageAppended {
                     session,
                     message: Box::new(message.clone()),
                 })
@@ -212,14 +212,14 @@ impl Actor {
                 active.accumulator.push_text(&text);
                 // Ephemeral: broadcast to render, never stored. The coalesced
                 // block is what becomes durable.
-                self.broadcast(SmedEvent::TextDelta { session, run, text });
+                self.broadcast(MjolnrEvent::TextDelta { session, run, text });
             }
             ProviderEvent::ReasoningDelta { text } => {
-                self.broadcast(SmedEvent::ReasoningDelta { session, run, text });
+                self.broadcast(MjolnrEvent::ReasoningDelta { session, run, text });
             }
             ProviderEvent::ToolCallStarted { id, name } => {
                 active.accumulator.start_tool_call(id);
-                self.broadcast(SmedEvent::ToolAssembling { session, run, name });
+                self.broadcast(MjolnrEvent::ToolAssembling { session, run, name });
             }
             ProviderEvent::ToolArgumentsDelta { id, fragment } => {
                 active.accumulator.push_arguments(&id, &fragment);
@@ -240,7 +240,7 @@ impl Actor {
                 // (`docs/provider-contract.md` §6.6), so one event per turn is
                 // the contract this relies on.
                 if let Err(error) = self
-                    .persist(SmedEvent::UsageReported {
+                    .persist(MjolnrEvent::UsageReported {
                         session,
                         run,
                         usage,
@@ -255,7 +255,7 @@ impl Actor {
                 self.publish_snapshot();
             }
             ProviderEvent::Quota { snapshot } => {
-                self.broadcast(SmedEvent::QuotaReported {
+                self.broadcast(MjolnrEvent::QuotaReported {
                     session,
                     run,
                     snapshot: snapshot.clone(),
@@ -292,7 +292,7 @@ impl Actor {
             .unwrap_or_default();
         if let Some(message) = message {
             let stored = match self
-                .persist(SmedEvent::MessageAppended {
+                .persist(MjolnrEvent::MessageAppended {
                     session,
                     message: Box::new(message.clone()),
                 })
@@ -312,7 +312,7 @@ impl Actor {
             // this, and its threads stay linked to no response — which is the
             // honest record of what happened, not a gap to be filled in.
             if !answering.is_empty() {
-                let answered = SmedEvent::ReviewRequestAnswered {
+                let answered = MjolnrEvent::ReviewRequestAnswered {
                     session,
                     threads: answering,
                     response_message,
@@ -496,7 +496,7 @@ impl Actor {
             return;
         };
         if let Err(error) = self
-            .persist(SmedEvent::QuotaBoundaryReached {
+            .persist(MjolnrEvent::QuotaBoundaryReached {
                 session,
                 run,
                 reserve: reserve.clone(),

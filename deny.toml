@@ -1,11 +1,11 @@
 # cargo-deny policy. Backs AGENTS.md §8 (dependencies and provenance).
 #
-# smed is intended to become open source, so provenance must be reviewable
+# mjolnr is intended to become open source, so provenance must be reviewable
 # from the first commit. This file is the mechanical half of that promise;
 # THIRD_PARTY.md is the human-readable half.
 
 [graph]
-# Check the platforms smed ships to. Windows is deliberately absent: the plan
+# Check the platforms mjolnr ships to. Windows is deliberately absent: the plan
 # forbids advertising Windows support until it is actually tested there.
 targets = [
     { triple = "aarch64-apple-darwin" },
@@ -34,7 +34,7 @@ ignore = [
 version = 2
 confidence-threshold = 0.93
 
-# Permissive licences only. smed itself is Apache-2.0, so a copyleft
+# Permissive licences only. mjolnr itself is Apache-2.0, so a copyleft
 # dependency would force a relicence rather than merely widen this list —
 # which is why the constraint stays even now that the choice is made.
 # This list is deliberately trimmed to licences actually encountered in the
@@ -55,7 +55,7 @@ allow = [
     "Unicode-3.0",
 ]
 
-# `smed` declares `license = "Apache-2.0"`, which is in the allow list above,
+# `mjolnr` declares `license = "Apache-2.0"`, which is in the allow list above,
 # so our own package is checked like any other. The `private.ignore` escape
 # hatch is deliberately absent: `publish = false` should not buy an exemption
 # from the licence policy this file exists to enforce.

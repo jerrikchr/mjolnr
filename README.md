@@ -130,9 +130,9 @@ Stated up front, because the alternative is discovering it later:
   green after the last mutation — not that the edit was right. Review is still yours.
 - **It does not currently provide an OS security sandbox.** The policy gate is
   approvals, path containment, and budgets. Stronger containment must be built and
-  verified before smed claims it.
+  verified before mjolnr claims it.
 - **It will not guess what an interrupted command did.** Killed between approving a
-  write and recording its outcome, smed says so and stops rather than re-running it
+  write and recording its outcome, mjolnr says so and stops rather than re-running it
   or reporting an outcome it cannot demonstrate.
 - **Approvals do not outlive the session.** `a` is never written to disk, and
   full-auto never survives a resume — it always reopens in `ask`.
@@ -161,7 +161,7 @@ cargo test --all-features
 cargo deny check
 ```
 
-A panic restores the terminal and writes a bounded redacted report beside smed's
+A panic restores the terminal and writes a bounded redacted report beside mjolnr's
 database; provider text and panic payloads are intentionally excluded.
 
 ## Documentation

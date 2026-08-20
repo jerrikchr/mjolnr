@@ -10,8 +10,8 @@ use std::sync::Arc;
 
 use crate::core::checkpoint::SessionCheckpoint;
 use crate::core::continuation::{QuotaReservePhase, ResumeAdvice, ResumeWarning};
-use crate::core::error::{ReasonCode, SmedError};
-use crate::core::event::{SessionId, SmedEvent, StoredEvent};
+use crate::core::error::{MjolnrError, ReasonCode};
+use crate::core::event::{MjolnrEvent, SessionId, StoredEvent};
 use crate::core::policy::PolicyMode;
 use crate::core::recovery::{RecoveryDecision, RecoveryState};
 use crate::core::store::{SessionStatus, SessionSummary, StoreError};
@@ -56,15 +56,18 @@ impl Actor {
     /// `StoreError::Unavailable`, which told the user their database was broken
     /// when they had mistyped a directory. A refusal nobody is told about is
     /// indistinguishable from a dead button (AGENTS.md §1.3).
-    pub(super) async fn open_project(&mut self, root: std::path::PathBuf) -> Result<(), SmedError> {
+    pub(super) async fn open_project(
+        &mut self,
+        root: std::path::PathBuf,
+    ) -> Result<(), MjolnrError> {
         if self.run.is_some() {
-            return Err(SmedError::workspace_refused(
+            return Err(MjolnrError::workspace_refused(
                 ReasonCode::RunActive,
                 "the workspace root cannot change while a run is active; cancel the run first",
             ));
         }
         if self.state.session.is_some() {
-            return Err(SmedError::workspace_refused(
+            return Err(MjolnrError::workspace_refused(
                 ReasonCode::WorkspaceRootLocked,
                 "a session is already open on this workspace root; end the session before \
                  opening a different one",
@@ -89,11 +92,11 @@ impl Actor {
             // `canonical_root` already graded this refusal; carrying its own
             // code through keeps one authority over what an unopenable root
             // means rather than re-labelling it here.
-            Ok(Err(refusal)) => Err(SmedError::workspace_refused(refusal.code, refusal.detail)),
+            Ok(Err(refusal)) => Err(MjolnrError::workspace_refused(refusal.code, refusal.detail)),
             // A join failure leaves nothing written — `canonical_root` is a
             // pure read — so this is a failed attempt, not a store fault and
             // not an uncertain effect.
-            Err(error) => Err(SmedError::workspace_refused(
+            Err(error) => Err(MjolnrError::workspace_refused(
                 ReasonCode::ToolExecution,
                 format!("workspace validation task did not complete: {error}"),
             )),
@@ -197,7 +200,7 @@ impl Actor {
     /// a question with two answers.
     ///
     /// What crosses and what does not is documented on
-    /// [`SmedCommand::ForkSession`](crate::core::command::SmedCommand::ForkSession).
+    /// [`MjolnrCommand::ForkSession`](crate::core::command::MjolnrCommand::ForkSession).
     /// The short version: inert context crosses, authority does not.
     pub(super) async fn fork_session(&mut self, before: Option<u64>) {
         let (Some(_), Some(provider), Some(model)) = (
@@ -263,7 +266,7 @@ impl Actor {
 
         for message in carried {
             if let Err(error) = self
-                .persist(SmedEvent::MessageAppended {
+                .persist(MjolnrEvent::MessageAppended {
                     session,
                     message: Box::new(message),
                 })
@@ -453,7 +456,7 @@ impl Actor {
         };
         let program = definition.program().to_owned();
         let tool = Arc::new(crate::tools::ExtensionTool::new(definition.clone()));
-        self.persist(SmedEvent::ExtensionLoaded {
+        self.persist(MjolnrEvent::ExtensionLoaded {
             session,
             name: name.to_owned(),
             program: program.clone(),
@@ -544,7 +547,7 @@ impl Actor {
         }
         if let Some(session) = self.state.session
             && let Err(error) = self
-                .persist(SmedEvent::PolicyChanged { session, mode })
+                .persist(MjolnrEvent::PolicyChanged { session, mode })
                 .await
         {
             self.note_store_failure(&error);
@@ -647,7 +650,7 @@ impl Actor {
         self.recovery = RecoveryState::Clean;
 
         if let Err(error) = self
-            .persist(SmedEvent::SessionCreated {
+            .persist(MjolnrEvent::SessionCreated {
                 session,
                 provider,
                 model,
@@ -662,7 +665,7 @@ impl Actor {
         // append records the policy rather than establishing it.
         if initial_policy != PolicyMode::default()
             && let Err(error) = self
-                .persist(SmedEvent::PolicyChanged {
+                .persist(MjolnrEvent::PolicyChanged {
                     session,
                     mode: initial_policy,
                 })
@@ -766,7 +769,7 @@ impl Actor {
         // that crashed before its first checkpoint has no root in its
         // checkpoint, and taking the projection's `None` would leave a resumed
         // session with no workspace — every repository tool then refuses, which
-        // looks like smed forgetting the project rather than the bug it is.
+        // looks like mjolnr forgetting the project rather than the bug it is.
         let root = match self
             .session_root(&summary, recovered.state.workspace_root.clone())
             .await
@@ -794,11 +797,11 @@ impl Actor {
 
         self.state.resume_advice = resume_advice(&summary, &self.state);
 
-        // Recorded durably so the transcript says why smed stopped, rather than
+        // Recorded durably so the transcript says why mjolnr stopped, rather than
         // showing a gap followed by a decision.
         if let RecoveryState::Required(work) = &recovered.recovery
             && let Err(error) = self
-                .persist(SmedEvent::RecoveryRequired {
+                .persist(MjolnrEvent::RecoveryRequired {
                     session,
                     work: Box::new(work.clone()),
                 })
@@ -934,7 +937,7 @@ impl Actor {
         }
 
         if let Err(error) = self
-            .persist(SmedEvent::RecoveryResolved { session, decision })
+            .persist(MjolnrEvent::RecoveryResolved { session, decision })
             .await
         {
             self.note_store_failure(&error);
@@ -944,7 +947,7 @@ impl Actor {
         match decision {
             RecoveryDecision::AbandonAndContinue => {
                 // The interrupted work is dropped, never re-run. Its outcome
-                // stays unknown: smed does not write a `ToolCompleted` or a
+                // stays unknown: mjolnr does not write a `ToolCompleted` or a
                 // `ToolFailed` for it, because it knows neither (`AGENTS.md`
                 // §1.4).
                 self.recovery = RecoveryState::Clean;
@@ -970,7 +973,7 @@ impl Actor {
             return;
         };
 
-        if let Err(error) = self.persist(SmedEvent::SessionEnded { session }).await {
+        if let Err(error) = self.persist(MjolnrEvent::SessionEnded { session }).await {
             self.note_store_failure(&error);
             return;
         }
@@ -1146,7 +1149,7 @@ impl Actor {
 
     /// Critical ordering seam: persist before broadcasting or beginning an
     /// approved side effect.
-    pub(super) async fn persist(&mut self, event: SmedEvent) -> Result<StoredEvent, StoreError> {
+    pub(super) async fn persist(&mut self, event: MjolnrEvent) -> Result<StoredEvent, StoreError> {
         let stored = self.store.append(event.clone()).await?;
         self.state
             .apply_event(&event)
@@ -1162,7 +1165,7 @@ impl Actor {
     /// point so everything after it continues linearly.
     pub(super) async fn persist_branching(
         &mut self,
-        event: SmedEvent,
+        event: MjolnrEvent,
     ) -> Result<StoredEvent, StoreError> {
         let Some(parent) = self.state.branch_parent.take() else {
             return self.persist(event).await;
@@ -1173,7 +1176,7 @@ impl Actor {
     }
 
     /// Broadcast without storing. Ephemeral render traffic only.
-    pub(super) fn broadcast(&self, event: SmedEvent) {
+    pub(super) fn broadcast(&self, event: MjolnrEvent) {
         // An error means nobody is subscribed, which is normal for a headless
         // run. Nothing is lost: durable events are already in the store.
         let _ = self.events.send(event);

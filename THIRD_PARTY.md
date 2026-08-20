@@ -8,7 +8,7 @@ mjolnr itself is licensed under [Apache-2.0](./LICENSE). Everything below is lin
 
 ```bash
 cargo metadata --format-version 1 | jq -r '
-  .packages[] | select(.name=="smed") | .dependencies[].name' | sort -u
+  .packages[] | select(.name=="mjolnr") | .dependencies[].name' | sort -u
 ```
 
 Last verified: 2026-08-18 — re-verified with `cargo deny check` against the four targets in `deny.toml`. No new runtime crates in 6.1/6.2 (Vercel/Supabase reuse `reqwest` + `serde_json`); last added crates remain `ratatui-image` and `image` (2026-07-25).
@@ -45,7 +45,7 @@ Last verified: 2026-08-18 — re-verified with `cargo deny check` against the fo
 | `tokio-rusqlite` | 0.7.0 | MIT | Durable events and checkpoints. Owns the SQLite connection thread. `bundled` compiles SQLite in — see below. | https://github.com/programatik29/tokio-rusqlite |
 | `etcetera` | 0.11.0 | MIT OR Apache-2.0 | Resolves the platform data directory without introducing a disallowed licence. **See below.** | https://github.com/lunacookies/etcetera |
 | `unicode-normalization` | 0.1.25 | MIT OR Apache-2.0 | NFKC normalization required by the official Agent Skills validation fixtures. | https://github.com/unicode-rs/unicode-normalization |
-| `tauri` | 2.11.5 (declared 2.1.1, tauri-build 2.6.3) | MIT OR Apache-2.0 | Tauri 2 framework hosting smed's shared core & client bridge. | https://github.com/tauri-apps/tauri |
+| `tauri` | 2.11.5 (declared 2.1.1, tauri-build 2.6.3) | MIT OR Apache-2.0 | Tauri 2 framework hosting mjolnr's shared core & client bridge. | https://github.com/tauri-apps/tauri |
 
 ### Phase A0 Tauri Desktop Client Dependencies (`desktop/package.json`)
 
@@ -103,7 +103,7 @@ Last verified: 2026-08-18 — re-verified with `cargo deny check` against the fo
 ### Phase C standard desktop component system
 
 **Purpose:** shadcn-svelte supplies a coherent, accessible Svelte component
-baseline so smed's desktop effort stays focused on governed runtime workflows
+baseline so mjolnr's desktop effort stays focused on governed runtime workflows
 rather than maintaining buttons, dialogs, selectors, sidebars, tabs, command
 menus, and focus behavior. The committed source uses the Nova style with a zinc
 base/theme, HugeIcons, and the default translucent menu treatment. Typography
@@ -114,7 +114,7 @@ component-system change.
 
 **Alternatives rejected:** continuing the Phase C hand-built primitive set was
 rejected because it duplicated mature accessibility and interaction work and
-would leave smed owning a bespoke UI library. A hybrid custom/Bits UI layer
+would leave mjolnr owning a bespoke UI library. A hybrid custom/Bits UI layer
 was also rejected because it would preserve two component conventions. The
 generated shadcn-svelte source is the sole desktop component baseline.
 
@@ -131,12 +131,12 @@ client DTOs, plan authority, approval, recovery, or execution policy.
 ### Phase 11 official MCP client
 
 **Purpose:** `rmcp` supplies the official MCP handshake, paginated tool discovery,
-tool-call wire types, cancellation, and bounded child-process shutdown. smed
+tool-call wire types, cancellation, and bounded child-process shutdown. mjolnr
 enables only its client and child-process features; HTTP and OAuth transports
 are outside Phase 11.
 
 **Alternatives rejected:** a hand-written JSON-RPC/MCP implementation would make
-smed own protocol version negotiation, cancellation, pagination, and framing.
+mjolnr own protocol version negotiation, cancellation, pagination, and framing.
 Using an unofficial SDK was rejected by `AGENTS.md` section 8.
 
 **Licence:** Apache-2.0, read from the downloaded 2.2.0 crate metadata; it passes
@@ -158,7 +158,7 @@ scripted stdio contract tests.
 
 ### `rpassword`: no-echo credential input
 
-**Purpose:** `smed auth login` reads an API key from the terminal. Without no-echo input the key is echoed into terminal scrollback — and into whatever the user's terminal or session recorder logs. `AGENTS.md` §3 says a secret must never reach the screen, so plain `stdin` reading is not an option for an interactive prompt.
+**Purpose:** `mjolnr auth login` reads an API key from the terminal. Without no-echo input the key is echoed into terminal scrollback — and into whatever the user's terminal or session recorder logs. `AGENTS.md` §3 says a secret must never reach the screen, so plain `stdin` reading is not an option for an interactive prompt.
 
 **Alternatives rejected:**
 
@@ -194,19 +194,19 @@ error[rejected]: failed to satisfy license requirements
    │            ━━━━━━━  rejected: license is not explicitly allowed
 ```
 
-The allowlist is intentionally not widened for a convenience dependency. smed
+The allowlist is intentionally not widened for a convenience dependency. mjolnr
 is Apache-2.0 and keeps its dependency graph permissive so downstream use does
 not acquire an unexpected relicensing obligation.
 
 **Purpose:** resolve the platform-appropriate user data directory for the
-durable store. smed uses `choose_native_strategy`, not `choose_app_strategy`:
+durable store. mjolnr uses `choose_native_strategy`, not `choose_app_strategy`:
 the latter uses XDG on macOS too, which is a defensible CLI convention but not
 the platform-native location.
 
 | Platform | Data directory |
 |---|---|
-| macOS | `~/Library/Application Support/smed` |
-| Linux | `$XDG_DATA_HOME/smed`, else `~/.local/share/smed` |
+| macOS | `~/Library/Application Support/mjolnr` |
+| Linux | `$XDG_DATA_HOME/mjolnr`, else `~/.local/share/mjolnr` |
 
 **Alternatives rejected:**
 
@@ -226,9 +226,9 @@ the platform-native location.
 
 **Purpose:** durable events and checkpoints, on a dedicated connection thread so SQLite never blocks a Tokio worker (`AGENTS.md` §4).
 
-**`bundled`** compiles SQLite from source rather than linking the host's `libsqlite3`. The WAL, `busy_timeout`, and `integrity_check` behaviour smed tests against is then the behaviour that ships — the same reasoning as `rustls` over system OpenSSL (`docs/adr/0001-all-rust-ratatui.md`). Cost: a C compiler at build time and a slower cold build.
+**`bundled`** compiles SQLite from source rather than linking the host's `libsqlite3`. The WAL, `busy_timeout`, and `integrity_check` behaviour mjolnr tests against is then the behaviour that ships — the same reasoning as `rustls` over system OpenSSL (`docs/adr/0001-all-rust-ratatui.md`). Cost: a C compiler at build time and a slower cold build.
 
-**Its queue is unbounded** (`crossbeam_channel::unbounded`, `src/lib.rs:376`), so it is never smed's ordering or backpressure boundary. `src/store/sqlite/actor.rs` puts a bounded actor in front; see `docs/persistence.md` §1.3.
+**Its queue is unbounded** (`crossbeam_channel::unbounded`, `src/lib.rs:376`), so it is never mjolnr's ordering or backpressure boundary. `src/store/sqlite/actor.rs` puts a bounded actor in front; see `docs/persistence.md` §1.3.
 
 **Alternatives rejected:**
 
@@ -247,11 +247,11 @@ All three were shortlisted during the dependency review, are permissively licens
 
 ### Phase 20 highlighting dependency
 
-- **`syntect`:** highlights fenced code blocks and unified diffs in the transcript. Purpose: the transcript is where a coding harness is judged; flat-green code was the largest perceived-quality gap. **Alternatives rejected:** tree-sitter (per-language C grammars compiled in — far heavier than the value it adds); hand-rolled keyword coloring (mediocre output and a permanent maintenance sink); `pulldown-cmark` ( shortlisted it for parsing, but parsing was never the gap — token coloring is). **Licence:** MIT. **Feature cut:** `default-features = false` with `parsing`, `default-syntaxes`, `regex-fancy` — the pure-Rust regex engine, no oniguruma C library, no theme/plist/html loaders (smed builds its own palette from `tui::theme`). **Advisory note:** pulls `bincode 1.3.3` (RUSTSEC-2025-0141, unmaintained-only, no safe upgrade) to deserialize its own crate-bundled binary syntax assets — trusted data, recorded in `deny.toml`. **Removal cost:** low — confined to `src/tui/highlight.rs`; deleting it returns the transcript to flat code blocks with no API change elsewhere.
+- **`syntect`:** highlights fenced code blocks and unified diffs in the transcript. Purpose: the transcript is where a coding harness is judged; flat-green code was the largest perceived-quality gap. **Alternatives rejected:** tree-sitter (per-language C grammars compiled in — far heavier than the value it adds); hand-rolled keyword coloring (mediocre output and a permanent maintenance sink); `pulldown-cmark` ( shortlisted it for parsing, but parsing was never the gap — token coloring is). **Licence:** MIT. **Feature cut:** `default-features = false` with `parsing`, `default-syntaxes`, `regex-fancy` — the pure-Rust regex engine, no oniguruma C library, no theme/plist/html loaders (mjolnr builds its own palette from `tui::theme`). **Advisory note:** pulls `bincode 1.3.3` (RUSTSEC-2025-0141, unmaintained-only, no safe upgrade) to deserialize its own crate-bundled binary syntax assets — trusted data, recorded in `deny.toml`. **Removal cost:** low — confined to `src/tui/highlight.rs`; deleting it returns the transcript to flat code blocks with no API change elsewhere.
 
 ### Terminal image rendering
 
-- **`ratatui-image`:** renders images inside the Ratatui frame using the terminal's own graphics protocol (kitty, iTerm2, sixel), falling back to unicode half-blocks where none is available. **Licence:** MIT. **Feature cut:** `default-features = false` with only `crossterm`. The default set pulls `chafa-dyn`, which links the system `libchafa` through `pkg-config` — a C system dependency, the same thing the `syntect` `regex-fancy` choice above exists to avoid — and `image-defaults`, which widens `image` to every codec it ships. What remains decodes PNG, which is what the widget itself requires; wider codec support is the separate `image` entry below. **Version fit:** depends on `ratatui ^0.30.1`, so it shares smed's single `ratatui 0.30.2` (`cargo tree -i ratatui` shows one). **Duplicate note:** brings `thiserror 1.0.69` alongside the workspace's `2.0.18` — a `cargo deny` *warning* under `multiple-versions = "warn"`, not a failure. 
+- **`ratatui-image`:** renders images inside the Ratatui frame using the terminal's own graphics protocol (kitty, iTerm2, sixel), falling back to unicode half-blocks where none is available. **Licence:** MIT. **Feature cut:** `default-features = false` with only `crossterm`. The default set pulls `chafa-dyn`, which links the system `libchafa` through `pkg-config` — a C system dependency, the same thing the `syntect` `regex-fancy` choice above exists to avoid — and `image-defaults`, which widens `image` to every codec it ships. What remains decodes PNG, which is what the widget itself requires; wider codec support is the separate `image` entry below. **Version fit:** depends on `ratatui ^0.30.1`, so it shares mjolnr's single `ratatui 0.30.2` (`cargo tree -i ratatui` shows one). **Duplicate note:** brings `thiserror 1.0.69` alongside the workspace's `2.0.18` — a `cargo deny` *warning* under `multiple-versions = "warn"`, not a failure. 
 
 **Call sites (2026-07-25):** `src/tui/image.rs` owns protocol detection, containment, decode, and encoding; `src/tui/timeline.rs` reserves the rows and draws. The live source of links is the pasted `![…](file://…)` that `src/tui/app.rs` writes into the composer — `ContentBlock::ImageRef` exists in `core` but is constructed nowhere, so it is not the path. **Removal cost:** low and localised — `src/tui/image.rs` plus the placeholder/draw hooks in `timeline.rs`; the transcript returns to captioned links.
 
@@ -304,9 +304,9 @@ Removed on review for having no call sites: `proptest` and `tempfile` (Phase 0),
 
 All direct dependencies are permissive (MIT / Apache-2.0 / dual). `deny.toml` allows only permissive licences across the whole linked graph, trimmed to those actually encountered.
 
-**smed is Apache-2.0** (owner decision, 2026-07-31). The permissive-only constraint predates that choice — it existed to keep every option open while the decision was pending — and it survives the choice for a stronger reason: a copyleft dependency would now force a relicence, not merely narrow a pending decision. A new licence appearing in the graph fails CI on purpose.
+**mjolnr is Apache-2.0** (owner decision, 2026-07-31). The permissive-only constraint predates that choice — it existed to keep every option open while the decision was pending — and it survives the choice for a stronger reason: a copyleft dependency would now force a relicence, not merely narrow a pending decision. A new licence appearing in the graph fails CI on purpose.
 
-Both manifests declare `license = "Apache-2.0"`. `deny.toml` no longer sets `private = { ignore = true }`, so `smed` is checked against the allowlist like any other package in the graph — `publish = false` does not buy an exemption from the policy this file exists to enforce. Publishing to crates.io remains a separate decision that has not been made.
+Both manifests declare `license = "Apache-2.0"`. `deny.toml` no longer sets `private = { ignore = true }`, so `mjolnr` is checked against the allowlist like any other package in the graph — `publish = false` does not buy an exemption from the policy this file exists to enforce. Publishing to crates.io remains a separate decision that has not been made.
 
 ## Not dependencies
 

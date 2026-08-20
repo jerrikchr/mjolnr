@@ -26,15 +26,15 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use smed::core::command::SmedCommand;
-use smed::core::event::SmedEvent;
-use smed::core::message::Role;
-use smed::core::provider::Provider;
-use smed::core::runtime::{RuntimeSnapshot, SmedRuntime};
-use smed::core::store::EventStore;
-use smed::providers::fake::{FakeProvider, FakeScript};
-use smed::runtime::Runtime;
-use smed::store::sqlite::SqliteEventStore;
+use mjolnr::core::command::MjolnrCommand;
+use mjolnr::core::event::MjolnrEvent;
+use mjolnr::core::message::Role;
+use mjolnr::core::provider::Provider;
+use mjolnr::core::runtime::{MjolnrRuntime, RuntimeSnapshot};
+use mjolnr::core::store::EventStore;
+use mjolnr::providers::fake::{FakeProvider, FakeScript};
+use mjolnr::runtime::Runtime;
+use mjolnr::store::sqlite::SqliteEventStore;
 use tempfile::TempDir;
 
 struct Fixture {
@@ -46,7 +46,7 @@ struct Fixture {
 impl Fixture {
     fn new() -> Self {
         let directory = TempDir::new().expect("temp dir");
-        let database = directory.path().join("smed.sqlite3");
+        let database = directory.path().join("mjolnr.sqlite3");
         let workspace = directory.path().join("workspace");
         std::fs::create_dir_all(&workspace).expect("workspace");
         let workspace = workspace.canonicalize().expect("canonical workspace");
@@ -86,9 +86,9 @@ async fn settle(runtime: &Runtime, ready: impl Fn(&RuntimeSnapshot) -> bool) -> 
 async fn say(runtime: &Runtime, text: &str) -> RuntimeSnapshot {
     let before = runtime.snapshot().messages.len();
     runtime
-        .dispatch(SmedCommand::SendUserMessage {
+        .dispatch(MjolnrCommand::SendUserMessage {
             text: text.to_owned(),
-            source: smed::core::directive::DirectiveSource::Human,
+            source: mjolnr::core::directive::DirectiveSource::Human,
         })
         .await
         .expect("dispatch");
@@ -126,15 +126,15 @@ async fn every_live_message_is_anchored_to_the_event_that_introduced_it() {
     let store = fixture.store().await;
     let runtime = runtime_for(&store);
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: fixture.workspace.clone(),
         })
         .await
         .expect("open project");
     runtime
-        .dispatch(SmedCommand::CreateSession {
-            provider: smed::core::model::ProviderId::new(FakeProvider::ID),
-            model: smed::core::model::ModelId::new(FakeProvider::MODEL),
+        .dispatch(MjolnrCommand::CreateSession {
+            provider: mjolnr::core::model::ProviderId::new(FakeProvider::ID),
+            model: mjolnr::core::model::ModelId::new(FakeProvider::MODEL),
         })
         .await
         .expect("create session");
@@ -177,18 +177,18 @@ async fn every_live_message_is_anchored_to_the_event_that_introduced_it() {
 async fn rewound_session(
     fixture: &Fixture,
     store: &Arc<SqliteEventStore>,
-) -> smed::core::event::SessionId {
+) -> mjolnr::core::event::SessionId {
     let runtime = runtime_for(store);
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: fixture.workspace.clone(),
         })
         .await
         .expect("open project");
     runtime
-        .dispatch(SmedCommand::CreateSession {
-            provider: smed::core::model::ProviderId::new(FakeProvider::ID),
-            model: smed::core::model::ModelId::new(FakeProvider::MODEL),
+        .dispatch(MjolnrCommand::CreateSession {
+            provider: mjolnr::core::model::ProviderId::new(FakeProvider::ID),
+            model: mjolnr::core::model::ModelId::new(FakeProvider::MODEL),
         })
         .await
         .expect("create session");
@@ -200,7 +200,7 @@ async fn rewound_session(
 
     let sequence = anchor_of(&snapshot, "branch here");
     runtime
-        .dispatch(SmedCommand::RewindTo { sequence })
+        .dispatch(MjolnrCommand::RewindTo { sequence })
         .await
         .expect("rewind");
     let rewound = settle(&runtime, |snapshot| {
@@ -233,7 +233,7 @@ async fn a_rewind_starts_a_sibling_and_keeps_the_abandoned_branch_in_the_store()
     let said: Vec<String> = branch
         .iter()
         .filter_map(|stored| match &stored.event {
-            SmedEvent::MessageAppended { message, .. } if message.role == Role::User => {
+            MjolnrEvent::MessageAppended { message, .. } if message.role == Role::User => {
                 Some(message.text())
             }
             _ => None,
@@ -249,7 +249,7 @@ async fn a_rewind_starts_a_sibling_and_keeps_the_abandoned_branch_in_the_store()
     let every_text: Vec<String> = all
         .iter()
         .filter_map(|stored| match &stored.event {
-            SmedEvent::MessageAppended { message, .. } if message.role == Role::User => {
+            MjolnrEvent::MessageAppended { message, .. } if message.role == Role::User => {
                 Some(message.text())
             }
             _ => None,
@@ -278,13 +278,13 @@ async fn a_rewind_survives_a_restart() {
     let store = fixture.store().await;
     let runtime = runtime_for(&store);
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: fixture.workspace.clone(),
         })
         .await
         .expect("open project");
     runtime
-        .dispatch(SmedCommand::ResumeSession { session })
+        .dispatch(MjolnrCommand::ResumeSession { session })
         .await
         .expect("resume");
     let resumed = settle(&runtime, |snapshot| snapshot.session == Some(session)).await;
@@ -312,13 +312,13 @@ async fn a_resumed_transcript_is_anchored_the_same_way_a_live_one_is() {
     let store = fixture.store().await;
     let runtime = runtime_for(&store);
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: fixture.workspace.clone(),
         })
         .await
         .expect("open project");
     runtime
-        .dispatch(SmedCommand::ResumeSession { session })
+        .dispatch(MjolnrCommand::ResumeSession { session })
         .await
         .expect("resume");
     let resumed = settle(&runtime, |snapshot| snapshot.session == Some(session)).await;
@@ -363,9 +363,9 @@ async fn a_rewind_survives_a_crash_with_no_covering_checkpoint() {
     // does it: "what must resume do given these events?" must not depend on how
     // the events came to exist, and killing a live actor mid-turn would race the
     // thing it was trying to interrupt (`AGENTS.md` §7).
-    use smed::core::event::SessionId;
-    use smed::core::message::CanonicalMessage;
-    use smed::core::model::{ModelId, ProviderId};
+    use mjolnr::core::event::SessionId;
+    use mjolnr::core::message::CanonicalMessage;
+    use mjolnr::core::model::{ModelId, ProviderId};
 
     let fixture = Fixture::new();
     let store = fixture.store().await;
@@ -380,13 +380,13 @@ async fn a_rewind_survives_a_crash_with_no_covering_checkpoint() {
         .await
         .expect("session");
 
-    let said = |text: &str| SmedEvent::MessageAppended {
+    let said = |text: &str| MjolnrEvent::MessageAppended {
         session,
         message: Box::new(CanonicalMessage::user(text)),
     };
 
     store
-        .append(SmedEvent::SessionCreated {
+        .append(MjolnrEvent::SessionCreated {
             session,
             provider: ProviderId::new(FakeProvider::ID),
             model: ModelId::new(FakeProvider::MODEL),
@@ -417,13 +417,13 @@ async fn a_rewind_survives_a_crash_with_no_covering_checkpoint() {
 
     let runtime = runtime_for(&store);
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: fixture.workspace.clone(),
         })
         .await
         .expect("open project");
     runtime
-        .dispatch(SmedCommand::ResumeSession { session })
+        .dispatch(MjolnrCommand::ResumeSession { session })
         .await
         .expect("resume");
     let resumed = settle(&runtime, |snapshot| snapshot.session == Some(session)).await;
@@ -488,15 +488,15 @@ async fn a_turn_parents_to_the_previous_turn_across_the_tool_traffic_between_the
     let store = fixture.store().await;
     let runtime = runtime_for(&store);
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: fixture.workspace.clone(),
         })
         .await
         .expect("open project");
     runtime
-        .dispatch(SmedCommand::CreateSession {
-            provider: smed::core::model::ProviderId::new(FakeProvider::ID),
-            model: smed::core::model::ModelId::new(FakeProvider::MODEL),
+        .dispatch(MjolnrCommand::CreateSession {
+            provider: mjolnr::core::model::ProviderId::new(FakeProvider::ID),
+            model: mjolnr::core::model::ModelId::new(FakeProvider::MODEL),
         })
         .await
         .expect("create session");
@@ -543,19 +543,19 @@ async fn following_an_abandoned_branch_restores_it_without_writing_anything() {
 
     let runtime = runtime_for(&store);
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: fixture.workspace.clone(),
         })
         .await
         .expect("open project");
     runtime
-        .dispatch(SmedCommand::ResumeSession { session })
+        .dispatch(MjolnrCommand::ResumeSession { session })
         .await
         .expect("resume");
     settle(&runtime, |snapshot| snapshot.session == Some(session)).await;
 
     runtime
-        .dispatch(SmedCommand::FollowBranch {
+        .dispatch(MjolnrCommand::FollowBranch {
             sequence: abandoned.sequence,
         })
         .await
@@ -604,15 +604,15 @@ async fn following_an_abandoned_branch_restores_it_without_writing_anything() {
 async fn two_turn_session(fixture: &Fixture, store: &Arc<SqliteEventStore>) -> Runtime {
     let runtime = runtime_for(store);
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: fixture.workspace.clone(),
         })
         .await
         .expect("open project");
     runtime
-        .dispatch(SmedCommand::CreateSession {
-            provider: smed::core::model::ProviderId::new(FakeProvider::ID),
-            model: smed::core::model::ModelId::new(FakeProvider::MODEL),
+        .dispatch(MjolnrCommand::CreateSession {
+            provider: mjolnr::core::model::ProviderId::new(FakeProvider::ID),
+            model: mjolnr::core::model::ModelId::new(FakeProvider::MODEL),
         })
         .await
         .expect("create session");
@@ -630,7 +630,7 @@ async fn a_clone_carries_the_whole_branch_into_a_session_of_its_own() {
     let original = runtime.snapshot().session.expect("session");
 
     runtime
-        .dispatch(SmedCommand::ForkSession { before: None })
+        .dispatch(MjolnrCommand::ForkSession { before: None })
         .await
         .expect("clone");
     // The new session id appears before its carried history does, so settle on
@@ -652,7 +652,7 @@ async fn a_clone_carries_the_whole_branch_into_a_session_of_its_own() {
     let events = store.events(session).await.expect("events");
     assert!(
         events.iter().any(
-            |stored| matches!(&stored.event, SmedEvent::MessageAppended { message, .. }
+            |stored| matches!(&stored.event, MjolnrEvent::MessageAppended { message, .. }
                 if message.text() == "first")
         ),
         "the carried messages must be this session's own durable events"
@@ -689,7 +689,7 @@ async fn a_fork_cuts_where_a_rewind_would_and_leaves_the_original_alone() {
     let cut = anchor_of(&snapshot, "second");
 
     runtime
-        .dispatch(SmedCommand::ForkSession { before: Some(cut) })
+        .dispatch(MjolnrCommand::ForkSession { before: Some(cut) })
         .await
         .expect("fork");
     let forked = settle(&runtime, |snapshot| {
@@ -730,18 +730,18 @@ async fn a_fork_cannot_launder_a_narrow_policy_into_a_wide_one() {
     let original = runtime.snapshot().session.expect("session");
 
     runtime
-        .dispatch(SmedCommand::SetPolicy {
-            mode: smed::core::policy::PolicyMode::ReadOnly,
+        .dispatch(MjolnrCommand::SetPolicy {
+            mode: mjolnr::core::policy::PolicyMode::ReadOnly,
         })
         .await
         .expect("set policy");
     settle(&runtime, |snapshot| {
-        snapshot.policy == smed::core::policy::PolicyMode::ReadOnly
+        snapshot.policy == mjolnr::core::policy::PolicyMode::ReadOnly
     })
     .await;
 
     runtime
-        .dispatch(SmedCommand::ForkSession { before: None })
+        .dispatch(MjolnrCommand::ForkSession { before: None })
         .await
         .expect("clone");
     let cloned = settle(&runtime, |snapshot| {
@@ -751,7 +751,7 @@ async fn a_fork_cannot_launder_a_narrow_policy_into_a_wide_one() {
 
     assert_eq!(
         cloned.policy,
-        smed::core::policy::PolicyMode::ReadOnly,
+        mjolnr::core::policy::PolicyMode::ReadOnly,
         "a fork must not widen the policy back to the default"
     );
 
@@ -780,13 +780,13 @@ async fn no_published_snapshot_pairs_a_forked_session_with_a_widened_policy() {
     let original = runtime.snapshot().session.expect("session");
 
     runtime
-        .dispatch(SmedCommand::SetPolicy {
-            mode: smed::core::policy::PolicyMode::ReadOnly,
+        .dispatch(MjolnrCommand::SetPolicy {
+            mode: mjolnr::core::policy::PolicyMode::ReadOnly,
         })
         .await
         .expect("set policy");
     settle(&runtime, |snapshot| {
-        snapshot.policy == smed::core::policy::PolicyMode::ReadOnly
+        snapshot.policy == mjolnr::core::policy::PolicyMode::ReadOnly
     })
     .await;
 
@@ -798,7 +798,7 @@ async fn no_published_snapshot_pairs_a_forked_session_with_a_widened_policy() {
         while let Ok(snapshot) = snapshots.changed().await {
             if let Some(session) = snapshot.session
                 && session != original
-                && snapshot.policy != smed::core::policy::PolicyMode::ReadOnly
+                && snapshot.policy != mjolnr::core::policy::PolicyMode::ReadOnly
             {
                 widened.push(snapshot.policy);
             }
@@ -807,7 +807,7 @@ async fn no_published_snapshot_pairs_a_forked_session_with_a_widened_policy() {
     });
 
     runtime
-        .dispatch(SmedCommand::ForkSession { before: None })
+        .dispatch(MjolnrCommand::ForkSession { before: None })
         .await
         .expect("fork");
     settle(&runtime, |snapshot| {
@@ -833,15 +833,15 @@ async fn a_fork_does_not_inherit_unattended_autonomy() {
     let original = runtime.snapshot().session.expect("session");
 
     runtime
-        .dispatch(SmedCommand::SetPolicy {
-            mode: smed::core::policy::PolicyMode::FullAuto,
+        .dispatch(MjolnrCommand::SetPolicy {
+            mode: mjolnr::core::policy::PolicyMode::FullAuto,
         })
         .await
         .expect("set policy");
     settle(&runtime, |snapshot| snapshot.policy.is_full_auto()).await;
 
     runtime
-        .dispatch(SmedCommand::ForkSession { before: None })
+        .dispatch(MjolnrCommand::ForkSession { before: None })
         .await
         .expect("clone");
     let cloned = settle(&runtime, |snapshot| {
@@ -930,13 +930,13 @@ async fn switching_away_puts_the_summary_on_the_snapshot() {
 
     let runtime = runtime_for(&store);
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: fixture.workspace.clone(),
         })
         .await
         .expect("open project");
     runtime
-        .dispatch(SmedCommand::ResumeSession { session })
+        .dispatch(MjolnrCommand::ResumeSession { session })
         .await
         .expect("resume");
     settle(&runtime, |snapshot| snapshot.session == Some(session)).await;
@@ -948,7 +948,7 @@ async fn switching_away_puts_the_summary_on_the_snapshot() {
         .expect("turn");
 
     runtime
-        .dispatch(SmedCommand::FollowBranch {
+        .dispatch(MjolnrCommand::FollowBranch {
             sequence: abandoned.sequence,
         })
         .await

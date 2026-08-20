@@ -47,7 +47,7 @@ pub const MAX_INTEGRATION_RECORDS_PER_PROVIDER: u32 = 10;
 #[serde(rename_all = "camelCase")]
 #[non_exhaustive]
 pub enum TrustClass {
-    SmedGoverned,
+    MjolnrGoverned,
     OperatorControlled,
     #[serde(other)]
     ExternalUnverified,
@@ -127,7 +127,7 @@ pub struct RepositoryState {
     /// True when any path list is bounded rather than complete.
     pub paths_truncated: bool,
     pub remote_sync: RepositorySyncState,
-    /// When smed last saw the remote, for qualifying `remote_sync` (ADR 0008).
+    /// When mjolnr last saw the remote, for qualifying `remote_sync` (ADR 0008).
     ///
     /// `None` when there is no upstream, or when git's reflog could not say.
     /// A surface renders the "as of" qualifier on `remote_sync` **whether or not
@@ -163,7 +163,7 @@ pub struct RepositoryHistory {
 
 /// Whether the repository was read, and if so at what moment.
 ///
-/// This is the honest half of the D5 producer. smed refreshes on explicit
+/// This is the honest half of the D5 producer. mjolnr refreshes on explicit
 /// triggers and nothing watches the filesystem, so a client can be told what
 /// git said and when it was asked — never that the answer is still true. There
 /// is deliberately no `fresh` or `upToDate` variant to render.
@@ -188,7 +188,7 @@ pub enum RepositoryFreshness {
 /// Where the branch stands against its remote-tracking ref (ADR 0008).
 ///
 /// Every variant except `Unknown` is a statement about the ref as it stood when
-/// smed last saw the remote, **not** about the remote now. Computing these
+/// mjolnr last saw the remote, **not** about the remote now. Computing these
 /// touches no network; learning whether the remote has moved since would, and no
 /// read path may.
 ///
@@ -273,14 +273,14 @@ pub struct ReviewCommentView {
 ///
 /// The D0 contract shipped the first five fields; the producer added the rest,
 /// because a summary that could not say *where* a note was pinned, *whether the
-/// diff had moved under it*, or *what smed answered* is not a review thread —
+/// diff had moved under it*, or *what mjolnr answered* is not a review thread —
 /// it is a count. `MAX_REVIEW_COMMENTS_PER_THREAD` already anticipated the
 /// comments travelling here, which is what `comment_count_truncated` is for.
 ///
 /// `status` stays a `String` on the wire, as D0 declared it, and its values come
 /// from the closed [`ReviewThreadStatus`](crate::core::review::ReviewThreadStatus)
 /// — `"open"` or `"sent"`. There is no `"resolved"`, `"applied"`, or
-/// `"verified"`: smed cannot know a note was addressed, so nothing may render
+/// `"verified"`: mjolnr cannot know a note was addressed, so nothing may render
 /// as if it does.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -297,7 +297,7 @@ pub struct ReviewThreadSummary {
     /// same as "still current" and must not render as it.
     pub anchor_stale: bool,
     pub comments: Vec<ReviewCommentView>,
-    /// The `ClientMessage` id smed answered with, when a sent request produced
+    /// The `ClientMessage` id mjolnr answered with, when a sent request produced
     /// one. `None` while a thread is unsent, and also when the run that carried
     /// it ended without an answer.
     pub response_message_id: Option<String>,
@@ -328,7 +328,7 @@ pub const MAX_FILE_TEXT_BYTES: u32 = 1_048_576;
 /// Largest preview excerpt carried for a file the editor may not have.
 pub const MAX_FILE_PREVIEW_BYTES: u32 = 4_096;
 
-/// What a client may ask smed to page through. `page` is zero-based; a page
+/// What a client may ask mjolnr to page through. `page` is zero-based; a page
 /// past the end is refused rather than answered empty.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -362,7 +362,7 @@ pub struct DirectoryPage {
 ///
 /// The six metadata answers §D7 names by name — symlink, binary, generated,
 /// ignored, large-file, permission — are here, and three of them are `Option`
-/// or a tagged enum rather than a bare `bool`, because "no" and "smed did not
+/// or a tagged enum rather than a bare `bool`, because "no" and "mjolnr did not
 /// look" are different statements and one `false` cannot carry both.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -374,7 +374,7 @@ pub struct DirectoryEntryView {
     /// code: prose may change, these may not.
     pub kind: String,
     /// Present only when the entry is a symbolic link. `target` is `None` for a
-    /// link that escapes the workspace or could not be resolved — smed refuses
+    /// link that escapes the workspace or could not be resolved — mjolnr refuses
     /// to open either, and reporting where an escaping link points would be
     /// reporting a path outside the workspace.
     pub symlink: Option<SymlinkView>,
@@ -389,7 +389,7 @@ pub struct DirectoryEntryView {
     /// repository to ask" — an unasked question cannot answer "ignored".
     pub ignored: bool,
     /// Permission metadata from the filesystem's read-only bit. A hint, not a
-    /// promise: ownership, ACLs, and mount options all outrank it, so smed
+    /// promise: ownership, ACLs, and mount options all outrank it, so mjolnr
     /// still attempts a write and reports what happened.
     pub writable: bool,
 }
@@ -400,12 +400,12 @@ pub struct DirectoryEntryView {
 pub struct SymlinkView {
     /// Project-relative target, or `None` when the link leaves the workspace.
     pub target: Option<String>,
-    /// True when the link resolves outside the workspace or not at all. smed
+    /// True when the link resolves outside the workspace or not at all. mjolnr
     /// refuses to open it either way, which is why one flag covers both.
     pub escaping: bool,
 }
 
-/// What smed could tell about a file's bytes, or that it could not tell.
+/// What mjolnr could tell about a file's bytes, or that it could not tell.
 ///
 /// Tagged rather than two booleans: `unreadable` and `notAFile` are neither
 /// "text" nor "binary", and a surface that rendered them as either would be
@@ -433,7 +433,7 @@ pub enum FileContentView {
 pub struct FileOpenView {
     pub path: String,
     pub mode: FileModeView,
-    /// SHA-256 of the exact bytes on disk when smed read them, computed over
+    /// SHA-256 of the exact bytes on disk when mjolnr read them, computed over
     /// the whole file in both modes. A client echoes it back when it saves, and
     /// the runtime compares rather than trusts.
     pub digest: String,
@@ -441,10 +441,10 @@ pub struct FileOpenView {
     /// [`DirectoryEntryView::size_bytes`].
     pub size_bytes: Option<u32>,
     pub writable: bool,
-    /// `OperatorControlled`. A file on disk is not a smed-governed
-    /// observation: smed read it, it did not produce it, and labelling it
-    /// `SmedGoverned` would show a human's file in the colour reserved for
-    /// things smed verified.
+    /// `OperatorControlled`. A file on disk is not a mjolnr-governed
+    /// observation: mjolnr read it, it did not produce it, and labelling it
+    /// `MjolnrGoverned` would show a human's file in the colour reserved for
+    /// things mjolnr verified.
     pub trust: TrustClass,
 }
 
@@ -526,10 +526,10 @@ mod tests {
 
     #[test]
     fn trust_class_known_variants_round_trip() {
-        let governed = serde_json::to_string(&TrustClass::SmedGoverned).unwrap();
-        assert_eq!(governed, "\"smedGoverned\"");
+        let governed = serde_json::to_string(&TrustClass::MjolnrGoverned).unwrap();
+        assert_eq!(governed, "\"mjolnrGoverned\"");
         let parsed: TrustClass = serde_json::from_str(&governed).unwrap();
-        assert_eq!(parsed, TrustClass::SmedGoverned);
+        assert_eq!(parsed, TrustClass::MjolnrGoverned);
 
         let operator = serde_json::to_string(&TrustClass::OperatorControlled).unwrap();
         assert_eq!(operator, "\"operatorControlled\"");
@@ -563,9 +563,10 @@ mod tests {
     /// tightening the deserializer and breaking legitimate calls.
     #[test]
     fn provenance_accepts_known_good_trust_value() {
-        let json = r#"{"source":"smed","fetchedAt":"2026-07-28T12:00:00Z","trust":"smedGoverned"}"#;
+        let json =
+            r#"{"source":"mjolnr","fetchedAt":"2026-07-28T12:00:00Z","trust":"mjolnrGoverned"}"#;
         let parsed: WorkItemProvenance = serde_json::from_str(json).unwrap();
-        assert_eq!(parsed.trust, TrustClass::SmedGoverned);
+        assert_eq!(parsed.trust, TrustClass::MjolnrGoverned);
 
         let json = r#"{"source":"operator","fetchedAt":"2026-07-28T12:00:00Z","trust":"operatorControlled"}"#;
         let parsed: WorkItemProvenance = serde_json::from_str(json).unwrap();
@@ -643,7 +644,7 @@ mod tests {
                 trigger: "toolWrite".into(),
                 sequence: 7,
             },
-            trust: TrustClass::SmedGoverned,
+            trust: TrustClass::MjolnrGoverned,
         };
         let json = serde_json::to_string(&state).unwrap();
         let parsed: RepositoryState = serde_json::from_str(&json).unwrap();

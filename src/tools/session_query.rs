@@ -1,6 +1,6 @@
 //! Reading this session's own record.
 //!
-//! smed's session is an append-only event log that the session replays from,
+//! mjolnr's session is an append-only event log that the session replays from,
 //! and until now the model that produced those events could not read them. It
 //! saw the transcript the provider loop assembles and nothing else, so a fact
 //! established forty turns ago was re-derived, re-asked, or guessed at.

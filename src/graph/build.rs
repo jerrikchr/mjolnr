@@ -26,7 +26,7 @@ enum ExtractedFile {
 /// Build the graph for an **already canonicalised** root.
 ///
 /// Blocking by design: the caller runs it on a blocking thread, the same way
-/// every other filesystem tool in smed does (`AGENTS.md` §4).
+/// every other filesystem tool in mjolnr does (`AGENTS.md` §4).
 pub fn build(root: &Path) -> Result<CodeGraph, BuildError> {
     if !root.is_dir() {
         return Err(BuildError::NotADirectory {

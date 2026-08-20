@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { SmedClient, describeRefusal, isSearchRefusal } from '../client.svelte';
+import { MjolnrClient, describeRefusal, isSearchRefusal } from '../client.svelte';
 import type { ClientSnapshot } from '../contract';
 import { NO_PROJECT_REPOSITORY, NO_REVIEW_THREADS } from '../contract';
 
@@ -14,7 +14,7 @@ const sampleSnapshot: ClientSnapshot = {
   usage: { inputTokens: 100, outputTokens: 50 },
   budget: { providerTurns: 1, maxProviderTurns: 25, toolCalls: 0, maxToolCalls: 100 },
   messages: [
-    { kind: 'user', id: 'u1', text: 'Hello smed', textTruncated: false },
+    { kind: 'user', id: 'u1', text: 'Hello mjolnr', textTruncated: false },
     { kind: 'assistant', id: 'a1', text: 'Hello human', textTruncated: false, toolCalls: [] }
   ],
   messagesOmitted: 0,
@@ -43,11 +43,11 @@ const sampleSnapshot: ClientSnapshot = {
   reviewThreads: NO_REVIEW_THREADS
 };
 
-describe('SmedClient behavior boundaries', () => {
-  let client: SmedClient;
+describe('MjolnrClient behavior boundaries', () => {
+  let client: MjolnrClient;
 
   beforeEach(() => {
-    client = new SmedClient();
+    client = new MjolnrClient();
   });
 
   it('reports disconnected outside Tauri browser environment without manufacturing fake state', () => {
@@ -190,7 +190,7 @@ describe('refusal normalization', () => {
    * to the global Attention alert would make typing an error state.
    */
   it('refuses a search outside Tauri without raising the global error', async () => {
-    const fresh = new SmedClient();
+    const fresh = new MjolnrClient();
     fresh.lastError = null;
 
     const result = await fresh.searchWorkspace({ query: 'anything', limit: 8 });
@@ -208,10 +208,10 @@ describe('refusal normalization', () => {
  * the two clients cannot silently diverge on what the roster does.
  */
 describe('fleet roster reduction (ported from src/tui/reducer.rs)', () => {
-  let client: SmedClient;
+  let client: MjolnrClient;
 
   beforeEach(() => {
-    client = new SmedClient();
+    client = new MjolnrClient();
   });
 
   function activity(child: string, label: string) {
@@ -247,10 +247,10 @@ describe('fleet roster reduction (ported from src/tui/reducer.rs)', () => {
 });
 
 describe('worktree list reduction (E2)', () => {
-  let client: SmedClient;
+  let client: MjolnrClient;
 
   beforeEach(() => {
-    client = new SmedClient();
+    client = new MjolnrClient();
   });
 
   function spawn(child: string, branch: string, worktree: string) {
@@ -273,7 +273,7 @@ describe('worktree list reduction (E2)', () => {
   }
 
   it('adds an entry on spawn and marks it done on a finished/failed activity label', () => {
-    spawn('child-a', 'mjolnr/sub-child-a', '/work/.smed/worktrees/child-a');
+    spawn('child-a', 'mjolnr/sub-child-a', '/work/.mjolnr/worktrees/child-a');
     expect(client.worktrees).toHaveLength(1);
     expect(client.worktrees[0].done).toBe(false);
 

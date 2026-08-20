@@ -1,4 +1,4 @@
-# smed UX direction: a governed agent workspace
+# mjolnr UX direction: a governed agent workspace
 
 **Status:** Accepted product and interaction direction; Tauri workspace and
 several integrated-workspace slices landed, remaining breadth phased separately
@@ -10,7 +10,7 @@ document does not authorize implementation or alter the current phase plan.
 
 ## Executive direction
 
-smed is evolving from a governed chat console into a **governed agent
+mjolnr is evolving from a governed chat console into a **governed agent
 workspace**.
 
 The current product already has the difficult foundations: an owned agent loop,
@@ -24,7 +24,7 @@ Three researched products illuminate different parts of that direction:
 - **Orca** is the strongest reference for the everyday workspace: persistent
   navigation, parallel work made visible, worktrees as operational objects,
   review-oriented surfaces, and fast movement between active contexts.
-- **HumanLayer / CodeLayer** is the strongest reference for smed's
+- **HumanLayer / CodeLayer** is the strongest reference for mjolnr's
   approval-and-session thesis: drafts, running sessions, pending decisions,
   compressed traces, explicit operator attention, and archived history.
 - **Herdr** is the strongest reference for attention management: stable
@@ -32,7 +32,7 @@ Three researched products illuminate different parts of that direction:
   state, and honest distinctions between live attachment, history, restore,
   and handoff.
 
-smed must implement these ideas independently. The references inform product
+mjolnr must implement these ideas independently. The references inform product
 shape and known interaction patterns only. Their code, tests, naming, visual
 identity, component structure, and internal protocols must not be copied or
 ported.
@@ -41,7 +41,7 @@ The concise product position is:
 
 > **An Orca-like rich workspace, HumanLayer-like decision flow, Herdr-like
 > attention management, and a compact Ratatui companion — all rendering
-> smed's deterministic governance.**
+> mjolnr's deterministic governance.**
 
 The delivery surface is now decided. Ratatui remains the terminal client. The
 Tauri application is the rich everyday workspace under active development; it
@@ -55,7 +55,7 @@ interface. See
 The current TUI is not broken. Its frame tests cover semantic rendering,
 terminal sizes, approval and recovery gates, live activity, quota disclosure,
 tool outcomes, command discovery, and accessibility constraints. The issue is
-structural: smed's capabilities have outgrown the interaction model that
+structural: mjolnr's capabilities have outgrown the interaction model that
 contains them.
 
 Today, most of the product is compressed into:
@@ -80,7 +80,7 @@ triggers, councils, handoffs, configuration, extensions, quota, and subagent
 envelopes all exist. Most are accessed by remembering a slash command, opening
 an overlay, and then returning to the same transcript.
 
-That makes smed feature-rich but recall-driven. Users can discover command
+That makes mjolnr feature-rich but recall-driven. Users can discover command
 names by typing `/`, but they cannot glance at the product and understand:
 
 - what work exists;
@@ -96,7 +96,7 @@ names by typing `/`, but they cannot glance at the product and understand:
 The composer is the user's directive draft, slash-command query, autocomplete
 anchor, and input source for some selection flows. This creates hidden modes:
 the same physical area can mean "tell the agent what to do" or "control
-smed." Those are different intents and should have different view state.
+mjolnr." Those are different intents and should have different view state.
 
 The composer should remain the place where a user expresses intent. Selection,
 navigation, configuration, search, and command discovery should have dedicated
@@ -123,7 +123,7 @@ visual priority.
 The primary frame should answer:
 
 1. Where am I?
-2. What is smed doing?
+2. What is mjolnr doing?
 3. What needs my decision?
 4. What is the governing policy?
 
@@ -137,7 +137,7 @@ but the experience moves between the polished mission-control TUI and
 plain-terminal flows. The security boundary should remain; the interaction
 continuity should improve.
 
-smed should frame setup as one guided journey, even when a particular secret
+mjolnr should frame setup as one guided journey, even when a particular secret
 must be captured outside the transcript. Returning from credential capture
 should land in an explicit result step that says what changed, what was
 verified, and what remains unavailable.
@@ -148,24 +148,24 @@ The current composer attachment caption still says an image is attached as a
 path and the model receives text, while Phase 29 now sends bounded image bytes
 to supported providers and refuses unsupported paths explicitly.
 
-This is a small copy defect with large product significance. smed's promise is
+This is a small copy defect with large product significance. mjolnr's promise is
 that the UI never lies about runtime state. UX work must therefore include a
 systematic pass over every user-facing capability claim, not only layout and
 styling.
 
 ## What must be preserved
 
-The redesign must not weaken the parts smed already does unusually well.
+The redesign must not weaken the parts mjolnr already does unusually well.
 
 ### Deterministic authority
 
-Every status displayed as authoritative must be derived from smed-owned
+Every status displayed as authoritative must be derived from mjolnr-owned
 runtime, policy, persistence, or tool events. Model prose can be shown as a
 proposal, but it cannot create execution authority or claim a verified state.
 
 ### Approval and recovery remain different interactions
 
-"May smed do this?" and "smed was interrupted and cannot know whether this
+"May mjolnr do this?" and "mjolnr was interrupted and cannot know whether this
 happened" are not the same decision. They must retain different language,
 controls, and event records.
 
@@ -183,7 +183,7 @@ surfaces may compress it, but they must not rewrite history.
 
 ### Terminal operation remains first-class
 
-smed remains terminal-launchable and Ratatui remains supported. A wide
+mjolnr remains terminal-launchable and Ratatui remains supported. A wide
 terminal may show a small number of useful regions; a narrow terminal should
 switch between complete views rather than squeeze an imitation desktop UI into
 unreadable columns. “First-class” does not mean “the only rich surface.”
@@ -196,7 +196,7 @@ commands. No visual surface may become a second execution path.
 ## Inspiration from Orca
 
 Orca is best understood as a desktop orchestration workspace for running many
-CLI agents in isolated worktrees. smed should not adopt that underlying
+CLI agents in isolated worktrees. mjolnr should not adopt that underlying
 product thesis, but several of Orca's interaction choices are highly relevant.
 
 ### Adopt: persistent operational objects
@@ -205,7 +205,7 @@ Orca treats a worktree as more than a folder. It is an operational card with
 identity, status, agent activity, issue or pull-request context, ports, runtime
 state, and available actions.
 
-smed needs an analogous first-class **work item**. Depending on context, that
+mjolnr needs an analogous first-class **work item**. Depending on context, that
 item may represent:
 
 - a draft directive;
@@ -222,7 +222,7 @@ The user should not have to reconstruct that identity from transcript messages.
 ### Adopt: a universal jump surface
 
 Orca's jump palette spans recent worktrees, open tabs, projects, settings, and
-actions. smed should provide one keyboard-first jump surface across:
+actions. mjolnr should provide one keyboard-first jump surface across:
 
 - active and recent sessions;
 - drafts;
@@ -240,7 +240,7 @@ primary navigation and discovery mechanism.
 ### Adopt: changes as a primary surface
 
 Reviewing an agent's work is not the same activity as reading its conversation.
-smed should give proposed and completed changes their own surface with:
+mjolnr should give proposed and completed changes their own surface with:
 
 - changed-file list;
 - exact unified diff;
@@ -255,13 +255,13 @@ activity.
 
 ### Adopt: explicit viewport intent
 
-Live output should not drag a user away from text they are reading. smed should
+Live output should not drag a user away from text they are reading. mjolnr should
 model "following newest output" and "reading a pinned viewport" explicitly,
 rather than inferring user intent indirectly.
 
 ### Adapt: worktree visibility
 
-smed already isolates subagents in worktrees. Their existence should become
+mjolnr already isolates subagents in worktrees. Their existence should become
 visible through the work hierarchy: branch, parent task, policy ceiling,
 budget, live activity, attention state, and result. Worktree management remains
 owned by the runtime and tools, not by a general-purpose terminal pane.
@@ -275,7 +275,7 @@ work, and external CLI-agent adapters remain product direction, only behind the
 trust and authority boundary in
 [`ADR 0006`](./adr/0006-bounded-integrated-developer-workspace.md).
 
-smed's integrated workspace covers or is expected to cover:
+mjolnr's integrated workspace covers or is expected to cover:
 
 - a file explorer and code editor;
 - terminal tabs and splits;
@@ -285,20 +285,20 @@ smed's integrated workspace covers or is expected to cover:
 - explicit provider and integration account profiles; and
 - a compatibility surface for external CLI agents.
 
-This is adaptation, not wholesale adoption. smed work items remain the
+This is adaptation, not wholesale adoption. mjolnr work items remain the
 organizing identity. GitHub and Linear supply or receive work; they do not own
 it. Terminals and direct editor actions are operator-controlled. An arbitrary
 external CLI agent is external-unverified unless a specific adapter proves that
-every one of its side effects is forced through smed's policy and tool proxy.
+every one of its side effects is forced through mjolnr's policy and tool proxy.
 The interface must not blur those trust classes.
 
 ### Still reject from Orca
 
-smed should reject an unbounded IDE roadmap assembled merely by matching
-Orca's feature list, PTY-mediated "native chat" presented as smed-governed,
+mjolnr should reject an unbounded IDE roadmap assembled merely by matching
+Orca's feature list, PTY-mediated "native chat" presented as mjolnr-governed,
 screen-derived authority, silent credential inheritance, and any browser,
 terminal, editor, Git, task, or SSH action implemented directly in the
-frontend. smed owns its native agent loop and must not simulate governance by
+frontend. mjolnr owns its native agent loop and must not simulate governance by
 typing into another product.
 
 ## Inspiration from HumanLayer / CodeLayer
@@ -310,7 +310,7 @@ a guaranteed representation of the current commercial product.
 
 ### Adopt: explicit work lifecycle
 
-smed should distinguish:
+mjolnr should distinguish:
 
 ```text
 Draft → Active → Needs decision → Reviewing → Verified / Failed → Archived
@@ -321,7 +321,7 @@ deciding risk, reviewing effects, and reading history are no longer mixed into
 one list.
 
 The names are illustrative; final reason codes and lifecycle types must be
-derived from smed's runtime contract.
+derived from mjolnr's runtime contract.
 
 ### Adopt: approval-first navigation
 
@@ -337,7 +337,7 @@ The queue is a projection over durable events, not a separate mutable inbox.
 
 ### Adopt: off-screen attention remains visible
 
-If an approval or failure is outside the current transcript viewport, smed
+If an approval or failure is outside the current transcript viewport, mjolnr
 must retain a visible, selectable indicator. The user should never need to
 scroll randomly to discover why work stopped.
 
@@ -362,7 +362,7 @@ HumanLayer's TODO sidebar demonstrates a useful pattern: derive a small progress
 view from the latest structured task state instead of forcing the user to
 search the transcript.
 
-smed can generalize this into an explicit Plan surface, derived only from
+mjolnr can generalize this into an explicit Plan surface, derived only from
 structured plan state. It must remain labelled as proposed until the runtime
 has accepted it, and it never grants authority by itself.
 
@@ -387,24 +387,24 @@ separately and must not be disguised as ordinary undoable UI state.
 
 ### Reject from HumanLayer
 
-smed must not add a lightweight "dangerously skip permissions" affordance.
+mjolnr must not add a lightweight "dangerously skip permissions" affordance.
 Full-auto remains an explicit policy with unmistakable confirmation, bounded
 authority, recorded automatic approvals, and no persistence across resume.
 
-smed should also avoid making a daemon-plus-desktop-shell architecture its
+mjolnr should also avoid making a daemon-plus-desktop-shell architecture its
 default identity. A future remote client may exist, but it should consume the
 same runtime truth rather than redefining the product around an external agent.
 
 ## Inspiration from Herdr
 
-Herdr is an agent-aware persistent terminal workspace. smed should not become
+Herdr is an agent-aware persistent terminal workspace. mjolnr should not become
 an external-agent multiplexer, but Herdr shows how to make concurrent work
 glanceable.
 
 ### Adopt: a small, stable hierarchy
 
 Herdr's workspace → tab → pane → agent hierarchy keeps its UI coherent.
-smed's corresponding hierarchy should be small and product-specific:
+mjolnr's corresponding hierarchy should be small and product-specific:
 
 ```text
 Workspace
@@ -425,7 +425,7 @@ If a child agent is blocked, its session and workspace should show that
 attention is required. If several children are running, the parent should show
 an aggregate without hiding individual states.
 
-Rollups should use a restrained vocabulary grounded in smed events:
+Rollups should use a restrained vocabulary grounded in mjolnr events:
 
 - draft;
 - queued;
@@ -467,7 +467,7 @@ them consistently instead of collapsing them into a generic "continue."
 
 ### Reject from Herdr
 
-smed must not infer execution-critical state from terminal screen patterns.
+mjolnr must not infer execution-critical state from terminal screen patterns.
 It must also reject unrestricted plugins that run with the user's full
 authority. Extensions remain declarative, capability-scoped, session-loaded,
 and governed by the ordinary execution gate.
@@ -586,17 +586,17 @@ across multiple work items.
 
 ### First launch
 
-1. smed identifies the workspace.
+1. mjolnr identifies the workspace.
 2. Guided setup shows progress and explains which artifacts will be written.
 3. Provider authentication retains its secret boundary.
-4. Returning to smed shows the verified provider/model state.
+4. Returning to mjolnr shows the verified provider/model state.
 5. The quick launcher opens with a ready default route and ask policy.
 
 ### Start work
 
 1. User writes or resumes a durable draft.
 2. User selects route/model, policy, and optional budget.
-3. smed previews the effective authority.
+3. mjolnr previews the effective authority.
 4. Starting creates an active session and makes no broader grant.
 
 ### Supervise work
@@ -624,7 +624,7 @@ across multiple work items.
 ### Recover interrupted work
 
 1. Recovery interrupts ordinary navigation.
-2. smed distinguishes proven-not-started from uncertain effect.
+2. mjolnr distinguishes proven-not-started from uncertain effect.
 3. No automatic retry occurs.
 4. User chooses the recovery action using controls distinct from approval.
 
@@ -644,7 +644,7 @@ across multiple work items.
 
 ## Open-source and commercial optionality
 
-smed is licensed under Apache-2.0 and remains unpublished with `publish = false`.
+mjolnr is licensed under Apache-2.0 and remains unpublished with `publish = false`.
 The repository is being prepared for a later public release; publication and
 registry distribution remain separate owner decisions.
 
@@ -684,9 +684,9 @@ entitlements merely because remote services may be commercial.
 
 | Reference | Adopt | Adapt | Reject |
 |---|---|---|---|
-| Orca | Persistent work objects, universal jump, changes/review surface, viewport intent | Worktree/agent hierarchy, editor, terminals, bounded browser/design mode, SSH, task sources, and external CLI compatibility through explicit trust classes | Unbounded feature copying, screen-derived authority, PTY shims presented as governed smed sessions |
-| HumanLayer | Draft/active/attention/archive lifecycle, approval-first navigation, trace compression, quick launch | Desktop modals into responsive Ratatui surfaces; drafts into smed durability | Casual permission bypass, desktop daemon as the product identity |
-| Herdr | Stable hierarchy, upward status rollups, done-until-seen, explainable status | Terminal/agent status into explicit trust classes and deterministic smed events | Screen-pattern authority, unrestricted plugins, external multiplexer state presented as smed authority |
+| Orca | Persistent work objects, universal jump, changes/review surface, viewport intent | Worktree/agent hierarchy, editor, terminals, bounded browser/design mode, SSH, task sources, and external CLI compatibility through explicit trust classes | Unbounded feature copying, screen-derived authority, PTY shims presented as governed mjolnr sessions |
+| HumanLayer | Draft/active/attention/archive lifecycle, approval-first navigation, trace compression, quick launch | Desktop modals into responsive Ratatui surfaces; drafts into mjolnr durability | Casual permission bypass, desktop daemon as the product identity |
+| Herdr | Stable hierarchy, upward status rollups, done-until-seen, explainable status | Terminal/agent status into explicit trust classes and deterministic mjolnr events | Screen-pattern authority, unrestricted plugins, external multiplexer state presented as mjolnr authority |
 
 ## Delivery direction
 
@@ -774,7 +774,7 @@ visually and mechanically distinct.
 - Test first launch, partial provider failure, re-authentication, and return to
   an existing session.
 
-**Stop condition:** setup feels like one smed journey without placing secrets
+**Stop condition:** setup feels like one mjolnr journey without placing secrets
 in the transcript, argv, logs, or view state.
 
 ## Success criteria
@@ -786,10 +786,10 @@ remembering a command:
 - What is running?
 - What needs me?
 - What changed?
-- What did smed verify?
+- What did mjolnr verify?
 - What remains uncertain?
 - Which model and policy govern this work?
-- Is this action smed-governed, operator-controlled, or external-unverified?
+- Is this action mjolnr-governed, operator-controlled, or external-unverified?
 - How do I resume, branch, hand off, or archive it?
 - How do I inspect, edit, run, review, verify, commit, and publish the selected
   work without losing its provenance?
@@ -807,7 +807,7 @@ It must also preserve:
 
 ## Evidence reviewed
 
-### smed
+### mjolnr
 
 - `docs/tui-design.md`
 - `src/tui/layout.rs`

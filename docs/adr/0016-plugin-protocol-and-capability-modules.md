@@ -7,12 +7,12 @@
 
 ## Context
 
-The master implementation plan for the next phase of smed proposed a
-"microkernel + plugin ecosystem": a `smed-plugin.yaml` manifest format, a plugin
+The master implementation plan for the next phase of mjolnr proposed a
+"microkernel + plugin ecosystem": a `mjolnr-plugin.yaml` manifest format, a plugin
 host with a hook lifecycle, `pass_env` for environment secrets, community
 plugins shipping SvelteKit components mounted directly into the desktop
-webview, and first-party capabilities (`@smed/memory`, `@smed/fleet`,
-`@smed/preview`) packaged as plugins.
+webview, and first-party capabilities (`@mjolnr/memory`, `@mjolnr/fleet`,
+`@mjolnr/preview`) packaged as plugins.
 
 Three things constrain that proposal:
 
@@ -35,7 +35,7 @@ Three things constrain that proposal:
    execution path inside a client that ADR-0003 confines to rendering
    snapshots and emitting commands.
 
-smed also has three working precedents that already solve most of this:
+mjolnr also has three working precedents that already solve most of this:
 MCP (`src/mcp.rs` — `env_clear()` with an explicit pass-env allowlist, tools
 namespaced `mcp:<server>:<tool>`, pinned at `ToolTier::Execute`, honest
 `Unavailable` states), declarative extensions (`src/core/extension.rs`,
@@ -44,7 +44,7 @@ namespaced `mcp:<server>:<tool>`, pinned at `ToolTier::Execute`, honest
 downward), and the integrations port (`src/integrations/` — secrets held in
 `Secret` types, remote text framed as data, never authority).
 
-The question this ADR settles: what is a "plugin" in smed, what may third-party
+The question this ADR settles: what is a "plugin" in mjolnr, what may third-party
 code do, and how do first-party capabilities ship?
 
 ## Decision
@@ -59,20 +59,20 @@ contributions.**
 
 | Term | What it is | Governing rule |
 |---|---|---|
-| **Capability module** | First-party Rust in the single crate (`src/memory/`, fleet logic in `src/runtime/`, preview behind typed desktop commands). Toggleable via declarable `.smed/` files. | §2.2 extraction test; ordinary module boundaries; never called "plugin" in UI or docs |
+| **Capability module** | First-party Rust in the single crate (`src/memory/`, fleet logic in `src/runtime/`, preview behind typed desktop commands). Toggleable via declarable `.mjolnr/` files. | §2.2 extraction test; ordinary module boundaries; never called "plugin" in UI or docs |
 | **Plugin** | Third-party code, local subprocess, versioned JSON-RPC over stdio (streamable-HTTP transport later, mirroring MCP's split). | This ADR |
 | **MCP server** | External tool server, unchanged (`src/mcp.rs`). Tool-only: no lifecycle, no session context, no UI. | Existing implementation |
 
 The overlap between plugins and MCP is intentional and not a redundancy: a
 plugin may wrap an MCP server and add lifecycle, curation, or UI on top. MCP is
 the floor — any tool provider can be an MCP server — and the plugin protocol is
-the richer surface for publishers who want hooks and views. `@smed/*` naming is
+the richer surface for publishers who want hooks and views. `@mjolnr/*` naming is
 reserved for first-party modules; plugins use publisher namespacing
 (`acme.deploy`).
 
 ### 2. The trust model is honest, not sandboxed
 
-A plugin subprocess runs with the user's OS authority. smed does **not** claim
+A plugin subprocess runs with the user's OS authority. mjolnr does **not** claim
 OS-level sandboxing (AGENTS.md §3), and the plugin hub UI must say so plainly.
 Trust is established by:
 
@@ -82,9 +82,9 @@ Trust is established by:
 - **Pinned provenance**: source URL, publisher, and content hash recorded at
   install; an update changes the hash and requires re-approval.
 - **A distinct trust class in the UI** (ADR-0006): plugin-owned surfaces are
-  visually separate from smed-governed and operator-controlled ones.
+  visually separate from mjolnr-governed and operator-controlled ones.
 
-What smed *mediates* is the plugin's access to smed-owned capabilities: every
+What mjolnr *mediates* is the plugin's access to mjolnr-owned capabilities: every
 plugin tool call routes the ordinary policy gate, and hooks receive data, never
 authority. Quality curation is a property of the ecosystem, not a security
 claim — a curated-but-compromised plugin still has the user's authority, and
@@ -92,7 +92,7 @@ the ADR and the UI both say so.
 
 ### 3. The manifest is fail-closed and grants no tier
 
-`smed-plugin.yaml` declares identity, provenance, protocol version, tools
+`mjolnr-plugin.yaml` declares identity, provenance, protocol version, tools
 (name, description, JSON schema — no `$ref`, matching the registry's existing
 validation), subscribed hooks, view descriptors, and credential grants.
 Unknown fields refuse (the `deny_unknown_fields` pattern already used by
@@ -104,7 +104,7 @@ so every call is gated, previewed, and evidenced.
 
 The manifest *names* the environment variables a plugin wants; it never
 receives them by default. Each grant is approved by the owner at install or
-first use, stored in smed's owner-only credential files (one file per plugin,
+first use, stored in mjolnr's owner-only credential files (one file per plugin,
 the `src/store/secrets.rs` pattern), and injected as environment variables at
 spawn only — never argv, never YAML, never logs, `Debug`-redacted, zeroized on
 drop. Grant scope is exact variable names, displayed in the UI before
@@ -137,7 +137,7 @@ contract instead of an arbitrary code surface.
 ## What this does not license
 
 - No plugin code in-process, ever. The protocol boundary is the containment
-  boundary smed actually has.
+  boundary mjolnr actually has.
 - No blanket environment inheritance of any kind — provider keys must not be
   inheritable by plugin subprocesses.
 - No hook-authored tool arguments, approvals, or policy changes.

@@ -1,10 +1,10 @@
-//! Normalised provider events and durable smed events.
+//! Normalised provider events and durable mjolnr events.
 //!
 //! Two distinct vocabularies, deliberately not merged:
 //!
 //! - [`ProviderEvent`] is what an adapter emits while decoding one upstream
 //!   stream. Ephemeral, high-frequency, per-request.
-//! - [`SmedEvent`] is what the runtime broadcasts and (from Phase 4) persists.
+//! - [`MjolnrEvent`] is what the runtime broadcasts and (from Phase 4) persists.
 //!   It is the session's history.
 //!
 //! Render deltas may be lost; final blocks and checkpoints may not.
@@ -183,7 +183,7 @@ pub enum ExtensionLoadAuthority {
 /// Phase 4 persists these; Phase 1 keeps them in memory behind the same port.
 /// The shape is chosen now because changing it later means a migration.
 #[derive(Debug, Clone, PartialEq)]
-pub enum SmedEvent {
+pub enum MjolnrEvent {
     SessionCreated {
         session: SessionId,
         provider: ProviderId,
@@ -421,7 +421,7 @@ pub enum SmedEvent {
     },
     /// A resumed session found work that was interrupted by a crash.
     ///
-    /// Durable so the audit trail records that smed stopped and asked, rather
+    /// Durable so the audit trail records that mjolnr stopped and asked, rather
     /// than only recording what happened afterwards. Without it, a transcript
     /// would show a gap and then a decision, with nothing explaining why.
     RecoveryRequired {
@@ -637,7 +637,7 @@ pub enum SmedEvent {
     ///
     /// `response_message` is the `CanonicalMessage` id a client already keys
     /// its transcript by, which is what makes the §D3 "link to the resulting
-    /// smed response" bullet a link a surface can follow. A run that was
+    /// mjolnr response" bullet a link a surface can follow. A run that was
     /// cancelled or failed emits nothing here, and the threads stay linked to
     /// no response — the honest record of what happened.
     ReviewRequestAnswered {
@@ -699,7 +699,7 @@ pub enum SmedEvent {
     },
 }
 
-impl SmedEvent {
+impl MjolnrEvent {
     /// Whether this event belongs in durable history.
     ///
     /// Text deltas are the exception: they exist to drive a render and are
@@ -879,7 +879,7 @@ pub struct StoredEvent {
     pub id: EventId,
     pub sequence: u64,
     pub occurred_at: OffsetDateTime,
-    pub event: SmedEvent,
+    pub event: MjolnrEvent,
 }
 
 #[cfg(test)]
@@ -891,14 +891,14 @@ mod tests {
         let session = SessionId::new();
         let run = RunId::new();
 
-        let delta = SmedEvent::TextDelta {
+        let delta = MjolnrEvent::TextDelta {
             session,
             run,
             text: "a".to_owned(),
         };
         assert!(!delta.is_durable(), "one row per token is forbidden by ");
 
-        let finished = SmedEvent::RunFinished {
+        let finished = MjolnrEvent::RunFinished {
             session,
             run,
             reason: FinishReason::Stop,

@@ -1,5 +1,5 @@
 <!--
-  The brand mark is an anvil — smed is Danish for "smith". It is deliberately
+  The brand mark is an anvil — mjolnr is the hammer of Thor. It is deliberately
   legible at 16px: the block + horn silhouette stays crisp down to icon size.
 
   Bespoke chrome with no shadcn equivalent, so it reads the raw Obsidian
@@ -13,7 +13,7 @@
 <div
   class="relative flex shrink-0 items-center justify-center"
   style={`width:${size}px;height:${size}px;`}
-  title="smed — the smith"
+  title="mjolnr — governed execution"
 >
   <div class="emblem-glow"></div>
   <svg width={size} height={size} viewBox="0 0 64 64" class="relative z-10" aria-hidden="true">

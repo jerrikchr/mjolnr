@@ -34,21 +34,21 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use smed::core::checkpoint::SessionCheckpoint;
-use smed::core::command::{ApprovalDecision, ApprovalId, SmedCommand};
-use smed::core::event::{FinishReason, RunId, SessionId, SmedEvent};
-use smed::core::message::{CanonicalMessage, ContentBlock, ToolCall, ToolEffect, ToolResult};
-use smed::core::model::{ModelId, ProviderId, Usage};
-use smed::core::policy::PolicyMode;
-use smed::core::provider::Provider;
-use smed::core::recovery::{Authority, InterruptedKind, RecoveryDecision, RecoveryState};
-use smed::core::runtime::SmedRuntime;
-use smed::core::store::{EventStore, ProjectId, SessionStatus};
-use smed::core::tool::ToolTier;
-use smed::providers::fake::{FakeProvider, FakeScript};
-use smed::runtime::Runtime;
-use smed::runtime::recovery::{Recovered, project};
-use smed::store::sqlite::SqliteEventStore;
+use mjolnr::core::checkpoint::SessionCheckpoint;
+use mjolnr::core::command::{ApprovalDecision, ApprovalId, MjolnrCommand};
+use mjolnr::core::event::{FinishReason, MjolnrEvent, RunId, SessionId};
+use mjolnr::core::message::{CanonicalMessage, ContentBlock, ToolCall, ToolEffect, ToolResult};
+use mjolnr::core::model::{ModelId, ProviderId, Usage};
+use mjolnr::core::policy::PolicyMode;
+use mjolnr::core::provider::Provider;
+use mjolnr::core::recovery::{Authority, InterruptedKind, RecoveryDecision, RecoveryState};
+use mjolnr::core::runtime::MjolnrRuntime;
+use mjolnr::core::store::{EventStore, ProjectId, SessionStatus};
+use mjolnr::core::tool::ToolTier;
+use mjolnr::providers::fake::{FakeProvider, FakeScript};
+use mjolnr::runtime::Runtime;
+use mjolnr::runtime::recovery::{Recovered, project};
+use mjolnr::store::sqlite::SqliteEventStore;
 use tempfile::TempDir;
 
 /// A disposable database and workspace.
@@ -65,7 +65,7 @@ struct Fixture {
 impl Fixture {
     fn new() -> Self {
         let directory = TempDir::new().expect("temp dir");
-        let database = directory.path().join("smed.sqlite3");
+        let database = directory.path().join("mjolnr.sqlite3");
         let workspace = directory.path().join("workspace");
         std::fs::create_dir_all(&workspace).expect("workspace");
 
@@ -106,7 +106,7 @@ async fn open_session(store: &SqliteEventStore, root: &Path) -> (SessionId, Proj
     (session, project)
 }
 
-async fn seed(store: &SqliteEventStore, events: Vec<SmedEvent>) {
+async fn seed(store: &SqliteEventStore, events: Vec<MjolnrEvent>) {
     for event in events {
         store.append(event).await.expect("append");
     }
@@ -129,8 +129,8 @@ async fn recover(store: &SqliteEventStore, session: SessionId) -> Recovered {
     .expect("project")
 }
 
-fn session_created(session: SessionId) -> SmedEvent {
-    SmedEvent::SessionCreated {
+fn session_created(session: SessionId) -> MjolnrEvent {
+    MjolnrEvent::SessionCreated {
         session,
         provider: ProviderId::new(FakeProvider::ID),
         model: ModelId::new(FakeProvider::MODEL),
@@ -153,7 +153,7 @@ fn write_call() -> ToolCall {
 #[tokio::test]
 async fn a_proposal_interrupted_before_approval_provably_did_not_run() {
     // : "crash after ToolProposed but before approval does not
-    // execute on resume." smed persists intent before effect, so an approval
+    // execute on resume." mjolnr persists intent before effect, so an approval
     // that does not exist is proof the effect never started.
     let fixture = Fixture::new();
     let store = fixture.store().await;
@@ -164,12 +164,12 @@ async fn a_proposal_interrupted_before_approval_provably_did_not_run() {
         &store,
         vec![
             session_created(session),
-            SmedEvent::MessageAppended {
+            MjolnrEvent::MessageAppended {
                 session,
                 message: Box::new(CanonicalMessage::user("write a file")),
             },
-            SmedEvent::RunStarted { session, run },
-            SmedEvent::ToolProposed {
+            MjolnrEvent::RunStarted { session, run },
+            MjolnrEvent::ToolProposed {
                 session,
                 run,
                 approval: Some(ApprovalId::new()),
@@ -214,8 +214,8 @@ async fn an_approved_effect_with_no_outcome_is_uncertain_and_never_characterised
         &store,
         vec![
             session_created(session),
-            SmedEvent::RunStarted { session, run },
-            SmedEvent::ToolProposed {
+            MjolnrEvent::RunStarted { session, run },
+            MjolnrEvent::ToolProposed {
                 session,
                 run,
                 approval: Some(approval),
@@ -223,7 +223,7 @@ async fn an_approved_effect_with_no_outcome_is_uncertain_and_never_characterised
                 tier: ToolTier::Write,
                 preview: "+ written".to_owned(),
             },
-            SmedEvent::ApprovalResolved {
+            MjolnrEvent::ApprovalResolved {
                 session,
                 run,
                 approval,
@@ -247,7 +247,7 @@ async fn an_approved_effect_with_no_outcome_is_uncertain_and_never_characterised
     }
     assert!(
         !work.effect_is_certain(),
-        "smed must not claim to know whether an approved effect ran"
+        "mjolnr must not claim to know whether an approved effect ran"
     );
 
     let summary = work.summary().to_lowercase();
@@ -269,8 +269,8 @@ async fn a_policy_authorised_effect_is_exactly_as_uncertain_as_an_approved_one()
         &store,
         vec![
             session_created(session),
-            SmedEvent::RunStarted { session, run },
-            SmedEvent::ToolProposed {
+            MjolnrEvent::RunStarted { session, run },
+            MjolnrEvent::ToolProposed {
                 session,
                 run,
                 approval: None,
@@ -308,8 +308,8 @@ async fn a_denied_proposal_leaves_nothing_to_recover() {
         &store,
         vec![
             session_created(session),
-            SmedEvent::RunStarted { session, run },
-            SmedEvent::ToolProposed {
+            MjolnrEvent::RunStarted { session, run },
+            MjolnrEvent::ToolProposed {
                 session,
                 run,
                 approval: Some(approval),
@@ -317,13 +317,13 @@ async fn a_denied_proposal_leaves_nothing_to_recover() {
                 tier: ToolTier::Write,
                 preview: "+ written".to_owned(),
             },
-            SmedEvent::ApprovalResolved {
+            MjolnrEvent::ApprovalResolved {
                 session,
                 run,
                 approval,
                 decision: ApprovalDecision::Deny,
             },
-            SmedEvent::RunFinished {
+            MjolnrEvent::RunFinished {
                 session,
                 run,
                 reason: FinishReason::Stop,
@@ -351,11 +351,11 @@ async fn an_interrupted_provider_call_is_flagged_and_never_replayed() {
         &store,
         vec![
             session_created(session),
-            SmedEvent::MessageAppended {
+            MjolnrEvent::MessageAppended {
                 session,
                 message: Box::new(CanonicalMessage::user("hello")),
             },
-            SmedEvent::RunStarted { session, run },
+            MjolnrEvent::RunStarted { session, run },
         ],
     )
     .await;
@@ -384,11 +384,11 @@ async fn a_mutation_completed_after_the_last_checkpoint_is_recovered_from_events
         &store,
         vec![
             session_created(session),
-            SmedEvent::RunStarted {
+            MjolnrEvent::RunStarted {
                 session,
                 run: first,
             },
-            SmedEvent::RunFinished {
+            MjolnrEvent::RunFinished {
                 session,
                 run: first,
                 reason: FinishReason::Stop,
@@ -411,11 +411,11 @@ async fn a_mutation_completed_after_the_last_checkpoint_is_recovered_from_events
     seed(
         &store,
         vec![
-            SmedEvent::RunStarted {
+            MjolnrEvent::RunStarted {
                 session,
                 run: second,
             },
-            SmedEvent::ToolCompleted {
+            MjolnrEvent::ToolCompleted {
                 session,
                 run: second,
                 call_id: "call_1".to_owned(),
@@ -462,7 +462,7 @@ async fn successful_command_evidence_survives_a_crash() {
 
     seed(&store, vec![session_created(session)]).await;
     let stored = store
-        .append(SmedEvent::ToolCompleted {
+        .append(MjolnrEvent::ToolCompleted {
             session,
             run,
             call_id: "call_1".to_owned(),
@@ -500,8 +500,8 @@ async fn a_resolved_recovery_unblocks_the_session_durably() {
         &store,
         vec![
             session_created(session),
-            SmedEvent::RunStarted { session, run },
-            SmedEvent::ToolProposed {
+            MjolnrEvent::RunStarted { session, run },
+            MjolnrEvent::ToolProposed {
                 session,
                 run,
                 approval: Some(ApprovalId::new()),
@@ -516,7 +516,7 @@ async fn a_resolved_recovery_unblocks_the_session_durably() {
 
     seed(
         &store,
-        vec![SmedEvent::RecoveryResolved {
+        vec![MjolnrEvent::RecoveryResolved {
             session,
             decision: RecoveryDecision::AbandonAndContinue,
         }],
@@ -567,29 +567,29 @@ async fn a_checkpoint_restores_every_field_the_phase_requires() {
             output_tokens: 7,
         },
         policy: PolicyMode::WorkspaceWrite,
-        budget: smed::core::runtime::BudgetStatus {
+        budget: mjolnr::core::runtime::BudgetStatus {
             provider_turns: 2,
             max_provider_turns: 8,
             tool_calls: 3,
             max_tool_calls: 16,
         },
         read_set: vec![(fixture.workspace.join("a.rs"), "sha-a".to_owned())],
-        read_evidence: vec![smed::core::change_capture::ReadRecord::new(
+        read_evidence: vec![mjolnr::core::change_capture::ReadRecord::new(
             "a.rs".to_owned(),
             "sha-a".to_owned(),
             "evt-a".to_owned(),
         )],
-        review_threads: vec![smed::core::review::ReviewThread::open(
-            smed::core::review::ReviewThreadId::new(),
-            smed::core::review::ReviewAnchor {
+        review_threads: vec![mjolnr::core::review::ReviewThread::open(
+            mjolnr::core::review::ReviewThreadId::new(),
+            mjolnr::core::review::ReviewAnchor {
                 path: "a.rs".to_owned(),
-                side: smed::core::review::ReviewSide::New,
+                side: mjolnr::core::review::ReviewSide::New,
                 line: 12,
                 hunk_header: "@@ -10,3 +10,4 @@".to_owned(),
                 capture_digest: "9f8e7d".to_owned(),
                 base_object_id: Some("abc123".to_owned()),
             },
-            smed::core::review::ReviewComment {
+            mjolnr::core::review::ReviewComment {
                 body: "handle the None case".to_owned(),
                 created_at: time::OffsetDateTime::UNIX_EPOCH,
             },
@@ -599,8 +599,8 @@ async fn a_checkpoint_restores_every_field_the_phase_requires() {
         activated_skills: vec!["guarded-review".to_owned()],
         workspace_trusted: true,
         handoff: None,
-        quota_reserve: smed::core::continuation::QuotaReserveStatus::default(),
-        route: Some(smed::core::routing::RouteRuntime {
+        quota_reserve: mjolnr::core::continuation::QuotaReserveStatus::default(),
+        route: Some(mjolnr::core::routing::RouteRuntime {
             route: "main".to_owned(),
             position: 1,
         }),
@@ -686,8 +686,8 @@ async fn an_exact_command_grant_never_survives_a_restart() {
         &store,
         vec![
             session_created(session),
-            SmedEvent::RunStarted { session, run },
-            SmedEvent::ToolProposed {
+            MjolnrEvent::RunStarted { session, run },
+            MjolnrEvent::ToolProposed {
                 session,
                 run,
                 approval: Some(approval),
@@ -695,14 +695,14 @@ async fn an_exact_command_grant_never_survives_a_restart() {
                 tier: ToolTier::Execute,
                 preview: "git status".to_owned(),
             },
-            // The human granted the broadest thing smed can express.
-            SmedEvent::ApprovalResolved {
+            // The human granted the broadest thing mjolnr can express.
+            MjolnrEvent::ApprovalResolved {
                 session,
                 run,
                 approval,
                 decision: ApprovalDecision::ApproveExactForSession,
             },
-            SmedEvent::ToolCompleted {
+            MjolnrEvent::ToolCompleted {
                 session,
                 run,
                 call_id: "call_1".to_owned(),
@@ -713,7 +713,7 @@ async fn an_exact_command_grant_never_survives_a_restart() {
                     duration_ms: 1,
                 }),
             },
-            SmedEvent::RunFinished {
+            MjolnrEvent::RunFinished {
                 session,
                 run,
                 reason: FinishReason::Stop,
@@ -757,8 +757,8 @@ async fn resume_reports_the_boundary_and_does_not_execute_the_interrupted_tool()
         &store,
         vec![
             session_created(session),
-            SmedEvent::RunStarted { session, run },
-            SmedEvent::ToolProposed {
+            MjolnrEvent::RunStarted { session, run },
+            MjolnrEvent::ToolProposed {
                 session,
                 run,
                 approval: Some(approval),
@@ -766,7 +766,7 @@ async fn resume_reports_the_boundary_and_does_not_execute_the_interrupted_tool()
                 tier: ToolTier::Write,
                 preview: "+ written".to_owned(),
             },
-            SmedEvent::ApprovalResolved {
+            MjolnrEvent::ApprovalResolved {
                 session,
                 run,
                 approval,
@@ -781,13 +781,13 @@ async fn resume_reports_the_boundary_and_does_not_execute_the_interrupted_tool()
 
     let runtime = runtime_for(&store);
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: fixture.workspace.clone(),
         })
         .await
         .expect("open project");
     runtime
-        .dispatch(SmedCommand::ResumeSession { session })
+        .dispatch(MjolnrCommand::ResumeSession { session })
         .await
         .expect("resume");
 
@@ -805,9 +805,9 @@ async fn resume_reports_the_boundary_and_does_not_execute_the_interrupted_tool()
     // And the halt is real: a directive is refused rather than run.
     let event_count_before_refusal = store.events(session).await.expect("events").len();
     runtime
-        .dispatch(SmedCommand::SendUserMessage {
+        .dispatch(MjolnrCommand::SendUserMessage {
             text: "carry on".to_owned(),
-            source: smed::core::directive::DirectiveSource::Human,
+            source: mjolnr::core::directive::DirectiveSource::Human,
         })
         .await
         .expect("dispatch");
@@ -837,22 +837,22 @@ async fn a_session_survives_a_clean_close_and_reopen() {
         let store = fixture.store().await;
         let runtime = runtime_for(&store);
         runtime
-            .dispatch(SmedCommand::OpenProject {
+            .dispatch(MjolnrCommand::OpenProject {
                 root: fixture.workspace.clone(),
             })
             .await
             .expect("open project");
         runtime
-            .dispatch(SmedCommand::CreateSession {
+            .dispatch(MjolnrCommand::CreateSession {
                 provider: ProviderId::new(FakeProvider::ID),
                 model: ModelId::new(FakeProvider::MODEL),
             })
             .await
             .expect("create session");
         runtime
-            .dispatch(SmedCommand::SendUserMessage {
+            .dispatch(MjolnrCommand::SendUserMessage {
                 text: "hello".to_owned(),
-                source: smed::core::directive::DirectiveSource::Human,
+                source: mjolnr::core::directive::DirectiveSource::Human,
             })
             .await
             .expect("send");
@@ -868,13 +868,13 @@ async fn a_session_survives_a_clean_close_and_reopen() {
     let store = fixture.store().await;
     let runtime = runtime_for(&store);
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: fixture.workspace.clone(),
         })
         .await
         .expect("open project");
     runtime
-        .dispatch(SmedCommand::ResumeSession { session })
+        .dispatch(MjolnrCommand::ResumeSession { session })
         .await
         .expect("resume");
 
@@ -921,22 +921,22 @@ async fn a_resumed_session_is_announced_to_clients_that_watch_state() {
         let store = fixture.store().await;
         let runtime = runtime_for(&store);
         runtime
-            .dispatch(SmedCommand::OpenProject {
+            .dispatch(MjolnrCommand::OpenProject {
                 root: fixture.workspace.clone(),
             })
             .await
             .expect("open project");
         runtime
-            .dispatch(SmedCommand::CreateSession {
+            .dispatch(MjolnrCommand::CreateSession {
                 provider: ProviderId::new(FakeProvider::ID),
                 model: ModelId::new(FakeProvider::MODEL),
             })
             .await
             .expect("create session");
         runtime
-            .dispatch(SmedCommand::SendUserMessage {
+            .dispatch(MjolnrCommand::SendUserMessage {
                 text: "remember this".to_owned(),
-                source: smed::core::directive::DirectiveSource::Human,
+                source: mjolnr::core::directive::DirectiveSource::Human,
             })
             .await
             .expect("send");
@@ -953,13 +953,13 @@ async fn a_resumed_session_is_announced_to_clients_that_watch_state() {
     let mut events = runtime.subscribe();
 
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: fixture.workspace.clone(),
         })
         .await
         .expect("open project");
     runtime
-        .dispatch(SmedCommand::ResumeSession { session })
+        .dispatch(MjolnrCommand::ResumeSession { session })
         .await
         .expect("resume");
 
@@ -1003,13 +1003,13 @@ async fn a_clean_shutdown_writes_a_checkpoint_covering_every_event() {
     {
         let runtime = runtime_for(&store);
         runtime
-            .dispatch(SmedCommand::OpenProject {
+            .dispatch(MjolnrCommand::OpenProject {
                 root: fixture.workspace.clone(),
             })
             .await
             .expect("open project");
         runtime
-            .dispatch(SmedCommand::CreateSession {
+            .dispatch(MjolnrCommand::CreateSession {
                 provider: ProviderId::new(FakeProvider::ID),
                 model: ModelId::new(FakeProvider::MODEL),
             })
@@ -1059,13 +1059,13 @@ async fn a_real_interrupted_run_leaves_the_history_these_tests_assume() {
         );
         let runtime = Runtime::spawn(vec![provider], Arc::clone(&store) as Arc<dyn EventStore>);
         runtime
-            .dispatch(SmedCommand::OpenProject {
+            .dispatch(MjolnrCommand::OpenProject {
                 root: fixture.workspace.clone(),
             })
             .await
             .expect("open project");
         runtime
-            .dispatch(SmedCommand::CreateSession {
+            .dispatch(MjolnrCommand::CreateSession {
                 provider: ProviderId::new(FakeProvider::ID),
                 model: ModelId::new(FakeProvider::MODEL),
             })
@@ -1075,9 +1075,9 @@ async fn a_real_interrupted_run_leaves_the_history_these_tests_assume() {
         session = runtime.snapshot().session.expect("session");
 
         runtime
-            .dispatch(SmedCommand::SendUserMessage {
+            .dispatch(MjolnrCommand::SendUserMessage {
                 text: "hello".to_owned(),
-                source: smed::core::directive::DirectiveSource::Human,
+                source: mjolnr::core::directive::DirectiveSource::Human,
             })
             .await
             .expect("send");
@@ -1113,13 +1113,13 @@ async fn a_real_interrupted_run_leaves_the_history_these_tests_assume() {
     assert!(recover(&store, session).await.recovery.is_required());
 }
 
-fn label(event: &SmedEvent) -> &'static str {
+fn label(event: &MjolnrEvent) -> &'static str {
     match event {
-        SmedEvent::SessionCreated { .. } => "session-created",
-        SmedEvent::MessageAppended { .. } => "message",
-        SmedEvent::RunStarted { .. } => "run-started",
-        SmedEvent::RunFinished { .. } => "run-finished",
-        SmedEvent::RunFailed { .. } => "run-failed",
+        MjolnrEvent::SessionCreated { .. } => "session-created",
+        MjolnrEvent::MessageAppended { .. } => "message",
+        MjolnrEvent::RunStarted { .. } => "run-started",
+        MjolnrEvent::RunFinished { .. } => "run-finished",
+        MjolnrEvent::RunFailed { .. } => "run-failed",
         _ => "other",
     }
 }
@@ -1130,8 +1130,8 @@ fn label(event: &SmedEvent) -> &'static str {
 /// is neither (`AGENTS.md` §7 — no sleeps as synchronisation).
 async fn settle(
     runtime: &Runtime,
-    ready: impl Fn(&smed::core::runtime::RuntimeSnapshot) -> bool,
-) -> smed::core::runtime::RuntimeSnapshot {
+    ready: impl Fn(&mjolnr::core::runtime::RuntimeSnapshot) -> bool,
+) -> mjolnr::core::runtime::RuntimeSnapshot {
     for _ in 0..400 {
         let snapshot = runtime.snapshot();
         if ready(&snapshot) {

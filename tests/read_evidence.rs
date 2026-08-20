@@ -20,17 +20,17 @@ use std::process::Command;
 use std::sync::Arc;
 use std::time::Duration;
 
-use smed::core::changes::ChangeSet;
-use smed::core::command::SmedCommand;
-use smed::core::event::{SessionId, SmedEvent};
-use smed::core::model::{ModelId, ProviderId};
-use smed::core::provider::Provider;
-use smed::core::runtime::{RuntimeSubscription, SmedRuntime};
-use smed::core::store::EventStore;
-use smed::providers::fake::{FakeProvider, FakeScript};
-use smed::runtime::Runtime;
-use smed::runtime::client_bridge::snapshot_to_client;
-use smed::store::memory::InMemoryEventStore;
+use mjolnr::core::changes::ChangeSet;
+use mjolnr::core::command::MjolnrCommand;
+use mjolnr::core::event::{MjolnrEvent, SessionId};
+use mjolnr::core::model::{ModelId, ProviderId};
+use mjolnr::core::provider::Provider;
+use mjolnr::core::runtime::{MjolnrRuntime, RuntimeSubscription};
+use mjolnr::core::store::EventStore;
+use mjolnr::providers::fake::{FakeProvider, FakeScript};
+use mjolnr::runtime::Runtime;
+use mjolnr::runtime::client_bridge::snapshot_to_client;
+use mjolnr::store::memory::InMemoryEventStore;
 
 fn spawn_runtime(store: &Arc<InMemoryEventStore>) -> Runtime {
     Runtime::spawn(
@@ -43,14 +43,14 @@ fn spawn_runtime(store: &Arc<InMemoryEventStore>) -> Runtime {
 /// the model reads is also a file the change set shows. Evidence is projected
 /// only for files under review, so both halves have to be true at once.
 fn setup_repo(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("smed-d3-evidence-{name}"));
+    let dir = std::env::temp_dir().join(format!("mjolnr-d3-evidence-{name}"));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).expect("temp dir");
     let dir = dir.canonicalize().expect("canonical temp dir");
 
     git(&dir, &["init", "--initial-branch=main"]);
-    git(&dir, &["config", "user.email", "test@smed.invalid"]);
-    git(&dir, &["config", "user.name", "smed Test"]);
+    git(&dir, &["config", "user.email", "test@mjolnr.invalid"]);
+    git(&dir, &["config", "user.name", "mjolnr Test"]);
     git(&dir, &["config", "commit.gpgsign", "false"]);
 
     fs::write(dir.join("fixture.txt"), "before\n").expect("write");
@@ -77,7 +77,7 @@ fn git(dir: &Path, arguments: &[&str]) {
 async fn wait_for(
     events: &mut RuntimeSubscription,
     label: &str,
-    mut predicate: impl FnMut(&SmedEvent) -> bool,
+    mut predicate: impl FnMut(&MjolnrEvent) -> bool,
 ) {
     tokio::time::timeout(Duration::from_secs(10), async {
         loop {
@@ -131,22 +131,22 @@ async fn read_then_settle(runtime: &Runtime, root: &Path) -> SessionId {
     let mut events = runtime.subscribe();
 
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: root.to_path_buf(),
         })
         .await
         .expect("open project");
     runtime
-        .dispatch(SmedCommand::CreateSession {
+        .dispatch(MjolnrCommand::CreateSession {
             provider: ProviderId::new(FakeProvider::ID),
             model: ModelId::new(FakeProvider::MODEL),
         })
         .await
         .expect("create session");
     runtime
-        .dispatch(SmedCommand::SendUserMessage {
+        .dispatch(MjolnrCommand::SendUserMessage {
             text: "update the fixture and verify it".to_owned(),
-            source: smed::core::directive::DirectiveSource::Human,
+            source: mjolnr::core::directive::DirectiveSource::Human,
         })
         .await
         .expect("start run");
@@ -154,19 +154,19 @@ async fn read_then_settle(runtime: &Runtime, root: &Path) -> SessionId {
     wait_for(
         &mut events,
         "read_file completion",
-        |event| matches!(event, SmedEvent::ToolCompleted { name, .. } if name == "read_file"),
+        |event| matches!(event, MjolnrEvent::ToolCompleted { name, .. } if name == "read_file"),
     )
     .await;
 
     let session = runtime.snapshot().session.expect("a session");
     runtime
-        .dispatch(SmedCommand::CancelRun)
+        .dispatch(MjolnrCommand::CancelRun)
         .await
         .expect("cancel");
     wait_for(&mut events, "run finished", |event| {
         matches!(
             event,
-            SmedEvent::RunFinished { .. } | SmedEvent::RunFailed { .. }
+            MjolnrEvent::RunFinished { .. } | MjolnrEvent::RunFailed { .. }
         )
     })
     .await;
@@ -182,7 +182,7 @@ async fn stored_read_event_id(store: &InMemoryEventStore, session: SessionId) ->
         .expect("stored transcript")
         .iter()
         .find(|stored| {
-            matches!(&stored.event, SmedEvent::ToolCompleted { name, .. } if name == "read_file")
+            matches!(&stored.event, MjolnrEvent::ToolCompleted { name, .. } if name == "read_file")
         })
         .expect("a stored read_file completion")
         .id
@@ -204,7 +204,7 @@ async fn evidence_cites_the_durable_event_that_recorded_the_read() {
         .expect("evidence for the file that was read");
 
     // The equality that matters: the id on the wire *is* the id in the log.
-    // Anything smed invented would fail here, which is the whole reason this
+    // Anything mjolnr invented would fail here, which is the whole reason this
     // field stayed empty until an event id was actually available.
     assert_eq!(
         evidence.tool_event_id,
@@ -233,7 +233,7 @@ async fn evidence_does_not_promote_the_change_set_beyond_a_working_tree_read() {
     assert!(!changes.read_evidence.is_empty());
     assert_eq!(
         changes.state,
-        smed::core::changes::ChangeState::CurrentWorkingTree
+        mjolnr::core::changes::ChangeState::CurrentWorkingTree
     );
     let wire = serde_json::to_string(&changes).expect("serialize");
     assert!(
@@ -263,7 +263,7 @@ async fn evidence_survives_a_restart_with_the_same_event_id() {
 
     let second = spawn_runtime(&store);
     second
-        .dispatch(SmedCommand::ResumeSession { session })
+        .dispatch(MjolnrCommand::ResumeSession { session })
         .await
         .expect("resume");
 

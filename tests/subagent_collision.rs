@@ -18,17 +18,17 @@ use std::process::{Command, Stdio};
 use std::sync::Arc;
 use std::time::Duration;
 
-use smed::core::command::{ApprovalDecision, SmedCommand};
-use smed::core::event::{SessionId, SmedEvent};
-use smed::core::message::ToolResult;
-use smed::core::model::{ModelId, ProviderId};
-use smed::core::policy::PolicyMode;
-use smed::core::provider::Provider;
-use smed::core::runtime::{RuntimeSubscription, SmedRuntime};
-use smed::core::store::EventStore;
-use smed::providers::fake::{FakeProvider, FakeScript};
-use smed::runtime::Runtime;
-use smed::store::memory::InMemoryEventStore;
+use mjolnr::core::command::{ApprovalDecision, MjolnrCommand};
+use mjolnr::core::event::{MjolnrEvent, SessionId};
+use mjolnr::core::message::ToolResult;
+use mjolnr::core::model::{ModelId, ProviderId};
+use mjolnr::core::policy::PolicyMode;
+use mjolnr::core::provider::Provider;
+use mjolnr::core::runtime::{MjolnrRuntime, RuntimeSubscription};
+use mjolnr::core::store::EventStore;
+use mjolnr::providers::fake::{FakeProvider, FakeScript};
+use mjolnr::runtime::Runtime;
+use mjolnr::store::memory::InMemoryEventStore;
 use tempfile::TempDir;
 
 const DEADLINE: Duration = Duration::from_secs(30);
@@ -47,20 +47,20 @@ impl Harness {
         let runtime = Runtime::spawn(vec![provider], Arc::clone(&store) as Arc<dyn EventStore>);
 
         runtime
-            .dispatch(SmedCommand::OpenProject {
+            .dispatch(MjolnrCommand::OpenProject {
                 root: repository.path().to_path_buf(),
             })
             .await
             .expect("open project");
         runtime
-            .dispatch(SmedCommand::CreateSession {
+            .dispatch(MjolnrCommand::CreateSession {
                 provider: ProviderId::new(FakeProvider::ID),
                 model: ModelId::new(FakeProvider::MODEL),
             })
             .await
             .expect("create session");
         runtime
-            .dispatch(SmedCommand::SetPolicy { mode: policy })
+            .dispatch(MjolnrCommand::SetPolicy { mode: policy })
             .await
             .expect("set policy");
         wait_ready(&runtime, policy).await;
@@ -93,12 +93,12 @@ async fn wait_ready(runtime: &Runtime, policy: PolicyMode) {
 async fn approve_spawn(
     runtime: &Runtime,
     directive: &str,
-) -> (RuntimeSubscription, Vec<SmedEvent>) {
+) -> (RuntimeSubscription, Vec<MjolnrEvent>) {
     let mut events = runtime.subscribe();
     runtime
-        .dispatch(SmedCommand::SendUserMessage {
+        .dispatch(MjolnrCommand::SendUserMessage {
             text: directive.to_owned(),
-            source: smed::core::directive::DirectiveSource::Human,
+            source: mjolnr::core::directive::DirectiveSource::Human,
         })
         .await
         .expect("send directive");
@@ -108,7 +108,7 @@ async fn approve_spawn(
         loop {
             let event = events.recv().await.expect("event feed remains open");
             let approval = match &event {
-                SmedEvent::ToolProposed {
+                MjolnrEvent::ToolProposed {
                     approval: Some(approval),
                     call,
                     ..
@@ -125,7 +125,7 @@ async fn approve_spawn(
     .expect("spawn proposal arrives");
 
     runtime
-        .dispatch(SmedCommand::ResolveApproval {
+        .dispatch(MjolnrCommand::ResolveApproval {
             approval,
             decision: ApprovalDecision::ApproveOnce,
         })
@@ -134,14 +134,14 @@ async fn approve_spawn(
     (events, observed)
 }
 
-async fn run_spawn(runtime: &Runtime, directive: &str) -> Vec<SmedEvent> {
+async fn run_spawn(runtime: &Runtime, directive: &str) -> Vec<MjolnrEvent> {
     let (mut events, mut observed) = approve_spawn(runtime, directive).await;
     tokio::time::timeout(DEADLINE, async {
         loop {
             let event = events.recv().await.expect("event feed remains open");
             let terminal = matches!(
                 event,
-                SmedEvent::RunFinished { .. } | SmedEvent::RunFailed { .. }
+                MjolnrEvent::RunFinished { .. } | MjolnrEvent::RunFailed { .. }
             );
             observed.push(event);
             if terminal {
@@ -159,10 +159,10 @@ fn repository() -> TempDir {
     std::fs::write(repository.path().join("README.md"), "base\n").expect("seed README");
     std::fs::write(repository.path().join("shared.txt"), "before\n").expect("seed shared file");
     git(repository.path(), &["init", "-q"]);
-    git(repository.path(), &["config", "user.name", "smed Test"]);
+    git(repository.path(), &["config", "user.name", "mjolnr Test"]);
     git(
         repository.path(),
-        &["config", "user.email", "smed-test@localhost"],
+        &["config", "user.email", "mjolnr-test@localhost"],
     );
     git(repository.path(), &["add", "."]);
     git(repository.path(), &["commit", "-q", "-m", "seed"]);
@@ -184,11 +184,11 @@ fn git(root: &Path, arguments: &[&str]) -> String {
     String::from_utf8_lossy(&output.stdout).into_owned()
 }
 
-fn spawn_result(events: &[SmedEvent]) -> &ToolResult {
+fn spawn_result(events: &[MjolnrEvent]) -> &ToolResult {
     events
         .iter()
         .find_map(|event| match event {
-            SmedEvent::ToolCompleted { name, result, .. } if name == "spawn_subagent" => {
+            MjolnrEvent::ToolCompleted { name, result, .. } if name == "spawn_subagent" => {
                 Some(result)
             }
             _ => None,
@@ -196,19 +196,19 @@ fn spawn_result(events: &[SmedEvent]) -> &ToolResult {
         .expect("spawn result")
 }
 
-fn spawned(events: &[SmedEvent]) -> Vec<(SessionId, PolicyMode)> {
+fn spawned(events: &[MjolnrEvent]) -> Vec<(SessionId, PolicyMode)> {
     events
         .iter()
         .filter_map(|event| match event {
-            SmedEvent::SubagentSpawned { child, policy, .. } => Some((*child, *policy)),
+            MjolnrEvent::SubagentSpawned { child, policy, .. } => Some((*child, *policy)),
             _ => None,
         })
         .collect()
 }
 
-fn collision(events: &[SmedEvent]) -> Option<(SessionId, SessionId, String)> {
+fn collision(events: &[MjolnrEvent]) -> Option<(SessionId, SessionId, String)> {
     events.iter().find_map(|event| match event {
-        SmedEvent::ReadSetCollision {
+        MjolnrEvent::ReadSetCollision {
             reader,
             writer,
             path,
@@ -291,7 +291,7 @@ async fn a_sibling_write_refuses_the_readers_verified_finish() {
     assert!(
         stored
             .iter()
-            .any(|entry| matches!(&entry.event, SmedEvent::ReadSetCollision { .. })),
+            .any(|entry| matches!(&entry.event, MjolnrEvent::ReadSetCollision { .. })),
         "the collision must be persisted to the event ledger"
     );
 }

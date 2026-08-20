@@ -84,8 +84,8 @@ the replacement direction. Building to a contract nobody intends to keep is how
 a design system ends up with two of everything.
 
 **Adopt the mockup wholesale, including its cells.** Rejected for the reasons in
-the section above. The palette is a decision about how smed looks; `synced` in
-green is a decision about what smed claims, and those are not the same kind of
+the section above. The palette is a decision about how mjolnr looks; `synced` in
+green is a decision about what mjolnr claims, and those are not the same kind of
 decision.
 
 **Dark-only, matching the mockup's default.** Rejected: D1's acceptance requires

@@ -14,7 +14,7 @@ use std::fmt::Write as _;
 use time::OffsetDateTime;
 use tokio_util::sync::CancellationToken;
 
-use crate::core::event::{SmedEvent, StoredEvent};
+use crate::core::event::{MjolnrEvent, StoredEvent};
 use crate::core::message::Role;
 use crate::memory::error::MemoryError;
 use crate::memory::store::{Episode, MemoryStore};
@@ -60,7 +60,7 @@ pub async fn consolidate_events(
         }
 
         match &event.event {
-            SmedEvent::MessageAppended { message, .. } => {
+            MjolnrEvent::MessageAppended { message, .. } => {
                 if message.role == Role::User {
                     let text = message.text();
                     if !text.is_empty() {
@@ -68,13 +68,13 @@ pub async fn consolidate_events(
                     }
                 }
             }
-            SmedEvent::ApprovalResolved { decision, .. } => {
+            MjolnrEvent::ApprovalResolved { decision, .. } => {
                 decisions.push(format!("approval: {decision:?}"));
             }
-            SmedEvent::ToolCompleted { name, result, .. } => {
+            MjolnrEvent::ToolCompleted { name, result, .. } => {
                 tool_actions.push(format!("{name}: {result:?}"));
             }
-            SmedEvent::PolicyChanged { mode, .. } => {
+            MjolnrEvent::PolicyChanged { mode, .. } => {
                 decisions.push(format!("policy changed to {mode:?}"));
             }
             _ => {}

@@ -66,7 +66,7 @@
     <Dialog.Header class="flex-row items-center gap-2.5 border-b px-5 py-3.5">
       <HugeiconsIcon icon={RouteIcon} strokeWidth={2} class="size-4.5 text-primary" />
       <Dialog.Title class="text-base">Workspace Governance</Dialog.Title>
-      <span class="font-mono text-xs text-muted-foreground">.smed/</span>
+      <span class="font-mono text-xs text-muted-foreground">.mjolnr/</span>
     </Dialog.Header>
 
     <Tabs.Root bind:value={activeTab} class="contents">
@@ -153,7 +153,7 @@
                   <Badge variant="secondary">{acceptedCount} accepted</Badge>
                 </div>
                 <p class="text-xs text-muted-foreground">
-                  smed marks the artifact up with the findings you accepted. It does not rewrite
+                  mjolnr marks the artifact up with the findings you accepted. It does not rewrite
                   the prose and it does not write the file — the draft opens in the editor as
                   unsaved text, and saving it is the ordinary governed save.
                 </p>
@@ -204,7 +204,7 @@
             </p>
           {:else}
             <p class="text-xs text-muted-foreground">
-              Live convocation activity for this session. smed does not yet distinguish a council
+              Live convocation activity for this session. mjolnr does not yet distinguish a council
               seat from an ordinary subagent in this feed, so this is the same roster the sidebar
               Fleet section shows.
             </p>
@@ -226,7 +226,7 @@
         <Tabs.Content value="routes" class="flex flex-col gap-3">
           {#if snap.routes.length === 0}
             <p class="text-sm text-muted-foreground">
-              No routes are configured for this workspace (<code class="font-mono text-xs">.smed/routes.toml</code>).
+              No routes are configured for this workspace (<code class="font-mono text-xs">.mjolnr/routes.toml</code>).
             </p>
           {:else}
             <div class="overflow-x-auto rounded-md border">
@@ -308,7 +308,7 @@
 
           {#if snap.personas.length === 0 && snap.souls.length === 0}
             <p class="text-sm text-muted-foreground">
-              No personas or Soul files were discovered under <code class="font-mono text-xs">.smed/personas/</code>.
+              No personas or Soul files were discovered under <code class="font-mono text-xs">.mjolnr/personas/</code>.
             </p>
           {/if}
 

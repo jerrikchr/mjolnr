@@ -1,4 +1,4 @@
-//! The rules every child process smed spawns must obey.
+//! The rules every child process mjolnr spawns must obey.
 //!
 //! One responsibility: decide what a child process is allowed to inherit.
 //! It lives in `core` because more than one implementer needs it — `tools`

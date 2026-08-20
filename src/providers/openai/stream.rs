@@ -106,7 +106,7 @@ pub(crate) async fn decode_stream(
         return Err(ProviderError::Cancelled);
     }
 
-    // Argument events carry the output item id (`fc_…`), while smed and the
+    // Argument events carry the output item id (`fc_…`), while mjolnr and the
     // eventual function-call output must use `call_id` (`call_…`). Preserve the
     // relationship announced by `response.output_item.added` for the stream.
     let mut state = DecodeState {
@@ -337,7 +337,7 @@ async fn handle_event(
             .await;
         }
 
-        // Structural events smed does not act on. Named rather than wildcarded
+        // Structural events mjolnr does not act on. Named rather than wildcarded
         // so a new variant forces a decision here.
         wire::StreamEvent::Created
         | wire::StreamEvent::InProgress

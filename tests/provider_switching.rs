@@ -12,17 +12,17 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use async_trait::async_trait;
-use smed::context::{DiscoveryConfig, DiscoveryLimits, ProjectContext};
-use smed::core::command::SmedCommand;
-use smed::core::error::{ProviderError, ReasonCode};
-use smed::core::event::{FinishReason, ProviderEvent, SmedEvent};
-use smed::core::message::{ContentBlock, ToolCall};
-use smed::core::model::{ModelCapabilities, ModelDescriptor, ModelId, ProviderId};
-use smed::core::provider::{Provider, ProviderCompletion, ProviderRequest};
-use smed::core::runtime::{RuntimeSnapshot, SmedRuntime};
-use smed::core::store::EventStore;
-use smed::runtime::Runtime;
-use smed::store::memory::InMemoryEventStore;
+use mjolnr::context::{DiscoveryConfig, DiscoveryLimits, ProjectContext};
+use mjolnr::core::command::MjolnrCommand;
+use mjolnr::core::error::{ProviderError, ReasonCode};
+use mjolnr::core::event::{FinishReason, MjolnrEvent, ProviderEvent};
+use mjolnr::core::message::{ContentBlock, ToolCall};
+use mjolnr::core::model::{ModelCapabilities, ModelDescriptor, ModelId, ProviderId};
+use mjolnr::core::provider::{Provider, ProviderCompletion, ProviderRequest};
+use mjolnr::core::runtime::{MjolnrRuntime, RuntimeSnapshot};
+use mjolnr::core::store::EventStore;
+use mjolnr::runtime::Runtime;
+use mjolnr::store::memory::InMemoryEventStore;
 use tempfile::TempDir;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
@@ -262,7 +262,7 @@ async fn runtime_publishes_the_discovered_catalog_instead_of_static_models() {
     let snapshot = wait_snapshot(&runtime, |snapshot| {
         snapshot.providers.iter().any(|provider| {
             provider.provider.as_str() == "dynamic"
-                && provider.state == smed::core::runtime::ProviderConnectionState::Connected
+                && provider.state == mjolnr::core::runtime::ProviderConnectionState::Connected
         })
     })
     .await;
@@ -308,22 +308,22 @@ async fn canonical_history_tools_skills_and_project_survive_provider_switching()
         context,
     );
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: workspace.clone(),
         })
         .await
         .expect("open");
     runtime
-        .dispatch(SmedCommand::CreateSession {
+        .dispatch(MjolnrCommand::CreateSession {
             provider: ProviderId::new("alpha"),
             model: ModelId::new("alpha-1"),
         })
         .await
         .expect("create");
     runtime
-        .dispatch(SmedCommand::SendUserMessage {
+        .dispatch(MjolnrCommand::SendUserMessage {
             text: "inspect the repository".to_owned(),
-            source: smed::core::directive::DirectiveSource::Human,
+            source: mjolnr::core::directive::DirectiveSource::Human,
         })
         .await
         .expect("send alpha");
@@ -356,7 +356,7 @@ async fn canonical_history_tools_skills_and_project_survive_provider_switching()
 
     let mut events = runtime.subscribe();
     runtime
-        .dispatch(SmedCommand::SelectModel {
+        .dispatch(MjolnrCommand::SelectModel {
             provider: ProviderId::new("beta"),
             model: ModelId::new("beta-1"),
         })
@@ -364,7 +364,7 @@ async fn canonical_history_tools_skills_and_project_survive_provider_switching()
         .expect("switch");
     let changed = tokio::time::timeout(Duration::from_secs(5), async {
         loop {
-            if let SmedEvent::ModelChanged {
+            if let MjolnrEvent::ModelChanged {
                 provider, model, ..
             } = events.recv().await.expect("event")
             {
@@ -405,9 +405,9 @@ async fn canonical_history_tools_skills_and_project_survive_provider_switching()
     );
 
     runtime
-        .dispatch(SmedCommand::SendUserMessage {
+        .dispatch(MjolnrCommand::SendUserMessage {
             text: "continue from the prior work".to_owned(),
-            source: smed::core::directive::DirectiveSource::Human,
+            source: mjolnr::core::directive::DirectiveSource::Human,
         })
         .await
         .expect("send beta");
@@ -446,11 +446,11 @@ async fn canonical_history_tools_skills_and_project_survive_provider_switching()
         context,
     );
     resumed
-        .dispatch(SmedCommand::OpenProject { root: workspace })
+        .dispatch(MjolnrCommand::OpenProject { root: workspace })
         .await
         .expect("reopen");
     resumed
-        .dispatch(SmedCommand::ResumeSession { session })
+        .dispatch(MjolnrCommand::ResumeSession { session })
         .await
         .expect("resume");
     let restored = wait_snapshot(&resumed, |snapshot| snapshot.session == Some(session)).await;
@@ -480,13 +480,13 @@ async fn incompatible_model_switch_is_durable_and_sends_no_provider_request() {
     let store = Arc::new(InMemoryEventStore::new());
     let runtime = Runtime::spawn(vec![provider], Arc::clone(&store) as Arc<dyn EventStore>);
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: std::env::current_dir().expect("cwd"),
         })
         .await
         .expect("open");
     runtime
-        .dispatch(SmedCommand::CreateSession {
+        .dispatch(MjolnrCommand::CreateSession {
             provider: ProviderId::new("limited"),
             model: ModelId::new("limited-1"),
         })
@@ -497,7 +497,7 @@ async fn incompatible_model_switch_is_durable_and_sends_no_provider_request() {
         .session
         .expect("session");
     runtime
-        .dispatch(SmedCommand::SelectModel {
+        .dispatch(MjolnrCommand::SelectModel {
             provider: ProviderId::new("limited"),
             model: ModelId::new("limited-1"),
         })
@@ -509,7 +509,7 @@ async fn incompatible_model_switch_is_durable_and_sends_no_provider_request() {
             if events.iter().any(|stored| {
                 matches!(
                     stored.event,
-                    SmedEvent::ModelChangeRefused {
+                    MjolnrEvent::ModelChangeRefused {
                         code: ReasonCode::ProviderIncompatibleModel,
                         ..
                     }
@@ -525,7 +525,7 @@ async fn incompatible_model_switch_is_durable_and_sends_no_provider_request() {
     assert!(
         stored
             .iter()
-            .any(|event| matches!(event.event, SmedEvent::ModelChangeRefused { .. }))
+            .any(|event| matches!(event.event, MjolnrEvent::ModelChangeRefused { .. }))
     );
     assert!(requests.lock().expect("requests").is_empty());
     assert_eq!(
@@ -543,13 +543,13 @@ async fn disconnected_provider_is_auth_visible_model_hidden_and_direct_switch_re
         Arc::clone(&store) as Arc<dyn EventStore>,
     );
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: std::env::current_dir().expect("cwd"),
         })
         .await
         .expect("open");
     runtime
-        .dispatch(SmedCommand::CreateSession {
+        .dispatch(MjolnrCommand::CreateSession {
             provider: ProviderId::new("disconnected"),
             model: ModelId::new("offline-1"),
         })
@@ -562,12 +562,12 @@ async fn disconnected_provider_is_auth_visible_model_hidden_and_direct_switch_re
     assert!(snapshot.models.is_empty());
     assert_eq!(
         snapshot.providers[0].state,
-        smed::core::runtime::ProviderConnectionState::Disconnected
+        mjolnr::core::runtime::ProviderConnectionState::Disconnected
     );
     let session = snapshot.session.expect("session");
 
     runtime
-        .dispatch(SmedCommand::SelectModel {
+        .dispatch(MjolnrCommand::SelectModel {
             provider: ProviderId::new("disconnected"),
             model: ModelId::new("offline-1"),
         })
@@ -579,7 +579,7 @@ async fn disconnected_provider_is_auth_visible_model_hidden_and_direct_switch_re
             if events.iter().any(|stored| {
                 matches!(
                     stored.event,
-                    SmedEvent::ModelChangeRefused {
+                    MjolnrEvent::ModelChangeRefused {
                         code: ReasonCode::ProviderAuth,
                         ..
                     }
@@ -594,7 +594,7 @@ async fn disconnected_provider_is_auth_visible_model_hidden_and_direct_switch_re
     .expect("durable auth refusal");
     assert!(events.iter().any(|stored| matches!(
         stored.event,
-        SmedEvent::ModelChangeRefused {
+        MjolnrEvent::ModelChangeRefused {
             code: ReasonCode::ProviderAuth,
             ..
         }

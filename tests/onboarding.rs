@@ -2,14 +2,14 @@
 //!
 //! The wizard itself is an interactive host (it needs a TTY), so these tests
 //! drive the pure surface the plan's verification checklist actually names:
-//! first-run detection, and that a wizard-generated `.smed/` loads clean and
+//! first-run detection, and that a wizard-generated `.mjolnr/` loads clean and
 //! round-trips through the Phase 15 loader. They deliberately do *not* assert
 //! that files appear unconditionally — the previous test did, and that is what
 //! let a non-interactive stub pass as a feature.
 
-use smed::cli::onboard::{self, Selections};
-use smed::core::model::{ModelId, ProviderId};
-use smed::routing::scaffold::SeededRoute;
+use mjolnr::cli::onboard::{self, Selections};
+use mjolnr::core::model::{ModelId, ProviderId};
+use mjolnr::routing::scaffold::SeededRoute;
 
 fn route(provider: &str, model: &str, roles: &[&str]) -> SeededRoute {
     SeededRoute {
@@ -20,8 +20,8 @@ fn route(provider: &str, model: &str, roles: &[&str]) -> SeededRoute {
 }
 
 #[test]
-fn a_defaults_run_produces_a_smed_that_loads_and_reaches_a_working_model() {
-    // A run through the flow accepting smed's suggestions: a flagship route
+fn a_defaults_run_produces_a_mjolnr_that_loads_and_reaches_a_working_model() {
+    // A run through the flow accepting mjolnr's suggestions: a flagship route
     // tagged plan, a cheap one tagged smol, plus an identity.
     let selections = Selections {
         routes: vec![
@@ -50,7 +50,7 @@ fn a_defaults_run_produces_a_smed_that_loads_and_reaches_a_working_model() {
 
     // And the routing loads without diagnostics, resolving a default plus the
     // roles the person confirmed — a session that reaches a working model.
-    let (table, diagnostics) = smed::routing::load_dir(temp.path());
+    let (table, diagnostics) = mjolnr::routing::load_dir(temp.path());
     assert!(
         diagnostics.is_empty(),
         "a wizard-generated .mjolnr/ must load clean: {diagnostics:?}"
@@ -91,9 +91,9 @@ fn first_run_detection_leaves_configured_returning_and_declined_users_alone() {
 }
 
 #[test]
-fn a_project_with_dot_smed_is_never_re_offered_the_project_flow() {
+fn a_project_with_dot_mjolnr_is_never_re_offered_the_project_flow() {
     let temp = tempfile::tempdir().expect("tempdir");
     assert!(onboard::project_first_run(temp.path()));
-    std::fs::create_dir_all(temp.path().join(".smed")).expect("mkdir");
+    std::fs::create_dir_all(temp.path().join(".mjolnr")).expect("mkdir");
     assert!(!onboard::project_first_run(temp.path()));
 }

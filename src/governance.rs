@@ -117,7 +117,7 @@ pub fn parse(content: &str) -> Result<GovernanceTable, String> {
 ///   exactly what it was before this feature existed. Removing full-auto from
 ///   every project that has never heard of governance would be a breaking
 ///   change wearing a safety argument.
-/// - **A file that will not parse.** Someone decided models differ and smed
+/// - **A file that will not parse.** Someone decided models differ and mjolnr
 ///   cannot read what they decided. That resolves to `supervised` everywhere —
 ///   the narrowest table, not the absent one — because the alternative is a
 ///   typo silently restoring authority the file was written to withhold.
@@ -180,7 +180,7 @@ pub fn starting_file() -> (std::path::PathBuf, String) {
         std::path::PathBuf::from(".mjolnr").join("governance.yaml"),
         "\
 # How much supervision each model needs. Your judgement, not a measurement —
-# nothing in smed ever edits this file, and no model's tier moves because of
+# nothing in mjolnr ever edits this file, and no model's tier moves because of
 # how it behaved. A level that drifts with last week's traffic is not a rule,
 # and a level a model can move is a level a model can farm.
 #
@@ -194,7 +194,7 @@ pub fn starting_file() -> (std::path::PathBuf, String) {
 # Evidence-gated completion is identical in all three.
 #
 # `default` applies to any model no row matches. It is `supervised` on purpose:
-# an unknown model is one smed has no judgement about, and the wrong guess in
+# an unknown model is one mjolnr has no judgement about, and the wrong guess in
 # that direction is cheap and visible.
 #
 # Matching: exact, or one trailing `*`. First match wins, top to bottom.
@@ -267,7 +267,7 @@ models:
                 .expect("the shipped template must load")
                 .default_tier,
             GovernanceTier::Supervised,
-            "an unknown model is one smed has no judgement about"
+            "an unknown model is one mjolnr has no judgement about"
         );
 
         let permissive = contents.replace("default: supervised", "default: trusted");
@@ -373,9 +373,9 @@ models:
         // The failure that would otherwise be silent: a typo restoring the
         // authority the file exists to withhold.
         let directory = tempfile::tempdir().expect("temp dir");
-        let smed = directory.path().join(".mjolnr");
-        std::fs::create_dir_all(&smed).expect("create .mjolnr");
-        std::fs::write(smed.join("governance.yaml"), "default: [not, a, tier]\n")
+        let mjolnr = directory.path().join(".mjolnr");
+        std::fs::create_dir_all(&mjolnr).expect("create .mjolnr");
+        std::fs::write(mjolnr.join("governance.yaml"), "default: [not, a, tier]\n")
             .expect("write file");
 
         let (table, diagnostics) = load_dir(directory.path());

@@ -20,18 +20,18 @@ use sha2::{Digest, Sha256};
 use tokio::sync::broadcast;
 use tokio_util::sync::CancellationToken;
 
-use crate::core::command::SmedCommand;
+use crate::core::command::MjolnrCommand;
 use crate::core::council::{
     CouncilArtifact, CouncilArtifactSection, CouncilConfig, CouncilContribution, CouncilFinding,
     CouncilMemberPosition, CouncilReview, CouncilReviewId,
 };
-use crate::core::event::{RunId, SessionId, SmedEvent};
+use crate::core::event::{MjolnrEvent, RunId, SessionId};
 use crate::core::message::CanonicalMessage;
 use crate::core::model::{ModelId, ProviderId};
 use crate::core::plan::{PlanId, PrdId, ProductRequirementsDocument};
 use crate::core::policy::PolicyMode;
 use crate::core::provider::Provider;
-use crate::core::runtime::SmedRuntime;
+use crate::core::runtime::MjolnrRuntime;
 use crate::core::store::EventStore;
 use crate::runtime::budget::BudgetLimits;
 use crate::runtime::{ChildLink, Mail, Runtime};
@@ -65,7 +65,7 @@ struct CouncilPlan {
     member_limits: BudgetLimits,
     providers: Vec<Arc<dyn Provider>>,
     store: Arc<dyn EventStore>,
-    events: broadcast::Sender<SmedEvent>,
+    events: broadcast::Sender<MjolnrEvent>,
     cancel: CancellationToken,
 }
 
@@ -229,7 +229,7 @@ impl super::Actor {
         // transcript. A client must never see a council review that recovery
         // could not reconstruct.
         if self
-            .persist(SmedEvent::CouncilReviewed {
+            .persist(MjolnrEvent::CouncilReviewed {
                 session,
                 review: Box::new(review.clone()),
             })
@@ -256,7 +256,7 @@ impl super::Actor {
     async fn append_council_notice(&mut self, session: SessionId, text: &str) -> bool {
         let message = CanonicalMessage::system(text.to_owned());
         let Some(sequence) = self
-            .persist(SmedEvent::MessageAppended {
+            .persist(MjolnrEvent::MessageAppended {
                 session,
                 message: Box::new(message.clone()),
             })
@@ -440,18 +440,18 @@ async fn run_council_member(plan: &CouncilPlan, seat: &CouncilSeat, directive: S
 
     let setup = async {
         runtime
-            .dispatch(SmedCommand::OpenProject {
+            .dispatch(MjolnrCommand::OpenProject {
                 root: plan.workspace.clone(),
             })
             .await?;
         runtime
-            .dispatch(SmedCommand::CreateSession {
+            .dispatch(MjolnrCommand::CreateSession {
                 provider: seat.provider.clone(),
                 model: seat.model.clone(),
             })
             .await?;
         runtime
-            .dispatch(SmedCommand::SetPolicy {
+            .dispatch(MjolnrCommand::SetPolicy {
                 mode: PolicyMode::ReadOnly,
             })
             .await
@@ -464,7 +464,7 @@ async fn run_council_member(plan: &CouncilPlan, seat: &CouncilSeat, directive: S
     forward(plan, child_session, "started");
     let mut events = runtime.subscribe();
     if runtime
-        .dispatch(SmedCommand::SendUserMessage {
+        .dispatch(MjolnrCommand::SendUserMessage {
             text: directive,
             source: crate::core::directive::DirectiveSource::Internal,
         })
@@ -480,7 +480,7 @@ async fn run_council_member(plan: &CouncilPlan, seat: &CouncilSeat, directive: S
             let event = tokio::select! {
                 event = events.recv() => event,
                 () = plan.cancel.cancelled() => {
-                    let _ = runtime.dispatch(SmedCommand::CancelRun).await;
+                    let _ = runtime.dispatch(MjolnrCommand::CancelRun).await;
                     continue;
                 }
             };
@@ -489,7 +489,7 @@ async fn run_council_member(plan: &CouncilPlan, seat: &CouncilSeat, directive: S
                     forward_event(plan, child_session, &event);
                     if matches!(
                         event,
-                        SmedEvent::RunFinished { .. } | SmedEvent::RunFailed { .. }
+                        MjolnrEvent::RunFinished { .. } | MjolnrEvent::RunFailed { .. }
                     ) {
                         return;
                     }
@@ -501,7 +501,7 @@ async fn run_council_member(plan: &CouncilPlan, seat: &CouncilSeat, directive: S
     })
     .await;
     if finished.is_err() {
-        let _ = runtime.dispatch(SmedCommand::CancelRun).await;
+        let _ = runtime.dispatch(MjolnrCommand::CancelRun).await;
     }
 
     let answer = last_assistant_text(&runtime)
@@ -544,7 +544,7 @@ fn last_assistant_text(runtime: &Runtime) -> Option<String> {
 /// Forward a member's lifecycle as one `SubagentActivity` label so the parent's
 /// fleet rail shows it live — the same event a Phase 13 subagent forwards.
 fn forward(plan: &CouncilPlan, child: SessionId, label: &str) {
-    let _ = plan.events.send(SmedEvent::SubagentActivity {
+    let _ = plan.events.send(MjolnrEvent::SubagentActivity {
         session: plan.parent_session,
         run: plan.run,
         child,
@@ -552,11 +552,11 @@ fn forward(plan: &CouncilPlan, child: SessionId, label: &str) {
     });
 }
 
-fn forward_event(plan: &CouncilPlan, child: SessionId, event: &SmedEvent) {
+fn forward_event(plan: &CouncilPlan, child: SessionId, event: &MjolnrEvent) {
     let label = match event {
-        SmedEvent::ToolAssembling { name, .. } => Some(format!("assembling {name}")),
-        SmedEvent::TextDelta { .. } => Some("deliberating".to_owned()),
-        SmedEvent::RunFailed { code, .. } => Some(format!("failed {}", code.as_str())),
+        MjolnrEvent::ToolAssembling { name, .. } => Some(format!("assembling {name}")),
+        MjolnrEvent::TextDelta { .. } => Some("deliberating".to_owned()),
+        MjolnrEvent::RunFailed { code, .. } => Some(format!("failed {}", code.as_str())),
         _ => None,
     };
     if let Some(label) = label {
@@ -574,7 +574,7 @@ mod tests {
             .expect("system clock before Unix epoch")
             .as_nanos();
         std::env::temp_dir().join(format!(
-            "smed-council-{label}-{}-{stamp}",
+            "mjolnr-council-{label}-{}-{stamp}",
             std::process::id()
         ))
     }

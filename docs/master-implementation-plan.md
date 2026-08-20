@@ -1,4 +1,4 @@
-# smed Master Implementation Plan: Governed Agent Workspace — Modules, Memory, and Plugins
+# mjolnr Master Implementation Plan: Governed Agent Workspace — Modules, Memory, and Plugins
 
 **Status:** Proposed Architecture & Execution Plan (revised 2026-08-18 after review against AGENTS.md and ADRs)
 **Target:** Shared Rust Core, SvelteKit Tauri Desktop, Ratatui TUI
@@ -12,13 +12,13 @@ Research artifacts in `Code/simon-says-research` (Wayland, Orca, jcode, LeanCTX,
 
 ## 1. Architecture: core, capability modules, plugins, MCP
 
-smed keeps the existing single-crate Rust runtime as the core. There is no
+mjolnr keeps the existing single-crate Rust runtime as the core. There is no
 microkernel rewrite and no in-process plugin loading. Four kinds of extension
 exist, with distinct governance:
 
 ```mermaid
 flowchart TB
-    subgraph Core ["smed Rust Core (existing runtime, single crate)"]
+    subgraph Core ["mjolnr Rust Core (existing runtime, single crate)"]
         K1["Fail-Closed Policy Gate & Approval Engine"]
         K2["SQLite Event Ledger (tokio-rusqlite) — append-only truth"]
         K3["Model Provider Wire Protocol & Stream Decoders"]
@@ -34,7 +34,7 @@ flowchart TB
     subgraph External ["Third-party surfaces (subprocesses, never in-process)"]
         E1["Plugins — JSON-RPC over stdio, ADR-0016 protocol"]
         E2["MCP Servers — src/mcp.rs, unchanged"]
-        E3["Declarative Extensions — .smed/extensions/, ADR-0002, unchanged"]
+        E3["Declarative Extensions — .mjolnr/extensions/, ADR-0002, unchanged"]
     end
 
     subgraph Surfaces ["Clients (render snapshots, emit commands)"]
@@ -54,8 +54,8 @@ no third-party JavaScript ever loads in the Tauri webview.
 
 | Term | Definition |
 |---|---|
-| **Capability module** | First-party Rust in the single crate, toggleable via declarable `.smed/` files, subject to the §2.2 extraction test. Never called "plugin" in UI or docs. `@smed/*` naming reserved for these. |
-| **Plugin** | Third-party code: local subprocess, versioned JSON-RPC over stdio, fail-closed `smed-plugin.yaml` manifest, owner-granted credentials, observer-only hooks, tools pinned `ToolTier::Execute`, data-only UI views (ADR-0016). |
+| **Capability module** | First-party Rust in the single crate, toggleable via declarable `.mjolnr/` files, subject to the §2.2 extraction test. Never called "plugin" in UI or docs. `@mjolnr/*` naming reserved for these. |
+| **Plugin** | Third-party code: local subprocess, versioned JSON-RPC over stdio, fail-closed `mjolnr-plugin.yaml` manifest, owner-granted credentials, observer-only hooks, tools pinned `ToolTier::Execute`, data-only UI views (ADR-0016). |
 | **MCP server** | External tool server via `src/mcp.rs`. Tool-only: no lifecycle, no session context, no UI. A plugin may wrap an MCP server. |
 | **Declarative extension** | Exact-argv YAML orchestration, `Execute`-gated (ADR-0002). The lightweight entry surface; unchanged. |
 
@@ -67,7 +67,7 @@ Transparent, user-editable, temporally accurate memory — as a first-party
 module, not a plugin.
 
 ```
-.smed/
+.mjolnr/
 ├── rules/                       # Tier 1: Explicit Workspace Rules (diffable Markdown)
 │   ├── coding-standards.md
 │   └── conventions.md
@@ -77,7 +77,7 @@ module, not a plugin.
 ```
 
 **The governing law (Standing Law #2, restated as a design constraint):**
-`.smed/data/memory.db` — triples, FTS index, embeddings — is a **disposable,
+`.mjolnr/data/memory.db` — triples, FTS index, embeddings — is a **disposable,
 regenerable projection**. The append-only event ledger and the working tree
 are truth. Memory may improve context selection only. It may never widen
 policy, approve an action, rewrite the record, or become durable truth.
@@ -85,7 +85,7 @@ Consolidation derives from the transcript and never rewrites it. Index loss is
 an inconvenience, never data loss.
 
 1. **Tier 1: Explicit Workspace Rules & User Profile**
-   - Plain Markdown under `.smed/rules/*.md` and `.smed/USER.md`, injected as
+   - Plain Markdown under `.mjolnr/rules/*.md` and `.mjolnr/USER.md`, injected as
      **frozen snapshots at session start** (zero prompt cache churn).
    - Strict character limits force consolidation.
    - `write_approval` staging gate: rule changes land via the existing
@@ -122,7 +122,7 @@ an inconvenience, never data loss.
 
 The full decision record is ADR-0016; the implementation obligations are:
 
-- `smed-plugin.yaml` manifest: identity, provenance (source URL, publisher,
+- `mjolnr-plugin.yaml` manifest: identity, provenance (source URL, publisher,
   content hash), protocol version, tools (JSON schema, no `$ref`), hook
   subscriptions, view descriptors, named credential grants. Unknown fields
   refuse (fail closed).
@@ -130,7 +130,7 @@ The full decision record is ADR-0016; the implementation obligations are:
   scrubbed environment, restart + cancellation, bounded channels, honest
   unavailable states on crash.
 - **Credentials: no `pass_env`.** Per-plugin owner-approved grants stored in
-  smed's owner-only credential files (one file per plugin), injected as env
+  mjolnr's owner-only credential files (one file per plugin), injected as env
   vars at spawn only — never argv, never YAML, never logs, `Debug`-redacted,
   zeroized.
 - **Hooks are observers only**: `SessionStart`, `UserPromptSubmit`,
@@ -222,9 +222,9 @@ flowchart LR
 ```
 
 ### Phase 1: Memory capability module
-- `.smed/data/memory.db` schema (`tokio-rusqlite`): triples, episodic tier,
+- `.mjolnr/data/memory.db` schema (`tokio-rusqlite`): triples, episodic tier,
   consolidation log.
-- Tier 1 frozen-snapshot loader for `.smed/rules/*.md` and `.smed/USER.md`,
+- Tier 1 frozen-snapshot loader for `.mjolnr/rules/*.md` and `.mjolnr/USER.md`,
   with `write_approval` staging.
 - Temporal triple manager with automatic `valid_until` invalidation.
 - 3-layer recall tools (`memory_search`, `memory_timeline`, `memory_expand`).
@@ -241,7 +241,7 @@ flowchart LR
 - `src/plugins/` subprocess host; architecture rule first.
 - Observer hook lifecycle; credential grant store and spawn-time injection;
   Execute-pinned tool registration through the existing gate;
-  `PluginInstalled`/`PluginUpdated` durable events; `.smed/plugins/*.yaml`
+  `PluginInstalled`/`PluginUpdated` durable events; `.mjolnr/plugins/*.yaml`
   one-file-per-plugin configuration, bounded scan in `src/context/plugins.rs`
   (diffable, user-revertible — Standing Law #7). Runtime holds `TaskSource`s
   in `HashMap<IntegrationId, Arc<dyn TaskSource>>` (`src/runtime/mod.rs:435`);
@@ -275,7 +275,7 @@ flowchart LR
 ### Phase 6: Ecosystem — **landed** (slices 6.1–6.3)
 - **6.1 Vercel** — `src/integrations/vercel/` as `TaskSource` (`GET /v6/deployments/{id}`, `api.vercel.com`), bounded reads, `TaskId` charset, `VERCEL_TOKEN` via `Secret`, `Debug`-redacted; HashMap registry generalization so new `TaskSource`s add one line.
 - **6.2 Supabase** — `src/integrations/supabase/` as `TaskSource` (`GET /v1/projects/{ref}`, `api.supabase.com`), same bounds/taxonomy, `SUPABASE_TOKEN`.
-- **6.3 Plugin scaffold + flagship** — `smed plugin create <name> [--template node|rust|python] [--yes]` scaffolds `.smed/plugins/<name>.yaml` (+ starter) via `src/cli/plugin.rs` (previewed, **never overwrites**, `PluginManifest::parse`-validated); `smed plugin list` discovers `.smed/plugins/*.yaml` + user config dir (`src/context/plugins.rs`). Flagship `examples/plugins/vercel-deployments/` — `list_deployments`/`get_deployment`, `session_start` hook, table view, `VERCEL_TOKEN` only via scrubbed env. All plugin tools pinned `ToolTier::Execute`.
+- **6.3 Plugin scaffold + flagship** — `mjolnr plugin create <name> [--template node|rust|python] [--yes]` scaffolds `.mjolnr/plugins/<name>.yaml` (+ starter) via `src/cli/plugin.rs` (previewed, **never overwrites**, `PluginManifest::parse`-validated); `mjolnr plugin list` discovers `.mjolnr/plugins/*.yaml` + user config dir (`src/context/plugins.rs`). Flagship `examples/plugins/vercel-deployments/` — `list_deployments`/`get_deployment`, `session_start` hook, table view, `VERCEL_TOKEN` only via scrubbed env. All plugin tools pinned `ToolTier::Execute`.
 
 ---
 

@@ -19,7 +19,7 @@ use tokio::sync::{mpsc, oneshot};
 use tokio_rusqlite::Connection;
 
 use crate::core::checkpoint::SessionCheckpoint;
-use crate::core::event::{SessionId, SmedEvent, StoredEvent};
+use crate::core::event::{MjolnrEvent, SessionId, StoredEvent};
 use crate::core::store::{
     DiagnosticsReport, EventStore, IntegrityReport, ProjectId, SessionLease, SessionSummary,
     StoreDiagnostics, StoreError, StoredCheckpoint, WorkspaceSearchFilter, WorkspaceSearchPage,
@@ -69,7 +69,7 @@ impl SqliteEventStore {
     ///
     /// # Errors
     /// - [`StoreError::UnsupportedSchema`] when the database was written by a
-    ///   newer smed. Nothing is modified in that case, including the WAL mode.
+    ///   newer mjolnr. Nothing is modified in that case, including the WAL mode.
     /// - [`StoreError::Unavailable`] when SQLite cannot open or migrate it.
     pub async fn open(path: impl AsRef<Path>) -> Result<Self, StoreError> {
         let database_path = path.as_ref().to_path_buf();
@@ -224,7 +224,7 @@ impl EventStore for SqliteEventStore {
         self.request(|reply| Request::Sessions { reply }).await
     }
 
-    async fn append(&self, event: SmedEvent) -> Result<StoredEvent, StoreError> {
+    async fn append(&self, event: MjolnrEvent) -> Result<StoredEvent, StoreError> {
         self.request(|reply| Request::Append {
             event: Box::new(event),
             reply,
@@ -238,7 +238,7 @@ impl EventStore for SqliteEventStore {
 
     async fn append_after(
         &self,
-        event: SmedEvent,
+        event: MjolnrEvent,
         parent: Option<u64>,
     ) -> Result<StoredEvent, StoreError> {
         self.request(|reply| Request::AppendAfter {

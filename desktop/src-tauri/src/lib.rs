@@ -1,4 +1,4 @@
-//! Tauri 2 backend composition glue for smed desktop client (Phase A0).
+//! Tauri 2 backend composition glue for mjolnr desktop client (Phase A0).
 
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 #![allow(clippy::doc_markdown)]
@@ -9,27 +9,27 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::io::Write as _;
 
 use serde::{Deserialize, Serialize};
-use smed::context::{DiscoveryConfig, ProjectContext};
-use smed::core::client::{ClientCommand, ClientSnapshot};
-use smed::core::client::workspace::ClientEditorPreferences;
-use smed::core::client::terminal::{
+use mjolnr::context::{DiscoveryConfig, ProjectContext};
+use mjolnr::core::client::{ClientCommand, ClientSnapshot};
+use mjolnr::core::client::workspace::ClientEditorPreferences;
+use mjolnr::core::client::terminal::{
     ClientTerminalInput, ClientTerminalLayout, ClientTerminalResize, ClientTerminalScroll,
     ClientTerminalSearch, ClientTerminalSnapshot,
 };
-use smed::core::provider::Provider;
-use smed::core::routing::RouteTable;
-use smed::core::runtime::SmedRuntime;
-use smed::core::secrets::SecretStore;
-use smed::core::store::EventStore;
-use smed::providers::anthropic::AnthropicProvider;
-use smed::providers::openai::OpenAiProvider;
-use smed::providers::openai_codex::OpenAiCodexProvider;
-use smed::providers::{gemini, ollama, openrouter};
-use smed::runtime::Runtime;
-use smed::runtime::client_bridge::ClientBridge;
-use smed::runtime::terminal::TerminalManager;
-use smed::store::secrets::OsSecretStore;
-use smed::store::sqlite::SqliteEventStore;
+use mjolnr::core::provider::Provider;
+use mjolnr::core::routing::RouteTable;
+use mjolnr::core::runtime::MjolnrRuntime;
+use mjolnr::core::secrets::SecretStore;
+use mjolnr::core::store::EventStore;
+use mjolnr::providers::anthropic::AnthropicProvider;
+use mjolnr::providers::openai::OpenAiProvider;
+use mjolnr::providers::openai_codex::OpenAiCodexProvider;
+use mjolnr::providers::{gemini, ollama, openrouter};
+use mjolnr::runtime::Runtime;
+use mjolnr::runtime::client_bridge::ClientBridge;
+use mjolnr::runtime::terminal::TerminalManager;
+use mjolnr::store::secrets::OsSecretStore;
+use mjolnr::store::sqlite::SqliteEventStore;
 use tauri::{AppHandle, Emitter, State};
 use tracing::{error, info};
 
@@ -83,18 +83,18 @@ pub struct OnboardingPreview {
     pub files: Vec<OnboardingFileStatus>,
 }
 
-fn onboarding_files(draft: &OnboardingDraft) -> Vec<smed::routing::scaffold::ScaffoldFile> {
-    let selections = smed::cli::onboard::Selections {
+fn onboarding_files(draft: &OnboardingDraft) -> Vec<mjolnr::routing::scaffold::ScaffoldFile> {
+    let selections = mjolnr::cli::onboard::Selections {
         routes: Vec::new(),
         soul: Some(draft.soul.clone()),
         user_profile: draft.user_profile.clone(),
         mcp_servers: Vec::new(),
     };
-    smed::cli::onboard::plan_files(&selections)
+    mjolnr::cli::onboard::plan_files(&selections)
 }
 
 fn onboarding_root(draft: &OnboardingDraft) -> Result<PathBuf, DesktopBridgeError> {
-    smed::policy::paths::canonical_root(Path::new(draft.root.trim())).map_err(|refusal| {
+    mjolnr::policy::paths::canonical_root(Path::new(draft.root.trim())).map_err(|refusal| {
         DesktopBridgeError::Refused {
             code: Some(refusal.code.as_str().to_owned()),
             message: refusal.detail,
@@ -104,12 +104,12 @@ fn onboarding_root(draft: &OnboardingDraft) -> Result<PathBuf, DesktopBridgeErro
 
 fn onboarding_status(
     root: &Path,
-    files: &[smed::routing::scaffold::ScaffoldFile],
+    files: &[mjolnr::routing::scaffold::ScaffoldFile],
 ) -> Result<Vec<OnboardingFileStatus>, DesktopBridgeError> {
     files
         .iter()
         .map(|file| {
-            let target = smed::policy::paths::for_write(root, &file.relative_path).map_err(
+            let target = mjolnr::policy::paths::for_write(root, &file.relative_path).map_err(
                 |refusal| DesktopBridgeError::Refused {
                     code: Some(refusal.code.as_str().to_owned()),
                     message: refusal.detail,
@@ -146,7 +146,7 @@ fn onboarding_write(draft: OnboardingDraft) -> Result<OnboardingPreview, Desktop
     let root = onboarding_root(&draft)?;
     let files = onboarding_files(&draft);
     for file in &files {
-        let target = smed::policy::paths::for_write(&root, &file.relative_path).map_err(
+        let target = mjolnr::policy::paths::for_write(&root, &file.relative_path).map_err(
             |refusal| DesktopBridgeError::Refused {
                 code: Some(refusal.code.as_str().to_owned()),
                 message: refusal.detail,
@@ -163,7 +163,7 @@ fn onboarding_write(draft: OnboardingDraft) -> Result<OnboardingPreview, Desktop
                 ))
             })?;
         }
-        let target = smed::policy::paths::for_write(&root, &file.relative_path).map_err(
+        let target = mjolnr::policy::paths::for_write(&root, &file.relative_path).map_err(
             |refusal| DesktopBridgeError::Refused {
                 code: Some(refusal.code.as_str().to_owned()),
                 message: refusal.detail,
@@ -236,9 +236,9 @@ async fn get_snapshot(state: State<'_, AppState>) -> Result<ClientSnapshot, Desk
 /// should have been.
 #[tauri::command]
 async fn search_workspace(
-    filter: smed::core::client::types::ClientWorkspaceSearchFilter,
+    filter: mjolnr::core::client::types::ClientWorkspaceSearchFilter,
     state: State<'_, AppState>,
-) -> Result<smed::core::client::types::ClientWorkspaceSearchPage, DesktopBridgeError> {
+) -> Result<mjolnr::core::client::types::ClientWorkspaceSearchPage, DesktopBridgeError> {
     state
         .bridge
         .search_workspace(filter)
@@ -255,7 +255,7 @@ async fn list_directory(
     path: String,
     page: u32,
     state: State<'_, AppState>,
-) -> Result<smed::core::client::workspace::DirectoryPage, DesktopBridgeError> {
+) -> Result<mjolnr::core::client::workspace::DirectoryPage, DesktopBridgeError> {
     state
         .bridge
         .list_directory(&path, page)
@@ -271,7 +271,7 @@ async fn list_directory(
 async fn open_file(
     path: String,
     state: State<'_, AppState>,
-) -> Result<smed::core::client::workspace::FileOpenView, DesktopBridgeError> {
+) -> Result<mjolnr::core::client::workspace::FileOpenView, DesktopBridgeError> {
     state
         .bridge
         .open_file(&path)
@@ -286,7 +286,7 @@ const EDITOR_PREFERENCES_FILE: &str = "editor-preferences.json";
 
 /// Resolve the user-editable preferences file beneath the open workspace.
 ///
-/// Preferences are intentionally a file under `.smed/`, not browser storage
+/// Preferences are intentionally a file under `.mjolnr/`, not browser storage
 /// or SQLite prose: an owner can inspect, diff, and revert them. The parent
 /// and an existing file are canonicalized immediately before either read or
 /// write so a symlink cannot turn this convenience setting into an escape.
@@ -294,23 +294,23 @@ fn editor_preferences_path(root: &Path) -> Result<PathBuf, DesktopBridgeError> {
     let root = std::fs::canonicalize(root).map_err(|error| {
         DesktopBridgeError::Initialization(format!("canonicalize workspace root: {error}"))
     })?;
-    let smed_dir = root.join(".smed");
-    if !smed_dir.exists() {
-        return Ok(smed_dir.join(EDITOR_PREFERENCES_FILE));
+    let mjolnr_dir = root.join(".mjolnr");
+    if !mjolnr_dir.exists() {
+        return Ok(mjolnr_dir.join(EDITOR_PREFERENCES_FILE));
     }
-    let smed_dir = std::fs::canonicalize(&smed_dir).map_err(|error| {
+    let mjolnr_dir = std::fs::canonicalize(&mjolnr_dir).map_err(|error| {
         DesktopBridgeError::Refused {
             code: Some("PATH_OUTSIDE_WORKSPACE".to_owned()),
-            message: format!("cannot validate the .smed preferences directory: {error}"),
+            message: format!("cannot validate the .mjolnr preferences directory: {error}"),
         }
     })?;
-    if !smed_dir.starts_with(&root) {
+    if !mjolnr_dir.starts_with(&root) {
         return Err(DesktopBridgeError::Refused {
             code: Some("PATH_OUTSIDE_WORKSPACE".to_owned()),
-            message: "the .smed preferences directory escapes the workspace".to_owned(),
+            message: "the .mjolnr preferences directory escapes the workspace".to_owned(),
         });
     }
-    let path = smed_dir.join(EDITOR_PREFERENCES_FILE);
+    let path = mjolnr_dir.join(EDITOR_PREFERENCES_FILE);
     match std::fs::symlink_metadata(&path) {
         Ok(metadata) if metadata.file_type().is_symlink() => {
             return Err(DesktopBridgeError::Refused {
@@ -405,9 +405,9 @@ fn editor_preferences_save(
 /// One bounded, deterministic code-graph projection for the E7 surface.
 #[tauri::command]
 async fn query_graph(
-    query: smed::core::client::graph::ClientGraphQuery,
+    query: mjolnr::core::client::graph::ClientGraphQuery,
     state: State<'_, AppState>,
-) -> Result<smed::core::client::graph::ClientGraphPage, DesktopBridgeError> {
+) -> Result<mjolnr::core::client::graph::ClientGraphPage, DesktopBridgeError> {
     state
         .bridge
         .query_graph(query)
@@ -423,7 +423,7 @@ async fn query_graph(
 #[tauri::command]
 async fn query_board(
     state: State<'_, AppState>,
-) -> Result<smed::core::client::board::ClientBoardOverview, DesktopBridgeError> {
+) -> Result<mjolnr::core::client::board::ClientBoardOverview, DesktopBridgeError> {
     state
         .bridge
         .query_board()
@@ -440,7 +440,7 @@ async fn query_board(
 async fn query_repository_history(
     limit: u32,
     state: State<'_, AppState>,
-) -> Result<smed::core::client::workspace::RepositoryHistory, DesktopBridgeError> {
+) -> Result<mjolnr::core::client::workspace::RepositoryHistory, DesktopBridgeError> {
     state
         .bridge
         .query_repository_history(limit)
@@ -540,7 +540,7 @@ fn terminal_scroll(
 fn terminal_search(
     search: ClientTerminalSearch,
     state: State<'_, AppState>,
-) -> Result<smed::core::client::terminal::ClientTerminalSearchResult, DesktopBridgeError> {
+) -> Result<mjolnr::core::client::terminal::ClientTerminalSearchResult, DesktopBridgeError> {
     state
         .terminal
         .search(&search)
@@ -613,7 +613,7 @@ async fn subscribe_updates(
     if let Some(mut rx) = bridge.take_updates() {
         tokio::spawn(async move {
             while let Some(update) = rx.recv().await {
-                if app.emit("smed-update", &update).is_err() {
+                if app.emit("mjolnr-update", &update).is_err() {
                     break;
                 }
             }
@@ -669,18 +669,18 @@ pub async fn init_bridge(database_path: PathBuf) -> Result<Arc<ClientBridge>, De
     let runtime = Runtime::spawn_with_tools_project_context_and_triggers(
         providers,
         store,
-        smed::tools::ToolRegistry::default(),
+        mjolnr::tools::ToolRegistry::default(),
         project_context,
         Arc::new(Vec::new()),
         Arc::new(Vec::new()),
         Arc::new(RouteTable::default()),
     );
 
-    let bridge_runtime: Arc<dyn SmedRuntime> = Arc::new(runtime);
+    let bridge_runtime: Arc<dyn MjolnrRuntime> = Arc::new(runtime);
     Ok(Arc::new(ClientBridge::start(bridge_runtime)))
 }
 
-/// Keep workspace-local history when the app is launched from a smed
+/// Keep workspace-local history when the app is launched from a mjolnr
 /// workspace, but give a bundled app a writable persistence location when
 /// LaunchServices supplies an unrelated working directory (often `/`).
 ///
@@ -691,18 +691,18 @@ pub async fn init_bridge(database_path: PathBuf) -> Result<Arc<ClientBridge>, De
 /// pre-workspace event store needed to start the client safely.
 fn launch_database_path() -> Result<PathBuf, DesktopBridgeError> {
     if let Ok(workspace_root) = std::env::current_dir() {
-        let smed_dir = workspace_root.join(".smed");
-        if smed_dir.is_dir() {
-            return Ok(smed_dir.join("smed-desktop.db"));
+        let mjolnr_dir = workspace_root.join(".mjolnr");
+        if mjolnr_dir.is_dir() {
+            return Ok(mjolnr_dir.join("mjolnr-desktop.db"));
         }
     }
 
-    let fallback = smed::store::paths::default_database_path().map_err(|error| {
+    let fallback = mjolnr::store::paths::default_database_path().map_err(|error| {
         DesktopBridgeError::Initialization(format!(
             "resolve desktop application data directory: {error}"
         ))
     })?;
-    Ok(fallback.with_file_name("smed-desktop.db"))
+    Ok(fallback.with_file_name("mjolnr-desktop.db"))
 }
 
 pub fn run() {
@@ -712,7 +712,7 @@ pub fn run() {
     {
         Ok(rt) => rt,
         Err(err) => {
-            error!("smed-desktop: failed to initialize Tokio runtime: {err}");
+            error!("mjolnr-desktop: failed to initialize Tokio runtime: {err}");
             return;
         }
     };
@@ -722,7 +722,7 @@ pub fn run() {
     let database_path = match launch_database_path() {
         Ok(path) => path,
         Err(err) => {
-            error!("smed-desktop initialization error: {err}");
+            error!("mjolnr-desktop initialization error: {err}");
             return;
         }
     };
@@ -732,7 +732,7 @@ pub fn run() {
     let bridge = match setup_result {
         Ok(b) => b,
         Err(err) => {
-            error!("smed-desktop initialization error: {err}");
+            error!("mjolnr-desktop initialization error: {err}");
             return;
         }
     };
@@ -777,7 +777,7 @@ pub fn run() {
     {
         Ok(app) => app,
         Err(err) => {
-            error!("smed-desktop: failed to build Tauri application: {err}");
+            error!("mjolnr-desktop: failed to build Tauri application: {err}");
             return;
         }
     };
@@ -795,12 +795,12 @@ pub fn run() {
                 // manager to stop every live child, then let its watcher own
                 // the eventual Exited/Failed state.
                 if let Err(err) = terminal_manager_clone.stop_all() {
-                    error!("smed-desktop: error stopping terminal sessions: {err}");
+                    error!("mjolnr-desktop: error stopping terminal sessions: {err}");
                 }
                 if let Err(err) = bridge_clone.close().await {
-                    error!("smed-desktop: error closing client bridge: {err}");
+                    error!("mjolnr-desktop: error closing client bridge: {err}");
                 } else {
-                    info!("smed-desktop: client bridge closed cleanly");
+                    info!("mjolnr-desktop: client bridge closed cleanly");
                 }
             });
         }
@@ -816,13 +816,13 @@ mod tests {
             .duration_since(std::time::UNIX_EPOCH)
             .expect("system clock before Unix epoch")
             .as_nanos();
-        std::env::temp_dir().join(format!("smed-{label}-{}-{stamp}", std::process::id()))
+        std::env::temp_dir().join(format!("mjolnr-{label}-{}-{stamp}", std::process::id()))
     }
 
     #[test]
-    fn editor_preferences_default_and_round_trip_under_dot_smed() {
+    fn editor_preferences_default_and_round_trip_under_dot_mjolnr() {
         let root = temporary_preferences_root("editor-preferences");
-        std::fs::create_dir_all(root.join(".smed")).expect("create preferences directory");
+        std::fs::create_dir_all(root.join(".mjolnr")).expect("create preferences directory");
 
         assert_eq!(
             load_editor_preferences(&root).expect("missing preferences default"),
@@ -843,7 +843,7 @@ mod tests {
     #[test]
     fn malformed_editor_preferences_refuse_with_schema_code() {
         let root = temporary_preferences_root("invalid-editor-preferences");
-        let directory = root.join(".smed");
+        let directory = root.join(".mjolnr");
         std::fs::create_dir_all(&directory).expect("create preferences directory");
         std::fs::write(directory.join(EDITOR_PREFERENCES_FILE), b"not json")
             .expect("write malformed preferences");
@@ -877,7 +877,7 @@ mod tests {
         let written = onboarding_write(draft.clone()).expect("write onboarding files");
         assert!(written.files.iter().all(|file| file.action == "preserve"));
         assert_eq!(
-            std::fs::read_to_string(root.join(".smed/SOUL.md")).expect("read soul"),
+            std::fs::read_to_string(root.join(".mjolnr/SOUL.md")).expect("read soul"),
             "# generated soul\n"
         );
 
@@ -888,7 +888,7 @@ mod tests {
         .expect("preserve existing onboarding files");
         assert!(second.files.iter().all(|file| file.action == "preserve"));
         assert_eq!(
-            std::fs::read_to_string(root.join(".smed/SOUL.md")).expect("read preserved soul"),
+            std::fs::read_to_string(root.join(".mjolnr/SOUL.md")).expect("read preserved soul"),
             "# generated soul\n"
         );
 
@@ -936,29 +936,29 @@ mod tests {
     fn bridge_start_outside_tokio_context_panics_as_expected() {
         let (events_tx, _) = tokio::sync::broadcast::channel(16);
         let (snapshot_tx, _) =
-            tokio::sync::watch::channel(smed::core::runtime::RuntimeSnapshot::default());
+            tokio::sync::watch::channel(mjolnr::core::runtime::RuntimeSnapshot::default());
 
         struct DummyRuntime {
-            events_tx: tokio::sync::broadcast::Sender<smed::core::event::SmedEvent>,
-            snapshot_tx: tokio::sync::watch::Sender<smed::core::runtime::RuntimeSnapshot>,
+            events_tx: tokio::sync::broadcast::Sender<mjolnr::core::event::MjolnrEvent>,
+            snapshot_tx: tokio::sync::watch::Sender<mjolnr::core::runtime::RuntimeSnapshot>,
         }
         use async_trait::async_trait;
 
         #[async_trait]
-        impl SmedRuntime for DummyRuntime {
-            fn snapshot(&self) -> smed::core::runtime::RuntimeSnapshot {
+        impl MjolnrRuntime for DummyRuntime {
+            fn snapshot(&self) -> mjolnr::core::runtime::RuntimeSnapshot {
                 self.snapshot_tx.borrow().clone()
             }
-            fn snapshots(&self) -> smed::core::runtime::SnapshotStream {
-                smed::core::runtime::SnapshotStream::new(self.snapshot_tx.subscribe())
+            fn snapshots(&self) -> mjolnr::core::runtime::SnapshotStream {
+                mjolnr::core::runtime::SnapshotStream::new(self.snapshot_tx.subscribe())
             }
-            fn subscribe(&self) -> smed::core::runtime::RuntimeSubscription {
-                smed::core::runtime::RuntimeSubscription::new(self.events_tx.subscribe())
+            fn subscribe(&self) -> mjolnr::core::runtime::RuntimeSubscription {
+                mjolnr::core::runtime::RuntimeSubscription::new(self.events_tx.subscribe())
             }
             async fn dispatch(
                 &self,
-                _command: smed::core::command::SmedCommand,
-            ) -> Result<(), smed::core::error::SmedError> {
+                _command: mjolnr::core::command::MjolnrCommand,
+            ) -> Result<(), mjolnr::core::error::MjolnrError> {
                 Ok(())
             }
             // Refuses rather than returning an empty page, matching every other
@@ -966,35 +966,35 @@ mod tests {
             // when nothing was searched (AGENTS.md §1.3).
             async fn search_workspace(
                 &self,
-                _filter: smed::core::store::WorkspaceSearchFilter,
-            ) -> Result<smed::core::store::WorkspaceSearchPage, smed::core::error::SmedError>
+                _filter: mjolnr::core::store::WorkspaceSearchFilter,
+            ) -> Result<mjolnr::core::store::WorkspaceSearchPage, mjolnr::core::error::MjolnrError>
             {
-                Err(smed::core::error::SmedError::workspace_refused(
-                    smed::core::error::ReasonCode::WorkspaceCapabilityUnavailable,
+                Err(mjolnr::core::error::MjolnrError::workspace_refused(
+                    mjolnr::core::error::ReasonCode::WorkspaceCapabilityUnavailable,
                     "workspace search is not yet implemented (contract landed in D4)",
                 ))
             }
             async fn query_board(
                 &self,
-            ) -> Result<smed::core::frontier::BoardOverview, smed::core::error::SmedError> {
-                Err(smed::core::error::SmedError::workspace_refused(
-                    smed::core::error::ReasonCode::WorkspaceCapabilityUnavailable,
+            ) -> Result<mjolnr::core::frontier::BoardOverview, mjolnr::core::error::MjolnrError> {
+                Err(mjolnr::core::error::MjolnrError::workspace_refused(
+                    mjolnr::core::error::ReasonCode::WorkspaceCapabilityUnavailable,
                     "this dummy runtime has no board projection",
                 ))
             }
             async fn read_workspace_files(
                 &self,
-                _request: smed::core::workspace_files::WorkspaceFileRequest,
+                _request: mjolnr::core::workspace_files::WorkspaceFileRequest,
             ) -> Result<
-                smed::core::workspace_files::WorkspaceFileAnswer,
-                smed::core::error::SmedError,
+                mjolnr::core::workspace_files::WorkspaceFileAnswer,
+                mjolnr::core::error::MjolnrError,
             > {
-                Err(smed::core::error::SmedError::workspace_refused(
-                    smed::core::error::ReasonCode::WorkspaceCapabilityUnavailable,
+                Err(mjolnr::core::error::MjolnrError::workspace_refused(
+                    mjolnr::core::error::ReasonCode::WorkspaceCapabilityUnavailable,
                     "this dummy runtime opens no project, so there is nothing to read files from",
                 ))
             }
-            async fn close(&self) -> Result<(), smed::core::error::SmedError> {
+            async fn close(&self) -> Result<(), mjolnr::core::error::MjolnrError> {
                 Ok(())
             }
         }
@@ -1025,29 +1025,29 @@ mod tests {
     async fn bridge_start_inside_tokio_context_succeeds() {
         let (events_tx, _) = tokio::sync::broadcast::channel(16);
         let (snapshot_tx, _) =
-            tokio::sync::watch::channel(smed::core::runtime::RuntimeSnapshot::default());
+            tokio::sync::watch::channel(mjolnr::core::runtime::RuntimeSnapshot::default());
 
         struct DummyRuntime {
-            events_tx: tokio::sync::broadcast::Sender<smed::core::event::SmedEvent>,
-            snapshot_tx: tokio::sync::watch::Sender<smed::core::runtime::RuntimeSnapshot>,
+            events_tx: tokio::sync::broadcast::Sender<mjolnr::core::event::MjolnrEvent>,
+            snapshot_tx: tokio::sync::watch::Sender<mjolnr::core::runtime::RuntimeSnapshot>,
         }
         use async_trait::async_trait;
 
         #[async_trait]
-        impl SmedRuntime for DummyRuntime {
-            fn snapshot(&self) -> smed::core::runtime::RuntimeSnapshot {
+        impl MjolnrRuntime for DummyRuntime {
+            fn snapshot(&self) -> mjolnr::core::runtime::RuntimeSnapshot {
                 self.snapshot_tx.borrow().clone()
             }
-            fn snapshots(&self) -> smed::core::runtime::SnapshotStream {
-                smed::core::runtime::SnapshotStream::new(self.snapshot_tx.subscribe())
+            fn snapshots(&self) -> mjolnr::core::runtime::SnapshotStream {
+                mjolnr::core::runtime::SnapshotStream::new(self.snapshot_tx.subscribe())
             }
-            fn subscribe(&self) -> smed::core::runtime::RuntimeSubscription {
-                smed::core::runtime::RuntimeSubscription::new(self.events_tx.subscribe())
+            fn subscribe(&self) -> mjolnr::core::runtime::RuntimeSubscription {
+                mjolnr::core::runtime::RuntimeSubscription::new(self.events_tx.subscribe())
             }
             async fn dispatch(
                 &self,
-                _command: smed::core::command::SmedCommand,
-            ) -> Result<(), smed::core::error::SmedError> {
+                _command: mjolnr::core::command::MjolnrCommand,
+            ) -> Result<(), mjolnr::core::error::MjolnrError> {
                 Ok(())
             }
             // Refuses rather than returning an empty page, matching every other
@@ -1055,35 +1055,35 @@ mod tests {
             // when nothing was searched (AGENTS.md §1.3).
             async fn search_workspace(
                 &self,
-                _filter: smed::core::store::WorkspaceSearchFilter,
-            ) -> Result<smed::core::store::WorkspaceSearchPage, smed::core::error::SmedError>
+                _filter: mjolnr::core::store::WorkspaceSearchFilter,
+            ) -> Result<mjolnr::core::store::WorkspaceSearchPage, mjolnr::core::error::MjolnrError>
             {
-                Err(smed::core::error::SmedError::workspace_refused(
-                    smed::core::error::ReasonCode::WorkspaceCapabilityUnavailable,
+                Err(mjolnr::core::error::MjolnrError::workspace_refused(
+                    mjolnr::core::error::ReasonCode::WorkspaceCapabilityUnavailable,
                     "workspace search is not yet implemented (contract landed in D4)",
                 ))
             }
             async fn query_board(
                 &self,
-            ) -> Result<smed::core::frontier::BoardOverview, smed::core::error::SmedError> {
-                Err(smed::core::error::SmedError::workspace_refused(
-                    smed::core::error::ReasonCode::WorkspaceCapabilityUnavailable,
+            ) -> Result<mjolnr::core::frontier::BoardOverview, mjolnr::core::error::MjolnrError> {
+                Err(mjolnr::core::error::MjolnrError::workspace_refused(
+                    mjolnr::core::error::ReasonCode::WorkspaceCapabilityUnavailable,
                     "this dummy runtime has no board projection",
                 ))
             }
             async fn read_workspace_files(
                 &self,
-                _request: smed::core::workspace_files::WorkspaceFileRequest,
+                _request: mjolnr::core::workspace_files::WorkspaceFileRequest,
             ) -> Result<
-                smed::core::workspace_files::WorkspaceFileAnswer,
-                smed::core::error::SmedError,
+                mjolnr::core::workspace_files::WorkspaceFileAnswer,
+                mjolnr::core::error::MjolnrError,
             > {
-                Err(smed::core::error::SmedError::workspace_refused(
-                    smed::core::error::ReasonCode::WorkspaceCapabilityUnavailable,
+                Err(mjolnr::core::error::MjolnrError::workspace_refused(
+                    mjolnr::core::error::ReasonCode::WorkspaceCapabilityUnavailable,
                     "this dummy runtime opens no project, so there is nothing to read files from",
                 ))
             }
-            async fn close(&self) -> Result<(), smed::core::error::SmedError> {
+            async fn close(&self) -> Result<(), mjolnr::core::error::MjolnrError> {
                 Ok(())
             }
         }

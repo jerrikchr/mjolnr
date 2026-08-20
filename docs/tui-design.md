@@ -1,6 +1,6 @@
-# smed TUI visual & design system contract
+# mjolnr TUI visual & design system contract
 
-smed is a **governed agent workspace**. Ratatui is its compact terminal client,
+mjolnr is a **governed agent workspace**. Ratatui is its compact terminal client,
 not a desktop-interface imitation. Its visual identity balances mission-control
 telemetry with a soft, modern, accessible design system while keeping the
 governed loop fast and legible.
@@ -14,7 +14,7 @@ layout rules.
 
 ## 1. Design System Philosophy
 
-Traditional terminal applications often suffer from high visual noise, rigid ASCII boxes, harsh matrix greens, and dense, unpadded layouts that intimidate non-terminal users. smed's Soft TUI Design System solves this with five core principles:
+Traditional terminal applications often suffer from high visual noise, rigid ASCII boxes, harsh matrix greens, and dense, unpadded layouts that intimidate non-terminal users. mjolnr's Soft TUI Design System solves this with five core principles:
 
 1. **Soft Surfaces & Rounded Geometry:** Uses rounded card borders (`BorderType::Rounded`), subtle background elevation tiers (`Void`, `SurfaceCanvas`, `SurfaceElevated`), and generous padding (`padding(1)`) to create visual breathing room similar to modern web/desktop tools (Linear, Raycast, Notion).
 2. **Harmonious Palette & Soft Accents:** Muted slate/zinc canvases paired with soft pastel semantic accents (Mint for `Verified`, Amber/Honey for `Approval`, Coral/Rose for `Refusal`, Sky Blue/Iris for `Proposals`). Harsh, pure `#FFFFFF` white or bright neon `#00FF00` green text is avoided in favor of warm, readable tones (`#CFE0DE` Frost / `#E2E8F0` Slate).
@@ -33,7 +33,7 @@ not delay Tauri by attempting to implement every rich-workspace surface first.
 
 ## 2. Elevation & Surface Tiers
 
-smed uses three background elevation tiers to structure visual hierarchy without cluttering the screen with nested boxes:
+mjolnr uses three background elevation tiers to structure visual hierarchy without cluttering the screen with nested boxes:
 
 | Tier | Dark Role (Noir / Soft Dark) | Light Role (Zeppi Light) | Meaning & Usage |
 |---|---|---|---|
@@ -81,11 +81,11 @@ Theme rendering code queries semantic color roles rather than hardcoding RGB lit
 
 ### 4.1 Rounded Badges & Pills
 - **Work Status Pills:** `[ 🟢 Active ]`, `[ 🟡 Needs Decision ]`, `[ 🔵 Reviewing ]`, `[ 🔴 Failed ]`, `[ ⚪ Draft ]`.
-- **Branch / Worktree Badges:** `[  main: feature-auth ]`, `[ 🌲 worktree: /tmp/smed-12 ]`.
+- **Branch / Worktree Badges:** `[  main: feature-auth ]`, `[ 🌲 worktree: /tmp/mjolnr-12 ]`.
 - **Policy Tier Pills:** `[ 🛡️ Ask ]`, `[ ⚡ Full-Auto ]`, `[ 🔒 Strict ]`.
 
 ### 4.2 Unicode Icon Standard
-smed uses clean, widely supported Unicode symbols with fallbacks for basic ASCII terminals:
+mjolnr uses clean, widely supported Unicode symbols with fallbacks for basic ASCII terminals:
 
 | Feature | Primary Unicode Symbol | ASCII Fallback |
 |---|:---:|:---:|
@@ -111,7 +111,7 @@ smed uses clean, widely supported Unicode symbols with fallbacks for basic ASCII
 
 ## 6. Non-Terminal-Native Comfort & Accessibility
 
-To make smed feel friendly to non-CLI users:
+To make mjolnr feel friendly to non-CLI users:
 
 1. **Mouse & Scroll Wheel Support:**
    - Tabs, list items, jump palette items, and buttons are fully clickable via terminal mouse events.

@@ -8,9 +8,9 @@
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
 
-use smed::core::event::{RunId, SessionId, SmedEvent};
-use smed::core::fleet::FleetAgentStatus;
-use smed::tui::reducer::ViewState;
+use mjolnr::core::event::{MjolnrEvent, RunId, SessionId};
+use mjolnr::core::fleet::FleetAgentStatus;
+use mjolnr::tui::reducer::ViewState;
 
 #[test]
 fn fleet_activity_tracks_success_and_failure_states() {
@@ -19,13 +19,13 @@ fn fleet_activity_tracks_success_and_failure_states() {
     let child_2 = SessionId::new();
     let run = RunId::new();
 
-    view.apply(&SmedEvent::SubagentActivity {
+    view.apply(&MjolnrEvent::SubagentActivity {
         session: SessionId::new(),
         run,
         child: child_1,
         label: "started".to_owned(),
     });
-    view.apply(&SmedEvent::SubagentActivity {
+    view.apply(&MjolnrEvent::SubagentActivity {
         session: SessionId::new(),
         run,
         child: child_1,
@@ -37,7 +37,7 @@ fn fleet_activity_tracks_success_and_failure_states() {
     assert!(!view.fleet[0].failed);
     assert_eq!(view.fleet[0].latest, "deliberating");
 
-    view.apply(&SmedEvent::SubagentActivity {
+    view.apply(&MjolnrEvent::SubagentActivity {
         session: SessionId::new(),
         run,
         child: child_2,
@@ -67,7 +67,7 @@ fn fleet_activity_projects_settled_summary_when_all_done() {
     let child = SessionId::new();
     let run = RunId::new();
 
-    view.apply(&SmedEvent::SubagentActivity {
+    view.apply(&MjolnrEvent::SubagentActivity {
         session: SessionId::new(),
         run,
         child,
@@ -93,13 +93,13 @@ fn fleet_rail_renders_status_dots_in_terminal() {
     let child_2 = SessionId::new();
     let run = RunId::new();
 
-    view.apply(&SmedEvent::SubagentActivity {
+    view.apply(&MjolnrEvent::SubagentActivity {
         session: SessionId::new(),
         run,
         child: child_1,
         label: "running".to_owned(),
     });
-    view.apply(&SmedEvent::SubagentActivity {
+    view.apply(&MjolnrEvent::SubagentActivity {
         session: SessionId::new(),
         run,
         child: child_2,
@@ -110,7 +110,7 @@ fn fleet_rail_renders_status_dots_in_terminal() {
 
     terminal
         .draw(|f| {
-            smed::tui::layout::render(f, &view);
+            mjolnr::tui::layout::render(f, &view);
         })
         .expect("draw layout with fleet rail");
 

@@ -1,6 +1,6 @@
-# smed — definition of done
+# mjolnr — definition of done
 
-*Owner's specification, 2026-07-31. The finish line for smed as a product, written
+*Owner's specification, 2026-07-31. The finish line for mjolnr as a product, written
 from the workflow it exists to serve.*
 
 ## What this document is
@@ -12,7 +12,7 @@ grows each time something is learned, and a breadth-first plan against an open
 backlog has no terminal state by construction.
 
 This document supplies the terminal state. It is written from the owner's own
-workflow, because the owner is smed's first and most demanding user, and a
+workflow, because the owner is mjolnr's first and most demanding user, and a
 harness that serves that workflow completely is a harness that is finished enough
 to be judged.
 
@@ -24,13 +24,13 @@ capability that no phase covers, it says so and stops there.
 
 ## The finish line, in one sentence
 
-> smed runs the owner's entire working day — greenfield and existing projects,
+> mjolnr runs the owner's entire working day — greenfield and existing projects,
 > planning through review through merge — across subscription-funded models, on
 > owned hardware, without the owner dropping to another tool.
 
 Two readings of that are wrong and worth foreclosing:
 
-- It is **not** "smed can fix a bug." That is the narrowest path *through* the
+- It is **not** "mjolnr can fix a bug." That is the narrowest path *through* the
   workflow and a sensible first thing to exercise, but shipping only that would
   leave the product undefined.
 - It is **not** "every phase in every roadmap is closed." Several queued phases
@@ -48,11 +48,11 @@ conjunction of checkable claims rather than a feeling.
 
 ### 1. Setup and identity
 
-The owner configures smed once and does not fight it again: providers connected,
-models mapped to the work they are good at, and smed's own standing rules, roles,
+The owner configures mjolnr once and does not fight it again: providers connected,
+models mapped to the work they are good at, and mjolnr's own standing rules, roles,
 personas, and Soul written down.
 
-**Done when** a fresh machine reaches a working, personalised smed through a
+**Done when** a fresh machine reaches a working, personalised mjolnr through a
 guided flow, and every artifact it produces is a diffable file the owner can edit
 by hand afterwards.
 
@@ -102,7 +102,7 @@ transcript.
 
 ### 4. Existing project: discovery
 
-Pointed at an unfamiliar repository, smed learns it before proposing anything —
+Pointed at an unfamiliar repository, mjolnr learns it before proposing anything —
 structure, conventions, test and build commands, where the risk concentrates — and
 reports what it found. Having learned it, it can *suggest* a model assignment
 appropriate to that project and the providers currently available.
@@ -134,7 +134,7 @@ pointing confidently at a line that moved.
 ### 7. Task and issue integration
 
 GitHub issues and pull requests, Linear issues, Vercel deployments, and Supabase
-projects appear as work in smed, on a board the owner can move things around, and
+projects appear as work in mjolnr, on a board the owner can move things around, and
 (only for GitHub) state syncs back. Opening a repository and starting on a known bug
 is a first-class entry point, not a special case. Vercel and Supabase are bounded
 read-only `TaskSource`s (`api.vercel.com`, `api.supabase.com`) with the same
@@ -175,7 +175,7 @@ Kimi — plus local models that cost nothing but time. Consequences:
 
 1. **Budgets denominated in dollars are meaningless here.** The real limits are
    rolling windows: five-hour, weekly, monthly, per provider, each with its own
-   reset. A budget smed can actually enforce must be expressed in the units the
+   reset. A budget mjolnr can actually enforce must be expressed in the units the
    provider actually meters.
 2. **Exhausting a window is normal, not exceptional.** It will happen mid-task,
    repeatedly, by design — that is what a subscription plan is. A harness that
@@ -202,16 +202,16 @@ those distinctions without inventing data a provider did not return.
 
 The remaining quota observations are provider-specific live-use questions — for
 example, whether a Codex secondary window ever activates and whether a monthly
-window is exposed. smed reports only data it actually receives; it does not
+window is exposed. mjolnr reports only data it actually receives; it does not
 invent a window to make the shape look complete.
 
 **The standing risk, recorded once.** Subscription OAuth is not an API contract.
 This repository already says so about the subscription routes it ships, and
-providers can change or close such routes without notice. smed's architecture is
+providers can change or close such routes without notice. mjolnr's architecture is
 provider-agnostic and therefore survives any single closure; the *owner's
 configuration* would not.
 The finish line therefore requires that losing a subscription route degrades to a
-narrower smed rather than a broken one — routes fall back, `/auth` states plainly
+narrower mjolnr rather than a broken one — routes fall back, `/auth` states plainly
 what is unavailable, and no capability silently disappears.
 
 ---
@@ -222,7 +222,7 @@ Measured against the nine stages, not against the phase list.
 
 | Stage | State |
 |---|---|
-| 1 Setup and identity | **Built** — `smed init`, roles, personas, Soul |
+| 1 Setup and identity | **Built** — `mjolnr init`, roles, personas, Soul |
 | 2 Model assignment | **Built** — deterministic routes and roles |
 | 3 Interview → PRD → reviewed plan | **Built** — bounded owner interview produces a durable PRD, links its advisory council review, synthesizes a durable plan, records human approval and handoff, and replays the chain on resume |
 | 4 Discovery | **Built** — E3's deterministic code graph plus E4's bounded discovery pass writing a non-overwriting OKF bundle, including `model-assignment.md` |
@@ -270,9 +270,9 @@ landed slices:
    edits the route configuration rather than approving a model-generated choice
    at the boundary.
 3. **Discovery shape:** an explicit bounded session command (`/discover`) writes
-   a durable OKF bundle under `.smed/discovery/run-*`; the runtime exposes only a
+   a durable OKF bundle under `.mjolnr/discovery/run-*`; the runtime exposes only a
    bounded projection of that artifact.
-4. **Board ownership:** the board projects durable smed events. GitHub/Linear
+4. **Board ownership:** the board projects durable mjolnr events. GitHub/Linear
    fetch, refresh, revision-pinned acts, and replay tests exercise that boundary;
    remote text remains untrusted data.
 5. ~~**The licence.**~~ **Settled** on 2026-07-31: Apache-2.0. Kept in

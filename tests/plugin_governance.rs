@@ -12,11 +12,11 @@ use std::time::Duration;
 use tempfile::tempdir;
 use tokio_util::sync::CancellationToken;
 
-use smed::core::message::ToolOutcome;
-use smed::core::plugin::{PluginHook, PluginManifest, PluginRunCommand, PluginToolDeclaration};
-use smed::core::tool::{ReadSet, ToolContext, ToolTier};
-use smed::plugins::PluginHost;
-use smed::tools::{ToolRegistry, register_plugin_tools};
+use mjolnr::core::message::ToolOutcome;
+use mjolnr::core::plugin::{PluginHook, PluginManifest, PluginRunCommand, PluginToolDeclaration};
+use mjolnr::core::tool::{ReadSet, ToolContext, ToolTier};
+use mjolnr::plugins::PluginHost;
+use mjolnr::tools::{ToolRegistry, register_plugin_tools};
 
 fn mock_plugin_manifest(script_path: &str) -> PluginManifest {
     PluginManifest {

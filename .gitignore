@@ -12,9 +12,7 @@
 *.swp
 
 # mjolnr runtime state produced by local runs. Never commit sessions or logs:
-# they may contain repository contents and provider output. `.smed/` stays
-# listed for the ADR-0018 compat window: a workspace that predates the rename
-# still writes there until its first migrated write.
+# they may contain repository contents and provider output.
 /.mjolnr/
 /.smed/
 

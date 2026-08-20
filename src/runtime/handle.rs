@@ -7,13 +7,13 @@ use tokio::sync::{broadcast, mpsc, oneshot, watch};
 use tokio_util::sync::CancellationToken;
 
 use crate::context::ProjectContext;
-use crate::core::command::SmedCommand;
-use crate::core::error::{ReasonCode, SmedError};
+use crate::core::command::MjolnrCommand;
+use crate::core::error::{MjolnrError, ReasonCode};
 use crate::core::mcp::McpServerSummary;
 use crate::core::provider::Provider;
 use crate::core::recovery::RecoveryState;
 use crate::core::routing::RouteTable;
-use crate::core::runtime::{RuntimeSnapshot, RuntimeSubscription, SmedRuntime, SnapshotStream};
+use crate::core::runtime::{MjolnrRuntime, RuntimeSnapshot, RuntimeSubscription, SnapshotStream};
 use crate::core::store::EventStore;
 use crate::runtime::budget::BudgetLimits;
 use crate::runtime::session::SessionState;
@@ -25,7 +25,7 @@ use super::{Actor, EVENT_CAPACITY, MAILBOX_CAPACITY, Mail};
 #[derive(Debug)]
 pub struct Runtime {
     mailbox: mpsc::Sender<Mail>,
-    events: broadcast::Sender<crate::core::event::SmedEvent>,
+    events: broadcast::Sender<crate::core::event::MjolnrEvent>,
     snapshot: watch::Receiver<RuntimeSnapshot>,
     shutdown: CancellationToken,
     store: Arc<dyn EventStore>,
@@ -365,7 +365,7 @@ impl Runtime {
 }
 
 #[async_trait]
-impl SmedRuntime for Runtime {
+impl MjolnrRuntime for Runtime {
     fn snapshot(&self) -> RuntimeSnapshot {
         self.snapshot.borrow().clone()
     }
@@ -381,34 +381,34 @@ impl SmedRuntime for Runtime {
     // A routing match that grows with every new command family; splitting it
     // obscures the dispatch shape.
     #[allow(clippy::too_many_lines)]
-    async fn dispatch(&self, command: SmedCommand) -> Result<(), SmedError> {
+    async fn dispatch(&self, command: MjolnrCommand) -> Result<(), MjolnrError> {
         if crate::runtime::interview::is_plan_command(&command) {
             let (reply, acknowledged) = oneshot::channel();
             self.mailbox
                 .send(Mail::PlanCommand { command, reply })
                 .await
-                .map_err(|_| SmedError::RuntimeClosed)?;
-            return acknowledged.await.map_err(|_| SmedError::RuntimeClosed)?;
+                .map_err(|_| MjolnrError::RuntimeClosed)?;
+            return acknowledged.await.map_err(|_| MjolnrError::RuntimeClosed)?;
         }
         // Child-run commands are acknowledged like plan commands: the caller
         // learns the typed refusal (today: capability unavailable) instead of
         // the command disappearing into the mailbox (Phase D2).
         if matches!(
             &command,
-            SmedCommand::CreateWorktree { .. }
-                | SmedCommand::ForkWork { .. }
-                | SmedCommand::StartChild { .. }
-                | SmedCommand::CancelChild { .. }
-                | SmedCommand::PreserveBranch { .. }
-                | SmedCommand::SettleChild { .. }
-                | SmedCommand::DiscardSettledWorktree { .. }
+            MjolnrCommand::CreateWorktree { .. }
+                | MjolnrCommand::ForkWork { .. }
+                | MjolnrCommand::StartChild { .. }
+                | MjolnrCommand::CancelChild { .. }
+                | MjolnrCommand::PreserveBranch { .. }
+                | MjolnrCommand::SettleChild { .. }
+                | MjolnrCommand::DiscardSettledWorktree { .. }
         ) {
             let (reply, acknowledged) = oneshot::channel();
             self.mailbox
                 .send(Mail::ChildRunCommand { command, reply })
                 .await
-                .map_err(|_| SmedError::RuntimeClosed)?;
-            return acknowledged.await.map_err(|_| SmedError::RuntimeClosed)?;
+                .map_err(|_| MjolnrError::RuntimeClosed)?;
+            return acknowledged.await.map_err(|_| MjolnrError::RuntimeClosed)?;
         }
         // Repository commands are acknowledged because they are the first
         // family that actually performs a side effect on the caller's behalf.
@@ -416,41 +416,41 @@ impl SmedRuntime for Runtime {
         // uncertain effect AGENTS.md §1.4 refuses to paper over (Phase D5).
         if matches!(
             &command,
-            SmedCommand::StagePaths { .. }
-                | SmedCommand::StageHunks { .. }
-                | SmedCommand::Unstage { .. }
-                | SmedCommand::CreateBranch { .. }
-                | SmedCommand::Commit { .. }
-                | SmedCommand::IntegrateChildBranch { .. }
-                | SmedCommand::Fetch
-                | SmedCommand::Push { .. }
-                | SmedCommand::IntegrateUpstream { .. }
-                | SmedCommand::CloneProject { .. }
-                | SmedCommand::Rebase { .. }
-                | SmedCommand::AbortRebase
+            MjolnrCommand::StagePaths { .. }
+                | MjolnrCommand::StageHunks { .. }
+                | MjolnrCommand::Unstage { .. }
+                | MjolnrCommand::CreateBranch { .. }
+                | MjolnrCommand::Commit { .. }
+                | MjolnrCommand::IntegrateChildBranch { .. }
+                | MjolnrCommand::Fetch
+                | MjolnrCommand::Push { .. }
+                | MjolnrCommand::IntegrateUpstream { .. }
+                | MjolnrCommand::CloneProject { .. }
+                | MjolnrCommand::Rebase { .. }
+                | MjolnrCommand::AbortRebase
         ) {
             let (reply, acknowledged) = oneshot::channel();
             self.mailbox
                 .send(Mail::RepositoryCommand { command, reply })
                 .await
-                .map_err(|_| SmedError::RuntimeClosed)?;
-            return acknowledged.await.map_err(|_| SmedError::RuntimeClosed)?;
+                .map_err(|_| MjolnrError::RuntimeClosed)?;
+            return acknowledged.await.map_err(|_| MjolnrError::RuntimeClosed)?;
         }
         // Integration commands are acknowledged so a client learns the typed
         // refusal instead of watching a "fetching…" state that never resolves
         // (Phase D6).
         if matches!(
             &command,
-            SmedCommand::FetchTask { .. }
-                | SmedCommand::FetchTasks { .. }
-                | SmedCommand::SubmitChange { .. }
+            MjolnrCommand::FetchTask { .. }
+                | MjolnrCommand::FetchTasks { .. }
+                | MjolnrCommand::SubmitChange { .. }
         ) {
             let (reply, acknowledged) = oneshot::channel();
             self.mailbox
                 .send(Mail::IntegrationCommand { command, reply })
                 .await
-                .map_err(|_| SmedError::RuntimeClosed)?;
-            return acknowledged.await.map_err(|_| SmedError::RuntimeClosed)?;
+                .map_err(|_| MjolnrError::RuntimeClosed)?;
+            return acknowledged.await.map_err(|_| MjolnrError::RuntimeClosed)?;
         }
         // Review commands are acknowledged because every one of them can refuse
         // for a reason the human has to act on: the diff moved under the note,
@@ -459,18 +459,18 @@ impl SmedRuntime for Runtime {
         // taken (Phase D3).
         if matches!(
             &command,
-            SmedCommand::AddReviewNote { .. }
-                | SmedCommand::AddReviewComment { .. }
-                | SmedCommand::SendReviewNotes { .. }
-                | SmedCommand::ResolveCouncilFinding { .. }
-                | SmedCommand::ProposeCouncilAmendment { .. }
+            MjolnrCommand::AddReviewNote { .. }
+                | MjolnrCommand::AddReviewComment { .. }
+                | MjolnrCommand::SendReviewNotes { .. }
+                | MjolnrCommand::ResolveCouncilFinding { .. }
+                | MjolnrCommand::ProposeCouncilAmendment { .. }
         ) {
             let (reply, acknowledged) = oneshot::channel();
             self.mailbox
                 .send(Mail::ReviewCommand { command, reply })
                 .await
-                .map_err(|_| SmedError::RuntimeClosed)?;
-            return acknowledged.await.map_err(|_| SmedError::RuntimeClosed)?;
+                .map_err(|_| MjolnrError::RuntimeClosed)?;
+            return acknowledged.await.map_err(|_| MjolnrError::RuntimeClosed)?;
         }
         // Board commands are acknowledged because silently *not* recording a
         // decision — an unknown ticket, a dangling blocker, an unrecorded
@@ -480,31 +480,31 @@ impl SmedRuntime for Runtime {
         // after the network effect.
         if matches!(
             &command,
-            SmedCommand::OpenDecisionTicket { .. }
-                | SmedCommand::ResolveDecisionTicket { .. }
-                | SmedCommand::ImportWorkItem { .. }
-                | SmedCommand::RefreshImportedItem { .. }
-                | SmedCommand::SubmitImportedComment { .. }
+            MjolnrCommand::OpenDecisionTicket { .. }
+                | MjolnrCommand::ResolveDecisionTicket { .. }
+                | MjolnrCommand::ImportWorkItem { .. }
+                | MjolnrCommand::RefreshImportedItem { .. }
+                | MjolnrCommand::SubmitImportedComment { .. }
         ) {
             let (reply, acknowledged) = oneshot::channel();
             self.mailbox
                 .send(Mail::BoardCommand { command, reply })
                 .await
-                .map_err(|_| SmedError::RuntimeClosed)?;
-            return acknowledged.await.map_err(|_| SmedError::RuntimeClosed)?;
+                .map_err(|_| MjolnrError::RuntimeClosed)?;
+            return acknowledged.await.map_err(|_| MjolnrError::RuntimeClosed)?;
         }
         if matches!(
             &command,
-            SmedCommand::LaunchExternalAgent { .. }
-                | SmedCommand::StopExternalAgent { .. }
-                | SmedCommand::ImportExternalAgentChanges { .. }
+            MjolnrCommand::LaunchExternalAgent { .. }
+                | MjolnrCommand::StopExternalAgent { .. }
+                | MjolnrCommand::ImportExternalAgentChanges { .. }
         ) {
             let (reply, acknowledged) = oneshot::channel();
             self.mailbox
                 .send(Mail::ExternalAgentCommand { command, reply })
                 .await
-                .map_err(|_| SmedError::RuntimeClosed)?;
-            return acknowledged.await.map_err(|_| SmedError::RuntimeClosed)?;
+                .map_err(|_| MjolnrError::RuntimeClosed)?;
+            return acknowledged.await.map_err(|_| MjolnrError::RuntimeClosed)?;
         }
         // Opening a project is acknowledged because refusing it is routine —
         // a run in flight, a session already anchored to the current root, or
@@ -512,29 +512,29 @@ impl SmedRuntime for Runtime {
         // turned every one of those into a control that did nothing.
         if matches!(
             &command,
-            SmedCommand::OpenProject { .. }
-                | SmedCommand::RefreshRepository
-                | SmedCommand::SaveFile { .. }
+            MjolnrCommand::OpenProject { .. }
+                | MjolnrCommand::RefreshRepository
+                | MjolnrCommand::SaveFile { .. }
         ) {
             let (reply, acknowledged) = oneshot::channel();
             self.mailbox
                 .send(Mail::WorkspaceCommand { command, reply })
                 .await
-                .map_err(|_| SmedError::RuntimeClosed)?;
-            return acknowledged.await.map_err(|_| SmedError::RuntimeClosed)?;
+                .map_err(|_| MjolnrError::RuntimeClosed)?;
+            return acknowledged.await.map_err(|_| MjolnrError::RuntimeClosed)?;
         }
-        if matches!(&command, SmedCommand::RunDiscovery) {
+        if matches!(&command, MjolnrCommand::RunDiscovery) {
             let (reply, acknowledged) = oneshot::channel();
             self.mailbox
                 .send(Mail::DiscoveryCommand { reply })
                 .await
-                .map_err(|_| SmedError::RuntimeClosed)?;
-            return acknowledged.await.map_err(|_| SmedError::RuntimeClosed)?;
+                .map_err(|_| MjolnrError::RuntimeClosed)?;
+            return acknowledged.await.map_err(|_| MjolnrError::RuntimeClosed)?;
         }
         self.mailbox
             .send(Mail::Command(command))
             .await
-            .map_err(|_| SmedError::RuntimeClosed)
+            .map_err(|_| MjolnrError::RuntimeClosed)
     }
 
     /// Ask the actor for one contained directory page or file (Phase D7).
@@ -548,33 +548,33 @@ impl SmedRuntime for Runtime {
     async fn read_workspace_files(
         &self,
         request: crate::core::workspace_files::WorkspaceFileRequest,
-    ) -> Result<crate::core::workspace_files::WorkspaceFileAnswer, SmedError> {
+    ) -> Result<crate::core::workspace_files::WorkspaceFileAnswer, MjolnrError> {
         let (reply, answered) = oneshot::channel();
         self.mailbox
             .send(Mail::WorkspaceFileQuery { request, reply })
             .await
-            .map_err(|_| SmedError::RuntimeClosed)?;
-        answered.await.map_err(|_| SmedError::RuntimeClosed)?
+            .map_err(|_| MjolnrError::RuntimeClosed)?;
+        answered.await.map_err(|_| MjolnrError::RuntimeClosed)?
     }
 
     async fn search_workspace(
         &self,
         filter: crate::core::store::WorkspaceSearchFilter,
-    ) -> Result<crate::core::store::WorkspaceSearchPage, SmedError> {
+    ) -> Result<crate::core::store::WorkspaceSearchPage, MjolnrError> {
         self.store.search_workspace(filter).await.map_err(|error| {
             // The store distinguishes "that question cannot be answered" from
             // "the store is broken" — that is the entire point of
             // `StoreError::Refused`, added with the D4 producer. Collapsing
-            // both into `SmedError::Store` threw the distinction away one hop
+            // both into `MjolnrError::Store` threw the distinction away one hop
             // later: `Store` carries no reason code, so a query too short for
             // the trigram index reached the client as an untyped failure
             // indistinguishable from a corrupt database, and a surface could
             // only print it. A refusal is a normal result (AGENTS.md §6).
             match error {
                 crate::core::store::StoreError::Refused { detail } => {
-                    SmedError::workspace_refused(ReasonCode::WorkspaceSearchRefused, detail)
+                    MjolnrError::workspace_refused(ReasonCode::WorkspaceSearchRefused, detail)
                 }
-                other => SmedError::Store {
+                other => MjolnrError::Store {
                     detail: other.to_string(),
                 },
             }
@@ -589,15 +589,19 @@ impl SmedRuntime for Runtime {
     /// and a live session cannot disagree about what a record says; the
     /// per-session durable records are rebuilt from the same events that
     /// recovery would replay (the board shares no checkpoint authority).
-    async fn query_board(&self) -> Result<crate::core::frontier::BoardOverview, SmedError> {
+    async fn query_board(&self) -> Result<crate::core::frontier::BoardOverview, MjolnrError> {
         let workspace_root = self.snapshot().workspace_root.ok_or_else(|| {
-            SmedError::workspace_refused(
+            MjolnrError::workspace_refused(
                 ReasonCode::WorkspaceCapabilityUnavailable,
                 "the board requires an open workspace",
             )
         })?;
 
-        let sessions = self.store.sessions().await.map_err(store_refusal_to_smed)?;
+        let sessions = self
+            .store
+            .sessions()
+            .await
+            .map_err(store_refusal_to_mjolnr)?;
 
         let mut labels: std::collections::BTreeMap<crate::core::frontier::NodeId, String> =
             std::collections::BTreeMap::new();
@@ -620,11 +624,11 @@ impl SmedRuntime for Runtime {
                 .store
                 .branch_events(summary.id)
                 .await
-                .map_err(store_refusal_to_smed)?;
+                .map_err(store_refusal_to_mjolnr)?;
             let mut state = crate::runtime::session::SessionState::default();
             state
                 .rebuild_durable_records_from(&events)
-                .map_err(store_refusal_to_smed)?;
+                .map_err(store_refusal_to_mjolnr)?;
             for (id, record) in state.decision_tickets {
                 let node = crate::core::frontier::NodeId::Decision(id);
                 tickets.insert(id, record.clone());
@@ -665,9 +669,9 @@ impl SmedRuntime for Runtime {
     async fn query_repository_history(
         &self,
         limit: u32,
-    ) -> Result<crate::core::repository::RepositoryHistory, SmedError> {
+    ) -> Result<crate::core::repository::RepositoryHistory, MjolnrError> {
         let root = self.snapshot().workspace_root.ok_or_else(|| {
-            SmedError::workspace_refused(
+            MjolnrError::workspace_refused(
                 ReasonCode::WorkspaceCapabilityUnavailable,
                 "repository history requires an open workspace",
             )
@@ -677,17 +681,17 @@ impl SmedRuntime for Runtime {
         })
         .await
         .map_err(|error| {
-            SmedError::workspace_refused(
+            MjolnrError::workspace_refused(
                 ReasonCode::RepositoryUncertainEffect,
                 format!("repository history worker failed: {error}"),
             )
         })?
-        .map_err(|error| SmedError::workspace_refused(error.reason_code(), error.to_string()))?;
+        .map_err(|error| MjolnrError::workspace_refused(error.reason_code(), error.to_string()))?;
         Ok(history)
     }
 
     /// Shut down only once every accepted durable write is flushed.
-    async fn close(&self) -> Result<(), SmedError> {
+    async fn close(&self) -> Result<(), MjolnrError> {
         let (reply, acknowledged) = oneshot::channel();
 
         if self.mailbox.send(Mail::Shutdown { reply }).await.is_err() {
@@ -696,10 +700,10 @@ impl SmedRuntime for Runtime {
         }
 
         let result = match acknowledged.await {
-            Ok(result) => result.map_err(|error| SmedError::Store {
+            Ok(result) => result.map_err(|error| MjolnrError::Store {
                 detail: error.to_string(),
             }),
-            Err(_) => Err(SmedError::RuntimeClosed),
+            Err(_) => Err(MjolnrError::RuntimeClosed),
         };
 
         self.shutdown.cancel();
@@ -711,12 +715,12 @@ impl SmedRuntime for Runtime {
 /// split that `search_workspace` relies on: a query a store cannot answer is a
 /// normal result carrying `WorkspaceSearchRefused`, while a corrupt or
 /// unreadable store is a `Store` error indistinguishable from a broken DB.
-fn store_refusal_to_smed(error: crate::core::store::StoreError) -> SmedError {
+fn store_refusal_to_mjolnr(error: crate::core::store::StoreError) -> MjolnrError {
     match error {
         crate::core::store::StoreError::Refused { detail } => {
-            SmedError::workspace_refused(ReasonCode::WorkspaceSearchRefused, detail)
+            MjolnrError::workspace_refused(ReasonCode::WorkspaceSearchRefused, detail)
         }
-        other => SmedError::Store {
+        other => MjolnrError::Store {
             detail: other.to_string(),
         },
     }

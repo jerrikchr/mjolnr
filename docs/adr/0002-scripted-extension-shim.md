@@ -10,10 +10,10 @@
 An agent-authored tool extension is a declarative file: a name, a description, a
 set of string parameters, and one exact-argv command template with `${name}`
 placeholders. Invoking the extension substitutes the validated arguments into the
-argv and runs it through the same command execution path smed already owns
+argv and runs it through the same command execution path mjolnr already owns
 (`tools::command::run_process`), gated at `Execute` tier like any other command.
 
-smed does **not** load agent-authored WASM, and does **not** treat a native Rust
+mjolnr does **not** load agent-authored WASM, and does **not** treat a native Rust
 addition (which needs a rebuild) as the extension surface. The extension is text
 that names a command; the command is what runs, and it runs behind the gate that
 already stands in front of every command.
@@ -33,7 +33,7 @@ session** (§Phase 17, "Explicit load step"). A loaded extension tool must resol
 to an ordinary policy tier and be "previewed, gated, evidenced, and refusable
 exactly like built-ins" ("Loaded tools are ordinary tools"), defaulting to
 `Execute` per the MCP precedent from Phase 11. And the whole phase exists under
-smed's identity: the model proposes, deterministic code disposes (`AGENTS.md`
+mjolnr's identity: the model proposes, deterministic code disposes (`AGENTS.md`
 §1), and every consequential act is gated and evidenced.
 
 ## Rationale
@@ -47,7 +47,7 @@ shaped view* onto that same path. It inherits every one of those guarantees for
 free, because it literally calls the same `run_process`. Nothing about "loaded
 tools are ordinary tools" has to be rebuilt — it is true by construction.
 
-**Exact argv, never a shell.** smed's tool boundary already refuses shell
+**Exact argv, never a shell.** mjolnr's tool boundary already refuses shell
 strings: `CommandSpec` is a program plus an argument vector, and
 `CommandSpec::display` quotes for humans without ever producing shell syntax that
 expands twice (`src/core/tool.rs`). Extension substitution is whole-value: a
@@ -71,7 +71,7 @@ orchestrate existing commands. Rejected for this phase: it adds a large runtime
 dependency, a host ABI, and a capability-plumbing story — and it does **not**
 reuse the command path, so "loaded tools are gated exactly like built-ins" would
 have to be re-established for a second execution surface instead of inherited.
-The cost buys isolation smed does not yet need, because the thing an extension
+The cost buys isolation mjolnr does not yet need, because the thing an extension
 does — run a bounded command at the workspace root — is already isolated by the
 `Execute` gate. Revisit if extensions must compute rather than orchestrate.
 
@@ -79,8 +79,8 @@ does — run a bounded command at the workspace root — is already isolated by 
 new `impl Tool`. Rejected as the *extension* surface because it cannot satisfy
 the phase's core requirement — a rebuild is not an in-session load, and gating
 "the explicit act that made this callable" collapses when the act is `cargo
-build`. Native tools remain how smed's *maintainers* add capability; they are
-not how smed's *agent loop* proposes one.
+build`. Native tools remain how mjolnr's *maintainers* add capability; they are
+not how mjolnr's *agent loop* proposes one.
 
 ## Consequences
 

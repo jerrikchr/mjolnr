@@ -253,19 +253,19 @@ mod tests {
 
     #[test]
     fn emphasis_markers_do_not_survive_into_the_transcript() {
-        // The bug this module exists for: `**smed**` shown as punctuation.
-        let lines = rendered("**smed** is a *local-first* harness");
-        assert_eq!(lines, vec!["smed is a local-first harness"]);
+        // The bug this module exists for: `**mjolnr**` shown as punctuation.
+        let lines = rendered("**mjolnr** is a *local-first* harness");
+        assert_eq!(lines, vec!["mjolnr is a local-first harness"]);
     }
 
     #[test]
     fn bold_text_is_actually_bold() {
-        let lines = render("**smed** rules", "", theme::text(), 80);
+        let lines = render("**mjolnr** rules", "", theme::text(), 80);
         let line = lines.first().expect("one line");
         let bold = line
             .spans
             .iter()
-            .find(|span| span.content.as_ref() == "smed")
+            .find(|span| span.content.as_ref() == "mjolnr")
             .expect("the bold span survives");
         assert!(bold.style.add_modifier.contains(Modifier::BOLD));
     }

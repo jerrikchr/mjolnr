@@ -22,12 +22,12 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use smed::core::board::{
+use mjolnr::core::board::{
     DecisionAuthor, DecisionResolution, DecisionResolutionId, DecisionTicket, DecisionTicketId,
     DecisionTicketKind, DecisionTicketRecord,
 };
-use smed::core::frontier::{FrontierBoard, NodeId, NodeKind, Provenance, compute_frontier};
-use smed::core::plan::{
+use mjolnr::core::frontier::{FrontierBoard, NodeId, NodeKind, Provenance, compute_frontier};
+use mjolnr::core::plan::{
     PlanApproval, PlanHandoff, PlanId, PlanProposal, PlanStage, PlanWorkflow, ReviewVerdict,
     RevisionId,
 };
@@ -337,8 +337,8 @@ fn property_provenance_survives_into_every_set() {
         assert_eq!(node.id, *id, "the entry names its source");
         assert_eq!(
             node.provenance,
-            Provenance::SmedGoverned,
-            "every step-2 record is smedGoverned, and the class is never elided"
+            Provenance::MjolnrGoverned,
+            "every step-2 record is mjolnrGoverned, and the class is never elided"
         );
         assert_eq!(
             node.kind,

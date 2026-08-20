@@ -19,7 +19,7 @@
 //!   decidable; the board names the cycle, and only a resolution — a human
 //!   judgement (ADR-0015) — legitimately unblocks.
 //! - **Provenance survives** — every projected entry carries its source
-//!   (`Provenance`): the `smedGoverned` records this step projects, and the
+//!   (`Provenance`): the `mjolnrGoverned` records this step projects, and the
 //!   `externalUnverified` items §D6 will add in step 4, never mixed silently.
 //!   `Provenance` is a core notion; the wire DTO `TrustClass`
 //!   (`core::client::workspace`, ADR 0006) is a bridge concern and is mapped
@@ -76,12 +76,12 @@ impl NodeId {
     }
 
     /// Where this node's record comes from. `Decision` and `Plan` are
-    /// `SmedGoverned`; `Imported` is `ExternalUnverified` (design §2,
+    /// `MjolnrGoverned`; `Imported` is `ExternalUnverified` (design §2,
     /// ADR-0014, §D6). Every entry the frontier emits carries this.
     #[must_use]
     pub const fn provenance(self) -> Provenance {
         match self {
-            NodeId::Decision(_) | NodeId::Plan(_) => Provenance::SmedGoverned,
+            NodeId::Decision(_) | NodeId::Plan(_) => Provenance::MjolnrGoverned,
             NodeId::Imported(_) => Provenance::ExternalUnverified,
         }
     }
@@ -103,11 +103,11 @@ pub enum NodeKind {
 /// mapped from this enum at projection, never imported here.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Provenance {
-    /// Created and judged by smed's own governed process: decision tickets
+    /// Created and judged by mjolnr's own governed process: decision tickets
     /// and the plan family (ADR-0014).
-    SmedGoverned,
+    MjolnrGoverned,
     /// Arrives from an external tracker (§D6 import, step 4); never mixed
-    /// silently with `SmedGoverned` entries.
+    /// silently with `MjolnrGoverned` entries.
     ExternalUnverified,
 }
 
@@ -177,7 +177,7 @@ pub fn compute_frontier(
             FrontierNode {
                 id,
                 kind: NodeKind::Decision,
-                provenance: Provenance::SmedGoverned,
+                provenance: Provenance::MjolnrGoverned,
             },
         );
         if record.resolution.is_some() {
@@ -197,7 +197,7 @@ pub fn compute_frontier(
             FrontierNode {
                 id,
                 kind: NodeKind::Implementation,
-                provenance: Provenance::SmedGoverned,
+                provenance: Provenance::MjolnrGoverned,
             },
         );
         if plan_is_settled(plan) {
@@ -463,7 +463,7 @@ impl BoardOverview {
         ) -> BoardNodeView {
             let (kind, provenance) = all
                 .get(&id)
-                .map_or((NodeKind::Decision, Provenance::SmedGoverned), |node| {
+                .map_or((NodeKind::Decision, Provenance::MjolnrGoverned), |node| {
                     (node.kind, node.provenance)
                 });
             BoardNodeView {

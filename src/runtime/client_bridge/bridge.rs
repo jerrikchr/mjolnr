@@ -8,9 +8,9 @@ use tokio::task::JoinHandle;
 
 use crate::core::client::{ClientCommand, ClientSnapshot, ClientUpdate};
 use crate::core::error::ReasonCode;
-use crate::core::runtime::SmedRuntime;
+use crate::core::runtime::MjolnrRuntime;
 
-use super::command::command_to_smed;
+use super::command::command_to_mjolnr;
 use super::convert::snapshot_to_client;
 use super::pump::pump_updates;
 
@@ -48,7 +48,7 @@ impl ClientBridgeError {
 
 #[derive(Debug)]
 pub struct ClientBridge {
-    runtime: Arc<dyn SmedRuntime>,
+    runtime: Arc<dyn MjolnrRuntime>,
     sequence: Arc<AtomicU64>,
     updates: mpsc::Sender<ClientUpdate>,
     receiver: Mutex<Option<mpsc::Receiver<ClientUpdate>>>,
@@ -57,12 +57,12 @@ pub struct ClientBridge {
 
 impl ClientBridge {
     #[must_use]
-    pub fn start(runtime: Arc<dyn SmedRuntime>) -> Self {
+    pub fn start(runtime: Arc<dyn MjolnrRuntime>) -> Self {
         Self::start_with_capacity(runtime, CLIENT_UPDATE_CAPACITY)
     }
 
     #[must_use]
-    pub fn start_with_capacity(runtime: Arc<dyn SmedRuntime>, capacity: usize) -> Self {
+    pub fn start_with_capacity(runtime: Arc<dyn MjolnrRuntime>, capacity: usize) -> Self {
         let (updates, receiver) = mpsc::channel(capacity.max(1));
         let sequence = Arc::new(AtomicU64::new(0));
         let pump = tokio::spawn(pump_updates(
@@ -80,21 +80,20 @@ impl ClientBridge {
     }
 
     pub async fn dispatch(&self, command: ClientCommand) -> Result<(), ClientBridgeError> {
-        match command_to_smed(&command)? {
-            Some(smed_command) => {
-                self.runtime
-                    .dispatch(smed_command)
-                    .await
-                    .map_err(|error| match error {
-                        crate::core::error::SmedError::RuntimeClosed => {
-                            ClientBridgeError::RuntimeClosed
-                        }
-                        other => ClientBridgeError::RuntimeRefused {
-                            code: other.reason_code(),
-                            detail: other.to_string(),
-                        },
-                    })
-            }
+        match command_to_mjolnr(&command)? {
+            Some(mjolnr_command) => self
+                .runtime
+                .dispatch(mjolnr_command)
+                .await
+                .map_err(|error| match error {
+                    crate::core::error::MjolnrError::RuntimeClosed => {
+                        ClientBridgeError::RuntimeClosed
+                    }
+                    other => ClientBridgeError::RuntimeRefused {
+                        code: other.reason_code(),
+                        detail: other.to_string(),
+                    },
+                }),
             None => self.emit_snapshot().await,
         }
     }
@@ -141,7 +140,7 @@ impl ClientBridge {
     /// Speaks the wire DTOs on the way out, so `core::workspace_files` never
     /// reaches a frontend, and applies the wire bounds on the way in: a path
     /// longer than `MAX_WORKSPACE_FILE_PATH_BYTES` is refused here rather than
-    /// inside a syscall, and the page size is smed's, not the caller's, so a
+    /// inside a syscall, and the page size is mjolnr's, not the caller's, so a
     /// client cannot ask for a page larger than the projection will carry.
     pub async fn list_directory(
         &self,
@@ -288,7 +287,7 @@ impl ClientBridge {
         )
     }
 
-    pub async fn close(&self) -> Result<(), crate::core::error::SmedError> {
+    pub async fn close(&self) -> Result<(), crate::core::error::MjolnrError> {
         self.runtime.close().await
     }
 
@@ -349,9 +348,9 @@ fn validate_graph_query(
     Ok(query)
 }
 
-fn refused(error: crate::core::error::SmedError) -> ClientBridgeError {
+fn refused(error: crate::core::error::MjolnrError) -> ClientBridgeError {
     match error {
-        crate::core::error::SmedError::RuntimeClosed => ClientBridgeError::RuntimeClosed,
+        crate::core::error::MjolnrError::RuntimeClosed => ClientBridgeError::RuntimeClosed,
         other => ClientBridgeError::RuntimeRefused {
             code: other.reason_code(),
             detail: other.to_string(),

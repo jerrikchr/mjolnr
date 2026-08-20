@@ -22,7 +22,7 @@ could ship without one.
 
 ## Decision
 
-**smed is licensed under Apache License 2.0.**
+**mjolnr is licensed under Apache License 2.0.**
 
 - `LICENSE` holds the canonical text from `apache.org/licenses/LICENSE-2.0.txt`,
   verbatim and unmodified, including the appendix. It is never to be edited.
@@ -40,7 +40,7 @@ for most libraries the difference is immaterial. It is not immaterial here.
 **The patent grant is the reason.** Apache-2.0 §3 grants an explicit, irrevocable
 patent licence from contributors to users, and terminates it for anyone who brings
 a patent suit over the work. MIT grants copyright permissions and says nothing
-about patents. smed's entire pitch is a set of *enforcement mechanisms* — a
+about patents. mjolnr's entire pitch is a set of *enforcement mechanisms* — a
 fail-closed gate, evidence-gated completion, clamped delegation, spawn envelopes.
 Mechanisms are the category of thing patents cover; prose and APIs mostly are not.
 A licence that leaves patent rights implicit is a worse fit for this project than
@@ -55,7 +55,7 @@ about state. It is a weak requirement and was not decisive.
 
 **Dual MIT OR Apache-2.0.** The Rust ecosystem convention, and the recommendation
 carried in  *downstream crates* pick the licence that matches their own, which matters
-for a library that gets linked into other people's dependency trees. smed is an
+for a library that gets linked into other people's dependency trees. mjolnr is an
 application. Nobody links it. Offering a choice that has no consumer buys ambiguity
 about which terms apply, and gives up the patent grant to anyone who selects the
 MIT arm — which is to say, it gives up the entire reason for choosing Apache-2.0.
@@ -63,7 +63,7 @@ MIT arm — which is to say, it gives up the entire reason for choosing Apache-2
 **MIT alone.** See above. Shorter, more familiar, no patent grant.
 
 **A copyleft licence (GPL/AGPL/MPL).** Rejected on positioning grounds rather than
-philosophical ones. smed's strategic bet, recorded in `docs/POSITIONING.md`, is
+philosophical ones. mjolnr's strategic bet, recorded in `docs/POSITIONING.md`, is
 that other systems attach to it: tools arrive over MCP, runs are triggered over
 webhooks, approval surfaces render wherever the human is. That is an interop bet,
 and copyleft narrows exactly the population able to take it. Adoption is the

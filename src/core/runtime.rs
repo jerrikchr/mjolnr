@@ -3,7 +3,7 @@
 //! This trait is the entire surface a client gets. The TUI holds one of these
 //! and nothing else — no provider, no store, no tool.
 //!
-//! > "The TUI reduces `SmedEvent` values into view state and sends commands
+//! > "The TUI reduces `MjolnrEvent` values into view state and sends commands
 //! > back. It cannot hold the authoritative session transcript." —
 //!
 //! The snapshot/subscribe split is what makes that true in practice: a client
@@ -15,14 +15,14 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
-use crate::core::command::SmedCommand;
+use crate::core::command::MjolnrCommand;
 use crate::core::context::{
     ContextDiagnostic, ExtensionLoadReport, ExtensionSummary, PersonaSummary, PromptSummary,
     ReloadReport, SkillSummary,
 };
 use crate::core::continuation::{HandoffCheckpoint, QuotaReserveStatus, ResumeAdvice};
-use crate::core::error::SmedError;
-use crate::core::event::{SessionId, SmedEvent};
+use crate::core::error::MjolnrError;
+use crate::core::event::{MjolnrEvent, SessionId};
 use crate::core::mcp::McpServerSummary;
 use crate::core::message::TranscriptEntry;
 use crate::core::model::{ModelDescriptor, ModelId, ProviderId, Usage};
@@ -76,7 +76,7 @@ pub struct RuntimeSnapshot {
     pub envelope_refusal: Option<String>,
     pub pending_approval: Option<PendingApproval>,
     pub budget: BudgetStatus,
-    /// Whether a crash left work whose outcome smed cannot establish.
+    /// Whether a crash left work whose outcome mjolnr cannot establish.
     ///
     /// The TUI renders this and blocks the composer on it. It travels in the
     /// snapshot rather than being inferred from the event feed because a client
@@ -232,7 +232,7 @@ pub struct ModelChoice {
     pub descriptor: ModelDescriptor,
 }
 
-/// What smed currently knows about one provider's usability.
+/// What mjolnr currently knows about one provider's usability.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProviderConnectionState {
     Disconnected,
@@ -345,12 +345,12 @@ impl Default for RuntimeSnapshot {
 /// is acceptable, losing bounded memory is not.
 #[derive(Debug)]
 pub struct RuntimeSubscription {
-    receiver: tokio::sync::broadcast::Receiver<SmedEvent>,
+    receiver: tokio::sync::broadcast::Receiver<MjolnrEvent>,
 }
 
 impl RuntimeSubscription {
     #[must_use]
-    pub fn new(receiver: tokio::sync::broadcast::Receiver<SmedEvent>) -> Self {
+    pub fn new(receiver: tokio::sync::broadcast::Receiver<MjolnrEvent>) -> Self {
         Self { receiver }
     }
 
@@ -358,9 +358,9 @@ impl RuntimeSubscription {
     ///
     /// Returns `Err(Lagged(n))` when the subscriber missed `n` events, and
     /// `Err(Closed)` when the runtime shut down. Callers must handle `Lagged`
-    /// by resyncing from [`SmedRuntime::snapshot`] rather than pretending the
+    /// by resyncing from [`MjolnrRuntime::snapshot`] rather than pretending the
     /// gap did not happen.
-    pub async fn recv(&mut self) -> Result<SmedEvent, tokio::sync::broadcast::error::RecvError> {
+    pub async fn recv(&mut self) -> Result<MjolnrEvent, tokio::sync::broadcast::error::RecvError> {
         self.receiver.recv().await
     }
 }
@@ -374,7 +374,7 @@ impl RuntimeSubscription {
 /// the other.
 ///
 /// Phase 4 found out why the hard way. The TUI used to re-read
-/// [`SmedRuntime::snapshot`] whenever a durable event arrived, which works
+/// [`MjolnrRuntime::snapshot`] whenever a durable event arrived, which works
 /// right up until state changes with no event to announce it — a resumed session
 /// restores an entire transcript and, if nothing was interrupted, emits nothing
 /// at all. The screen stayed empty and the runtime was fine: the view was
@@ -407,7 +407,7 @@ impl SnapshotStream {
 
 /// The runtime a client drives.
 #[async_trait]
-pub trait SmedRuntime: Send + Sync + std::fmt::Debug {
+pub trait MjolnrRuntime: Send + Sync + std::fmt::Debug {
     /// Current state, for an initial render or a resync after lag.
     fn snapshot(&self) -> RuntimeSnapshot;
 
@@ -420,13 +420,13 @@ pub trait SmedRuntime: Send + Sync + std::fmt::Debug {
     /// Submit an intent. Returns once the command is accepted, **not** once its
     /// effects complete — a `SendUserMessage` returns before the model answers.
     /// Progress arrives on the subscription.
-    async fn dispatch(&self, command: SmedCommand) -> Result<(), SmedError>;
+    async fn dispatch(&self, command: MjolnrCommand) -> Result<(), MjolnrError>;
 
     /// Search across the workspace index.
     async fn search_workspace(
         &self,
         filter: crate::core::store::WorkspaceSearchFilter,
-    ) -> Result<crate::core::store::WorkspaceSearchPage, SmedError>;
+    ) -> Result<crate::core::store::WorkspaceSearchPage, MjolnrError>;
 
     /// Read one contained directory page or file from the open project
     /// .
@@ -438,7 +438,7 @@ pub trait SmedRuntime: Send + Sync + std::fmt::Debug {
     async fn read_workspace_files(
         &self,
         request: crate::core::workspace_files::WorkspaceFileRequest,
-    ) -> Result<crate::core::workspace_files::WorkspaceFileAnswer, SmedError>;
+    ) -> Result<crate::core::workspace_files::WorkspaceFileAnswer, MjolnrError>;
 
     /// Read the board: what is decidable right now (Phase E5, step 3).
     ///
@@ -449,14 +449,14 @@ pub trait SmedRuntime: Send + Sync + std::fmt::Debug {
     /// not a command: it never mutates state, and it refuses with
     /// `WorkspaceCapabilityUnavailable` when no workspace is open rather than
     /// claiming an empty board.
-    async fn query_board(&self) -> Result<crate::core::frontier::BoardOverview, SmedError>;
+    async fn query_board(&self) -> Result<crate::core::frontier::BoardOverview, MjolnrError>;
 
     /// Read a bounded newest-first history for the open repository.
     async fn query_repository_history(
         &self,
         limit: u32,
-    ) -> Result<crate::core::repository::RepositoryHistory, SmedError>;
+    ) -> Result<crate::core::repository::RepositoryHistory, MjolnrError>;
 
     /// Shut down, flushing any pending durable writes.
-    async fn close(&self) -> Result<(), SmedError>;
+    async fn close(&self) -> Result<(), MjolnrError>;
 }

@@ -9,7 +9,7 @@ use std::path::Path;
 
 use time::OffsetDateTime;
 
-use crate::core::event::SmedEvent;
+use crate::core::event::MjolnrEvent;
 use crate::core::store::EventStore;
 use crate::core::trigger::TriggerStatus;
 
@@ -47,7 +47,7 @@ async fn status_of(
     let state = control::replay(&events, &definition.name);
 
     let last_fired_at = events.iter().rev().find_map(|stored| match &stored.event {
-        SmedEvent::TriggerFired { trigger, .. } if trigger == &definition.name => {
+        MjolnrEvent::TriggerFired { trigger, .. } if trigger == &definition.name => {
             Some(stored.occurred_at)
         }
         _ => None,
@@ -128,7 +128,7 @@ mod tests {
             .await
             .expect("create control session");
         store
-            .append(SmedEvent::TriggerDisabled {
+            .append(MjolnrEvent::TriggerDisabled {
                 session: control_session,
                 trigger: "nightly".to_owned(),
                 code: crate::core::error::ReasonCode::TriggerDisabled,

@@ -472,8 +472,8 @@ mod tests {
     #[tokio::test]
     async fn stdio_server_lists_previews_and_runs_namespaced_tool() {
         let workspace = tempfile::tempdir().expect("workspace");
-        let smed_dir = workspace.path().join(".mjolnr");
-        std::fs::create_dir(&smed_dir).expect("config dir");
+        let mjolnr_dir = workspace.path().join(".mjolnr");
+        std::fs::create_dir(&mjolnr_dir).expect("config dir");
         let script = workspace.path().join("server.sh");
         let body = r#"while IFS= read -r line; do
 case "$line" in
@@ -484,7 +484,7 @@ esac
 done"#;
         std::fs::write(&script, body).expect("script");
         std::fs::write(
-            smed_dir.join("mcp.yaml"),
+            mjolnr_dir.join("mcp.yaml"),
             format!(
                 "servers:\n  - name: fixture\n    command: /bin/sh\n    args:\n      - {}\n",
                 script.display()
@@ -529,15 +529,15 @@ done"#;
     #[tokio::test]
     async fn unavailable_server_is_status_not_a_hang() {
         let workspace = tempfile::tempdir().expect("workspace");
-        let smed_dir = workspace.path().join(".mjolnr");
-        std::fs::create_dir(&smed_dir).expect("config dir");
+        let mjolnr_dir = workspace.path().join(".mjolnr");
+        std::fs::create_dir(&mjolnr_dir).expect("config dir");
         let missing_command = if cfg!(windows) {
             r"C:\definitely\not\a\server.exe"
         } else {
             "/definitely/not/a/server"
         };
         std::fs::write(
-            smed_dir.join("mcp.yaml"),
+            mjolnr_dir.join("mcp.yaml"),
             format!("servers:\n  - name: gone\n    command: '{missing_command}'\n"),
         )
         .expect("config");
@@ -553,8 +553,8 @@ done"#;
     #[tokio::test]
     async fn server_death_mid_call_is_typed_unavailable() {
         let workspace = tempfile::tempdir().expect("workspace");
-        let smed_dir = workspace.path().join(".mjolnr");
-        std::fs::create_dir(&smed_dir).expect("config dir");
+        let mjolnr_dir = workspace.path().join(".mjolnr");
+        std::fs::create_dir(&mjolnr_dir).expect("config dir");
         let script = workspace.path().join("dying-server.sh");
         let body = r#"while IFS= read -r line; do
 case "$line" in
@@ -565,7 +565,7 @@ esac
 done"#;
         std::fs::write(&script, body).expect("script");
         std::fs::write(
-            smed_dir.join("mcp.yaml"),
+            mjolnr_dir.join("mcp.yaml"),
             format!(
                 "servers:\n  - name: dying\n    command: /bin/sh\n    args:\n      - {}\n",
                 script.display()

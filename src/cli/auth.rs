@@ -116,7 +116,7 @@ impl AuthProvider {
 
 #[derive(Debug, Subcommand)]
 pub enum AuthCommand {
-    /// Store a provider credential in smed's owner-only credential store.
+    /// Store a provider credential in mjolnr's owner-only credential store.
     ///
     /// The key is read from the terminal without echo, never from an argument.
     /// There is deliberately no `--key` flag: argv is world-readable on most
@@ -227,7 +227,7 @@ fn login_lm_studio(secrets: &Arc<dyn SecretStore>) -> i32 {
         if std::env::var("LM_API_TOKEN").is_ok_and(|value| !value.trim().is_empty()) {
             println!("cleared the stored token; LM_API_TOKEN remains active");
         } else {
-            println!("cleared any stored token; smed will connect keylessly");
+            println!("cleared any stored token; mjolnr will connect keylessly");
         }
         return 0;
     }
@@ -305,7 +305,7 @@ fn login_oauth(provider: AuthProvider, secrets: &Arc<dyn SecretStore>) -> i32 {
             .block_on(crate::providers::anthropic::paste_login(
                 Arc::clone(secrets),
                 |prompt| {
-                    println!("Open this URL in your browser and authorize smed:");
+                    println!("Open this URL in your browser and authorize mjolnr:");
                     println!("{}", prompt.authorize_url);
                     println!("The final page displays an authorization code.");
                 },
@@ -333,7 +333,7 @@ fn login_oauth(provider: AuthProvider, secrets: &Arc<dyn SecretStore>) -> i32 {
                     config,
                     Arc::clone(secrets),
                     |prompt| {
-                        println!("Open this URL in your browser and authorize smed:");
+                        println!("Open this URL in your browser and authorize mjolnr:");
                         println!("{}", prompt.authorize_url);
                         println!("Waiting for the browser callback (up to 15 minutes)…");
                     },
@@ -354,8 +354,8 @@ fn login_oauth(provider: AuthProvider, secrets: &Arc<dyn SecretStore>) -> i32 {
     match result {
         Ok(expires_at_unix) => {
             println!(
-                "stored a smed-owned OAuth credential for {id} in an owner-only file\n\
-                 access token expires at Unix time {expires_at_unix}; smed refreshes it automatically"
+                "stored a mjolnr-owned OAuth credential for {id} in an owner-only file\n\
+                 access token expires at Unix time {expires_at_unix}; mjolnr refreshes it automatically"
             );
             0
         }

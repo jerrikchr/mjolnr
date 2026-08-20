@@ -14,21 +14,21 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use smed::core::error::ReasonCode;
-use smed::repository::{Repository, RepositoryError};
+use mjolnr::core::error::ReasonCode;
+use mjolnr::repository::{Repository, RepositoryError};
 
 /// A fresh repository per test, named by the caller, with deterministic
 /// identity and signing explicitly disabled so a developer's global
 /// `commit.gpgsign = true` cannot make these tests fail for the wrong reason.
 fn setup_repo(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("smed-d5-{name}"));
+    let dir = std::env::temp_dir().join(format!("mjolnr-d5-{name}"));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).expect("temp dir");
     let dir = dir.canonicalize().expect("canonical temp dir");
 
     git(&dir, &["init", "--initial-branch=main"]);
-    git(&dir, &["config", "user.email", "test@smed.invalid"]);
-    git(&dir, &["config", "user.name", "smed Test"]);
+    git(&dir, &["config", "user.email", "test@mjolnr.invalid"]);
+    git(&dir, &["config", "user.name", "mjolnr Test"]);
     git(&dir, &["config", "commit.gpgsign", "false"]);
 
     fs::write(dir.join("README.md"), "hello\n").expect("write");
@@ -69,7 +69,7 @@ fn open(dir: &Path) -> Repository {
 
 #[test]
 fn a_directory_that_is_not_a_repository_is_refused_at_open() {
-    let dir = std::env::temp_dir().join("smed-d5-not-a-repo");
+    let dir = std::env::temp_dir().join("mjolnr-d5-not-a-repo");
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).expect("temp dir");
     let dir = dir.canonicalize().expect("canonical");
@@ -148,7 +148,7 @@ fn history_is_newest_first_and_explicitly_bounded() {
 #[test]
 fn clone_requires_a_new_destination_and_verifies_the_result() {
     let source = setup_repo("clone-source");
-    let destination = std::env::temp_dir().join("smed-d5-clone-destination");
+    let destination = std::env::temp_dir().join("mjolnr-d5-clone-destination");
     let _ = fs::remove_dir_all(&destination);
 
     let cloned = Repository::clone_project(source.to_str().expect("source path"), &destination)
@@ -191,7 +191,7 @@ fn rebase_moves_a_clean_branch_onto_the_named_ref() {
     assert_eq!(git_stdout(&dir, &["rev-parse", "HEAD~1"]), main_head);
     assert!(
         !open(&dir)
-            .project(smed::core::repository::RefreshTrigger::Requested, 1)
+            .project(mjolnr::core::repository::RefreshTrigger::Requested, 1)
             .expect("projection")
             .rebase_in_progress
     );
@@ -217,14 +217,14 @@ fn rebase_conflict_is_left_for_human_recovery_and_abort_clears_it() {
     assert!(matches!(error, RepositoryError::Conflict { .. }));
     assert!(
         open(&dir)
-            .project(smed::core::repository::RefreshTrigger::Requested, 1)
+            .project(mjolnr::core::repository::RefreshTrigger::Requested, 1)
             .expect("projection")
             .rebase_in_progress
     );
     open(&dir).abort_rebase().expect("abort rebase");
     assert!(
         !open(&dir)
-            .project(smed::core::repository::RefreshTrigger::Requested, 2)
+            .project(mjolnr::core::repository::RefreshTrigger::Requested, 2)
             .expect("projection")
             .rebase_in_progress
     );
@@ -237,7 +237,7 @@ fn rebase_conflict_is_left_for_human_recovery_and_abort_clears_it() {
 #[test]
 fn status_reports_the_repository_modules_own_type_and_grades_no_trust() {
     let dir = setup_repo("state-type");
-    let status: smed::repository::RepositoryStatus = open(&dir).status().expect("status");
+    let status: mjolnr::repository::RepositoryStatus = open(&dir).status().expect("status");
     assert_eq!(status.branch.as_deref(), Some("main"));
     assert!(!status.dirty_count_truncated);
 }
@@ -344,7 +344,7 @@ fn a_refusing_pre_commit_hook_is_reported_as_a_hook_refusal_not_a_success() {
         "expected a hook refusal, got {error:?}"
     );
     assert_eq!(error.reason_code(), ReasonCode::RepositoryHookRefused);
-    // The hook is the owner's own gate; smed reports it and HEAD is untouched.
+    // The hook is the owner's own gate; mjolnr reports it and HEAD is untouched.
     assert_eq!(repository.status().expect("status").head, before);
     // And the hook's own message reaches the human verbatim.
     assert!(error.to_string().contains("refused by policy"));
@@ -707,7 +707,7 @@ fn a_fetch_from_the_upstream_updates_the_local_tracking_ref() {
     repository.push(&head).expect("push");
 
     // The remote advances from a second clone; the local tracking ref stays
-    // at `head` until smed fetches.
+    // at `head` until mjolnr fetches.
     let bare = git_stdout(&dir, &["config", "--get", "remote.origin.url"]);
     advance_remote_one_commit(Path::new(&bare), "fetch-update");
     assert_eq!(git_stdout(&dir, &["rev-parse", "@{upstream}"]), head);
@@ -734,7 +734,7 @@ fn integrating_a_fetched_upstream_fast_forwards_to_the_upstream_tip() {
     let head = repository.status().expect("status").head.expect("head");
     repository.push(&head).expect("push");
 
-    // The remote advances; smed's fetch moves the local tracking ref. The
+    // The remote advances; mjolnr's fetch moves the local tracking ref. The
     // message is required even here: git consumes it only when a merge commit
     // is created, and the guard cannot relax per outcome (AGENTS.md §1.2).
     let bare = git_stdout(&dir, &["config", "--get", "remote.origin.url"]);
@@ -844,7 +844,7 @@ fn integrating_without_any_upstream_configured_is_refused() {
 fn integrating_an_upstream_that_was_never_fetched_is_refused() {
     // `branch.main.remote`/`branch.main.merge` exist but `@{upstream}`
     // resolves to nothing because nothing ever fetched (or pushed). There is
-    // no local commit to integrate and smed refuses rather than guessing;
+    // no local commit to integrate and mjolnr refuses rather than guessing;
     // the remedy is the human's own fetch.
     let dir = setup_repo_with_upstream("merge-upstream-unfetched");
     let repository = open(&dir);
@@ -939,14 +939,14 @@ fn a_conflicting_upstream_merge_is_reported_and_never_resolved_for_the_human() {
 
     // The remote takes `shared.txt` one way from a second clone.
     let bare = git_stdout(&dir, &["config", "--get", "remote.origin.url"]);
-    let clone = std::env::temp_dir().join("smed-d5-merge-upstream-conflict-clone");
+    let clone = std::env::temp_dir().join("mjolnr-d5-merge-upstream-conflict-clone");
     let _ = fs::remove_dir_all(&clone);
     git(
         &std::env::temp_dir(),
         &["clone", bare.as_str(), clone.to_str().expect("clone path")],
     );
-    git(&clone, &["config", "user.email", "test@smed.invalid"]);
-    git(&clone, &["config", "user.name", "smed Test"]);
+    git(&clone, &["config", "user.email", "test@mjolnr.invalid"]);
+    git(&clone, &["config", "user.name", "mjolnr Test"]);
     git(&clone, &["config", "commit.gpgsign", "false"]);
     fs::write(clone.join("shared.txt"), "remote version\n").expect("write");
     git(&clone, &["add", "shared.txt"]);
@@ -1020,7 +1020,7 @@ fn write_failing_hook(dir: &Path, hook: &str) {
 /// remote starts empty so a first push creates `refs/heads/main` on it.
 fn setup_repo_with_upstream(name: &str) -> PathBuf {
     let dir = setup_repo(name);
-    let bare = std::env::temp_dir().join(format!("smed-d5-{name}-remote"));
+    let bare = std::env::temp_dir().join(format!("mjolnr-d5-{name}-remote"));
     let _ = fs::remove_dir_all(&bare);
     git(
         &dir,
@@ -1043,7 +1043,7 @@ fn setup_repo_with_upstream(name: &str) -> PathBuf {
 /// Advance the bare remote by one commit from a throwaway clone, so a fetch
 /// in `dir` has something new to observe on the upstream.
 fn advance_remote_one_commit(bare: &Path, suffix: &str) {
-    let clone = std::env::temp_dir().join(format!("smed-d5-advance-{suffix}"));
+    let clone = std::env::temp_dir().join(format!("mjolnr-d5-advance-{suffix}"));
     let _ = fs::remove_dir_all(&clone);
     git(
         &std::env::temp_dir(),
@@ -1053,8 +1053,8 @@ fn advance_remote_one_commit(bare: &Path, suffix: &str) {
             clone.to_str().expect("clone path"),
         ],
     );
-    git(&clone, &["config", "user.email", "test@smed.invalid"]);
-    git(&clone, &["config", "user.name", "smed Test"]);
+    git(&clone, &["config", "user.email", "test@mjolnr.invalid"]);
+    git(&clone, &["config", "user.name", "mjolnr Test"]);
     git(&clone, &["config", "commit.gpgsign", "false"]);
     fs::write(clone.join("remote-work.txt"), "advanced\n").expect("write");
     git(&clone, &["add", "remote-work.txt"]);

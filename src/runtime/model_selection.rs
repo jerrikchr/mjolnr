@@ -1,7 +1,7 @@
 //! Idle model switching and durable switch refusals.
 
 use crate::core::error::ReasonCode;
-use crate::core::event::{RunId, SessionId, SmedEvent};
+use crate::core::event::{MjolnrEvent, RunId, SessionId};
 use crate::core::model::{Capability, ModelId, ProviderId};
 use crate::core::runtime::ProviderConnectionState;
 
@@ -76,7 +76,7 @@ impl Actor {
         }
 
         if let Err(error) = self
-            .persist(SmedEvent::ModelChanged {
+            .persist(MjolnrEvent::ModelChanged {
                 session,
                 provider: provider.clone(),
                 model: model.clone(),
@@ -113,7 +113,7 @@ impl Actor {
         active_run: Option<RunId>,
     ) {
         if let Err(error) = self
-            .persist(SmedEvent::ModelChangeRefused {
+            .persist(MjolnrEvent::ModelChangeRefused {
                 session,
                 provider,
                 model,

@@ -6,7 +6,7 @@
 //!             providers   tools / store / policy / context
 //! ```
 //!
-//! smed is one binary by design , so **no process or crate boundary
+//! mjolnr is one binary by design , so **no process or crate boundary
 //! makes this true**. Without this test the rule is a comment, and a comment
 //! loses to a deadline. Phase 0 shipped the rule as prose; this is the phase
 //! that makes it fail the build.
@@ -69,7 +69,7 @@ const RULES: &[Rule] = &[
     //
     // It may name a provider (`auth login openai` has to know the id it stores a
     // key under) and it must reach the store. It may not drive a runtime: that
-    // would make `smed <something>` a second, undocumented client of the agent
+    // would make `mjolnr <something>` a second, undocumented client of the agent
     // loop, outside every gate the TUI passes through. `main.rs` stays the only
     // place a runtime is wired.
     Rule {
@@ -192,7 +192,7 @@ const RULES: &[Rule] = &[
     // `src/memory/` file lands and the phase cannot drift past the boundary
     // unnoticed.
     //
-    // The memory module is a projection (Standing Law #2): `.smed/data/
+    // The memory module is a projection (Standing Law #2): `.mjolnr/data/
     // memory.db` is disposable and regenerable, and the append-only ledger is
     // truth. A memory module that could reach the runtime could act on its own
     // recall, and one that could reach `store` could write the ledger it must
@@ -343,14 +343,14 @@ fn check_desktop_backend_boundary(desktop_tauri_src: &Path) {
 
     for (path, contents) in &sources {
         for (line_number, line) in imports(contents) {
-            if line.contains("smed::tui") {
+            if line.contains("mjolnr::tui") {
                 violations.push(format!(
                     "{}:{line_number} imports `tui` directly into desktop client: {}",
                     path.display(),
                     line.trim()
                 ));
             }
-            if line.contains("smed::policy::") {
+            if line.contains("mjolnr::policy::") {
                 violations.push(format!(
                     "{}:{line_number} imports policy internal gate module into desktop client: {}",
                     path.display(),
@@ -604,7 +604,7 @@ fn board_dtos_are_consumed_only_by_the_bridge() {
 }
 
 /// The client bridge is a thin translation layer: it maps `ClientCommand` to
-/// `SmedCommand` and projects DTOs, full stop. Reuse of runtime machinery
+/// `MjolnrCommand` and projects DTOs, full stop. Reuse of runtime machinery
 /// (the subagent worktree engine, the repository projection) happens in the
 /// actor's `handle_command`, never in the bridge — a bridge that can reach
 /// runtime internals is a second authority surface (Phase D2 review).
@@ -899,4 +899,29 @@ fn collect_sources(root: &Path) -> BTreeMap<PathBuf, String> {
     }
 
     sources
+}
+
+#[test]
+fn no_stale_brand_in_user_facing_strings() {
+    let sources = collect_sources(&src_root());
+    let mut violations = Vec::new();
+
+    for (path, contents) in &sources {
+        if path.ends_with("src/core/paths.rs") {
+            continue;
+        }
+
+        for (line_number, line) in contents.lines().enumerate() {
+            let line_number = line_number + 1;
+            if line.contains("smed") || line.contains("Smed") || line.contains("SMED") {
+                violations.push(format!("{}:{line_number}: {}", path.display(), line.trim()));
+            }
+        }
+    }
+
+    assert!(
+        violations.is_empty(),
+        "stale brand name 'smed' found in source tree (ADR-0018):\n\n{}\n",
+        violations.join("\n")
+    );
 }

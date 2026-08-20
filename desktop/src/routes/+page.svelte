@@ -5,7 +5,6 @@
     Activity03Icon,
     Alert02Icon,
     Attachment01Icon,
-    BotIcon,
     CheckmarkCircle02Icon,
     CircleIcon,
     DashboardSquare01Icon,
@@ -239,7 +238,7 @@
   // value is not runtime truth and must never look like the selected project.
   // Project the current root into the chooser until the owner starts editing;
   // once edited, leave the draft alone until the runtime acknowledges a new
-  // root. This also clears a stale path when smed starts with no workspace.
+  // root. This also clears a stale path when mjolnr starts with no workspace.
   $effect(() => {
     const runtimeRoot = snap.workspaceRoot ?? '';
     const chooserIsUntouched =
@@ -255,7 +254,7 @@
     clientStore.fleet.length >= 2 && clientStore.fleet.some((agent) => !agent.done)
   );
   // The mockup's Accounts pills show connected providers only, not every
-  // provider smed knows how to authenticate — a "+Connect" affordance for
+  // provider mjolnr knows how to authenticate — a "+Connect" affordance for
   // the rest belongs to an onboarding flow this slice doesn't build.
   let connectedAccounts = $derived(snap.accounts.filter((account) => account.state === 'connected'));
   // The header's loop-state indicator. A pending approval is literally what
@@ -508,7 +507,7 @@
 
   /**
    * Choose a real directory from the native picker. This is the primary path
-   * when smed was launched without a project, so the process cwd is never
+   * when mjolnr was launched without a project, so the process cwd is never
    * mistaken for the project the owner intends to govern.
    */
   async function chooseWorkspace() {
@@ -579,7 +578,7 @@
    * Load a council amendment into the editor as unsaved text.
    *
    * The file is opened through the ordinary bounded producer first, so the tab
-   * carries the digest smed actually observed on disk; only the buffer text is
+   * carries the digest mjolnr actually observed on disk; only the buffer text is
    * replaced with the draft. Saving is therefore the same governed save as any
    * other edit — stale-digest refusal included — and the amendment never
    * reaches disk without a human pressing save.
@@ -631,7 +630,7 @@
 
     // The save event refreshes repository truth, but it intentionally does not
     // carry the file body or a new digest. Re-read through the same bounded
-    // producer so the editor's next save is anchored to bytes smed actually
+    // producer so the editor's next save is anchored to bytes mjolnr actually
     // observed after the write.
     const reread = await clientStore.openFile(editorPath);
     if ('message' in reread) return `saved, but the post-save read was refused: ${reread.message}`;
@@ -1051,7 +1050,7 @@
     <header class="flex h-12 shrink-0 items-center gap-2 border-b bg-sidebar px-3" style="height:var(--header-h);">
       <AppEmblem size={26} />
       <span class="shrink-0 text-sm font-semibold tracking-tight">
-        smed<span class="text-muted-foreground">-</span>says
+        mjolnr<span class="text-muted-foreground">-</span>says
       </span>
       <Separator orientation="vertical" class="mx-1 h-4.5" />
       <Sidebar.Trigger title="Toggle sidebar (⌘B)" />
@@ -1163,7 +1162,7 @@
                 {snap.session ? `Session ${snap.session.slice(0, 8)}` : 'Start a governed session'}
               </h1>
               <p class="text-sm text-muted-foreground">
-                {snap.runActive ? 'smed is working' : snap.session ? 'Ready for your next instruction' : 'Open a workspace, then create or resume a session'}
+                {snap.runActive ? 'mjolnr is working' : snap.session ? 'Ready for your next instruction' : 'Open a workspace, then create or resume a session'}
               </p>
             </div>
             <div class="flex items-center gap-2">
@@ -1263,7 +1262,7 @@
                       <Card.Title>1. Open a workspace</Card.Title>
                       <Card.Description>
                         {journeyState === 'workspace'
-                          ? 'smed started without a project folder. Choose the directory smed is allowed to inspect and modify.'
+                          ? 'mjolnr started without a project folder. Choose the directory mjolnr is allowed to inspect and modify.'
                           : `Workspace ready: ${snap.workspaceRoot}`}
                       </Card.Description>
                     </Card.Header>
@@ -1298,7 +1297,7 @@
                           </Field.Error>
                         {:else}
                           <p id="launch-project-hint" class="text-xs text-muted-foreground">
-                            The launch location is not used as a project. smed acts only after you choose a folder.
+                            The launch location is not used as a project. mjolnr acts only after you choose a folder.
                           </p>
                         {/if}
                         <CloneRepository />
@@ -1337,7 +1336,7 @@
                     <Empty.Media variant="icon"><HugeiconsIcon icon={TerminalIcon} strokeWidth={2} /></Empty.Media>
                     <Empty.Title>Ready for a real session</Empty.Title>
                     <Empty.Description>
-                      smed will stream conversation and governed tool activity here. Side effects still pass through the Rust runtime.
+                      mjolnr will stream conversation and governed tool activity here. Side effects still pass through the Rust runtime.
                     </Empty.Description>
                   </Empty.Header>
                 </Empty.Root>
@@ -1390,10 +1389,10 @@
           <div class="border-t bg-background p-4">
             <div class="mx-auto flex w-full max-w-4xl flex-col gap-2">
               <Field.Field data-disabled={!snap.session}>
-                <Field.Label for="composer" class="sr-only">Message smed</Field.Label>
+                <Field.Label for="composer" class="sr-only">Message mjolnr</Field.Label>
                 <Textarea
                   id="composer"
-                  placeholder={snap.session ? 'Describe the work you want smed to do…' : 'Create or resume a session to begin'}
+                  placeholder={snap.session ? 'Describe the work you want mjolnr to do…' : 'Create or resume a session to begin'}
                   rows={1}
                   bind:value={messageInput}
                   disabled={!snap.session || snap.runActive}
@@ -1563,7 +1562,7 @@
         {/if}
       </div>
       <div class="ml-auto flex items-center gap-2.5">
-        <span>trust: <span class="font-mono text-foreground">smed-governed</span></span>
+        <span>trust: <span class="font-mono text-foreground">mjolnr-governed</span></span>
         <span class="h-3 w-px bg-border" aria-hidden="true"></span>
         {#if snap.session}
           <span>session: <span class="font-mono text-foreground">{snap.session.slice(0, 8)}</span></span>
@@ -1595,7 +1594,7 @@
 -->
 <Command.Dialog
   bind:open={paletteOpen}
-  title="smed command palette"
+  title="mjolnr command palette"
   description="Navigate the governed workspace and search recorded work"
   filter={(value, search) => {
     if (value.startsWith('result:')) return 1;

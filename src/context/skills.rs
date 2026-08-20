@@ -247,7 +247,7 @@ impl SkillCatalog {
             }
             content.push_str("</skill_resources>\n");
         }
-        content.push_str("Bundled scripts are resources, not permissions; running one still requires smed's run_command policy.\n</skill_content>");
+        content.push_str("Bundled scripts are resources, not permissions; running one still requires mjolnr's run_command policy.\n</skill_content>");
         Ok(ActivatedSkill {
             name: parsed.name,
             project: record.summary.scope == SkillScope::Project,

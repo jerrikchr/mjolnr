@@ -404,7 +404,7 @@ pub(crate) fn menu_applies(composer: &str) -> bool {
 }
 
 /// Which field a `/route` or `/role` invocation fills. Both dispatch the same
-/// [`AttachRoute`](crate::core::command::SmedCommand::AttachRoute); they
+/// [`AttachRoute`](crate::core::command::MjolnrCommand::AttachRoute); they
 /// differ only in whether the argument is an explicit route name or a role the
 /// project tags a route with.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

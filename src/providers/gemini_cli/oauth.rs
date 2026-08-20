@@ -1,4 +1,4 @@
-//! smed-owned Google OAuth lifecycle for Cloud Code Assist subscriptions
+//! mjolnr-owned Google OAuth lifecycle for Cloud Code Assist subscriptions
 //! (Gemini CLI and Antigravity).
 //!
 //! Flow shape: standard installed-app authorization-code flow with a loopback
@@ -236,7 +236,7 @@ struct TokenResponse {
 }
 
 /// Complete the loopback login, resolve the Cloud Code Assist project, and
-/// persist smed's own credential copy. Returns the token expiry.
+/// persist mjolnr's own credential copy. Returns the token expiry.
 pub async fn browser_login<F>(
     config: &'static GoogleClient,
     secrets: Arc<dyn SecretStore>,
@@ -392,10 +392,10 @@ async fn wait_for_callback(
 
 /// The browser landing page after the OAuth redirect. Self-contained (no
 /// external assets — the page must render with the network conceptually
-/// untrusted) and styled like smed's terminal: dark, monospace, one verdict.
+/// untrusted) and styled like mjolnr's terminal: dark, monospace, one verdict.
 fn callback_page(verdict: &str, color: &str, detail: &str, action: &str) -> String {
     format!(
-        r#"<!doctype html><html><head><meta charset="utf-8"><title>smed // {verdict}</title>
+        r#"<!doctype html><html><head><meta charset="utf-8"><title>mjolnr // {verdict}</title>
 <style>
   html,body{{margin:0;height:100%;background:#0b0e14;color:#c9d1d9;
     font-family:"SF Mono","JetBrains Mono",Menlo,Consolas,monospace}}
@@ -414,7 +414,7 @@ fn callback_page(verdict: &str, color: &str, detail: &str, action: &str) -> Stri
   @keyframes blink{{50%{{opacity:0}}}}
 </style></head><body>
 <div class="card">
-  <div class="wordmark"><b>SMED</b>&nbsp;SAYS</div>
+  <div class="wordmark"><b>MJOLNR</b>&nbsp;SAYS</div>
   <p class="verdict">{verdict}</p>
   <p class="detail">// {detail}</p>
   <p class="action">{action}<span class="cursor"></span></p>

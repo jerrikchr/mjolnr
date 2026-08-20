@@ -15,16 +15,16 @@
 
 use std::sync::Arc;
 
-use smed::core::error::ProviderError;
-use smed::core::event::{FinishReason, ProviderEvent};
-use smed::core::message::CanonicalMessage;
-use smed::core::model::{ModelId, ProviderId};
-use smed::core::provider::{Provider, ProviderRequest};
-use smed::core::secrets::{
+use mjolnr::core::error::ProviderError;
+use mjolnr::core::event::{FinishReason, ProviderEvent};
+use mjolnr::core::message::CanonicalMessage;
+use mjolnr::core::model::{ModelId, ProviderId};
+use mjolnr::core::provider::{Provider, ProviderRequest};
+use mjolnr::core::secrets::{
     Credential, CredentialKind, ResolvedCredential, Secret, SecretError, SecretSource, SecretStore,
 };
-use smed::providers::forge::ForgeProvider;
-use smed::providers::openai_compat::{CATALOG, OpenAiCompatProvider, persist_lm_studio_base_url};
+use mjolnr::providers::forge::ForgeProvider;
+use mjolnr::providers::openai_compat::{CATALOG, OpenAiCompatProvider, persist_lm_studio_base_url};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use wiremock::matchers::{header, method, path};
@@ -78,7 +78,7 @@ impl SecretStore for EmptySecrets {
     }
 }
 
-fn descriptor(id: &str) -> &'static smed::providers::openai_compat::CompatDescriptor {
+fn descriptor(id: &str) -> &'static mjolnr::providers::openai_compat::CompatDescriptor {
     CATALOG
         .iter()
         .find(|descriptor| descriptor.id == id)
@@ -91,7 +91,7 @@ fn request(model: &str) -> ProviderRequest {
         messages: vec![CanonicalMessage::user("hello")],
         system: Some("be concise".to_owned()),
         tools: Vec::new(),
-        images: smed::core::image::ImageSidecar::new(),
+        images: mjolnr::core::image::ImageSidecar::new(),
     }
 }
 

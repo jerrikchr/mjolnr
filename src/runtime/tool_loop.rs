@@ -7,7 +7,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::core::command::{ApprovalDecision, ApprovalId};
 use crate::core::error::{ReasonCode, ToolError};
-use crate::core::event::{FinishReason, RunId, SmedEvent};
+use crate::core::event::{FinishReason, MjolnrEvent, RunId};
 use crate::core::message::{CanonicalMessage, ToolCall, ToolEffect, ToolOutcome, ToolResult};
 use crate::core::policy::PendingApproval;
 use crate::core::tool::{CommandSpec, Tool, ToolContext};
@@ -208,7 +208,7 @@ impl Actor {
         let Some(session) = self.state.session else {
             return true;
         };
-        let event = SmedEvent::ToolProposed {
+        let event = MjolnrEvent::ToolProposed {
             session,
             run,
             approval,
@@ -242,7 +242,7 @@ impl Actor {
                     return true;
                 };
                 if let Err(error) = self
-                    .persist(SmedEvent::ApprovalResolved {
+                    .persist(MjolnrEvent::ApprovalResolved {
                         session,
                         run,
                         approval,
@@ -329,7 +329,7 @@ impl Actor {
             None => return,
         };
         if let Err(error) = self
-            .persist(SmedEvent::ApprovalResolved {
+            .persist(MjolnrEvent::ApprovalResolved {
                 session,
                 run,
                 approval,
@@ -526,7 +526,7 @@ impl Actor {
             None => return false,
         };
         let stored = match self
-            .persist(SmedEvent::ToolCompleted {
+            .persist(MjolnrEvent::ToolCompleted {
                 session,
                 run,
                 call_id: call.id.clone(),
@@ -604,7 +604,7 @@ impl Actor {
             None => return false,
         };
         let stored = match self
-            .persist(SmedEvent::ToolFailed {
+            .persist(MjolnrEvent::ToolFailed {
                 session,
                 run,
                 call_id: call.id.clone(),

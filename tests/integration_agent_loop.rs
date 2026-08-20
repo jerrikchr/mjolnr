@@ -1,6 +1,6 @@
 //! Headless runtime tests.
 //!
-//! **This file must never import `smed::tui`.** That is the point of it: if the
+//! **This file must never import `mjolnr::tui`.** That is the point of it: if the
 //! core cannot be exercised without a terminal, the boundary is broken.
 //! `tests/architecture.rs` enforces the rule for `src/`; this file demonstrates
 //! it for real.
@@ -22,24 +22,24 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use smed::core::command::SmedCommand;
-use smed::core::event::{FinishReason, SmedEvent};
-use smed::core::message::Role;
-use smed::core::model::{ModelId, ProviderId};
-use smed::core::provider::Provider;
-use smed::core::runtime::SmedRuntime;
-use smed::core::store::EventStore;
-use smed::providers::fake::{FakeProvider, FakeScript};
-use smed::runtime::Runtime;
-use smed::store::memory::InMemoryEventStore;
+use mjolnr::core::command::MjolnrCommand;
+use mjolnr::core::event::{FinishReason, MjolnrEvent};
+use mjolnr::core::message::Role;
+use mjolnr::core::model::{ModelId, ProviderId};
+use mjolnr::core::provider::Provider;
+use mjolnr::core::runtime::MjolnrRuntime;
+use mjolnr::core::store::EventStore;
+use mjolnr::providers::fake::{FakeProvider, FakeScript};
+use mjolnr::runtime::Runtime;
+use mjolnr::store::memory::InMemoryEventStore;
 
 /// Wait for an event matching a predicate, or fail. Never sleeps: it awaits the
 /// real feed under a timeout, so it cannot pass by luck on a fast machine.
 async fn wait_for(
-    events: &mut smed::core::runtime::RuntimeSubscription,
+    events: &mut mjolnr::core::runtime::RuntimeSubscription,
     label: &str,
-    mut predicate: impl FnMut(&SmedEvent) -> bool,
-) -> SmedEvent {
+    mut predicate: impl FnMut(&MjolnrEvent) -> bool,
+) -> MjolnrEvent {
     let deadline = Duration::from_secs(5);
     let found = tokio::time::timeout(deadline, async {
         loop {
@@ -69,13 +69,13 @@ fn harness(script: FakeScript) -> (Runtime, Arc<InMemoryEventStore>) {
 /// foreign key refuse later with a less useful message.
 async fn open_session(runtime: &Runtime) {
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: std::env::current_dir().expect("current dir"),
         })
         .await
         .expect("open project");
     runtime
-        .dispatch(SmedCommand::CreateSession {
+        .dispatch(MjolnrCommand::CreateSession {
             provider: ProviderId::new(FakeProvider::ID),
             model: ModelId::new(FakeProvider::MODEL),
         })
@@ -90,9 +90,9 @@ async fn text_streams_incrementally_and_coalesces_into_one_message() {
     open_session(&runtime).await;
 
     runtime
-        .dispatch(SmedCommand::SendUserMessage {
+        .dispatch(MjolnrCommand::SendUserMessage {
             text: "hello".to_owned(),
-            source: smed::core::directive::DirectiveSource::Human,
+            source: mjolnr::core::directive::DirectiveSource::Human,
         })
         .await
         .expect("send");
@@ -102,8 +102,8 @@ async fn text_streams_incrementally_and_coalesces_into_one_message() {
     tokio::time::timeout(deadline, async {
         loop {
             match events.recv().await.expect("feed") {
-                SmedEvent::TextDelta { text, .. } => deltas.push(text),
-                SmedEvent::RunFinished { reason, .. } => {
+                MjolnrEvent::TextDelta { text, .. } => deltas.push(text),
+                MjolnrEvent::RunFinished { reason, .. } => {
                     assert_eq!(reason, FinishReason::Stop);
                     break;
                 }
@@ -144,7 +144,7 @@ async fn text_streams_incrementally_and_coalesces_into_one_message() {
     assert!(
         !stored
             .iter()
-            .any(|event| matches!(event.event, SmedEvent::TextDelta { .. })),
+            .any(|event| matches!(event.event, MjolnrEvent::TextDelta { .. })),
         "ephemeral deltas must not be persisted — one row per token is forbidden"
     );
 }
@@ -156,22 +156,22 @@ async fn tool_arguments_are_parsed_only_at_the_completion_boundary() {
     open_session(&runtime).await;
 
     runtime
-        .dispatch(SmedCommand::SendUserMessage {
+        .dispatch(MjolnrCommand::SendUserMessage {
             text: "read a file".to_owned(),
-            source: smed::core::directive::DirectiveSource::Human,
+            source: mjolnr::core::directive::DirectiveSource::Human,
         })
         .await
         .expect("send");
 
     let terminal = wait_for(&mut events, "run finished", |event| {
-        matches!(event, SmedEvent::RunFinished { .. })
+        matches!(event, MjolnrEvent::RunFinished { .. })
     })
     .await;
 
     // Phase 3 consumes the proposal, returns its schema refusal to the fake,
     // and lets the next provider turn stop normally.
     match terminal {
-        SmedEvent::RunFinished { reason, .. } => assert_eq!(reason, FinishReason::Stop),
+        MjolnrEvent::RunFinished { reason, .. } => assert_eq!(reason, FinishReason::Stop),
         other => panic!("expected a finished run, got {other:?}"),
     }
 
@@ -204,34 +204,34 @@ async fn cancel_stops_the_stream_and_emits_exactly_one_terminal_event() {
     open_session(&runtime).await;
 
     runtime
-        .dispatch(SmedCommand::SendUserMessage {
+        .dispatch(MjolnrCommand::SendUserMessage {
             text: "hello".to_owned(),
-            source: smed::core::directive::DirectiveSource::Human,
+            source: mjolnr::core::directive::DirectiveSource::Human,
         })
         .await
         .expect("send");
 
     // Cancel once the stream is demonstrably alive.
     wait_for(&mut events, "first delta", |event| {
-        matches!(event, SmedEvent::TextDelta { .. })
+        matches!(event, MjolnrEvent::TextDelta { .. })
     })
     .await;
 
     runtime
-        .dispatch(SmedCommand::CancelRun)
+        .dispatch(MjolnrCommand::CancelRun)
         .await
         .expect("cancel");
 
     let terminal = wait_for(&mut events, "terminal event", |event| {
         matches!(
             event,
-            SmedEvent::RunFinished { .. } | SmedEvent::RunFailed { .. }
+            MjolnrEvent::RunFinished { .. } | MjolnrEvent::RunFailed { .. }
         )
     })
     .await;
 
     match terminal {
-        SmedEvent::RunFinished { reason, .. } => assert_eq!(reason, FinishReason::Cancelled),
+        MjolnrEvent::RunFinished { reason, .. } => assert_eq!(reason, FinishReason::Cancelled),
         other => panic!("cancellation must finish, not fail: {other:?}"),
     }
 
@@ -239,7 +239,7 @@ async fn cancel_stops_the_stream_and_emits_exactly_one_terminal_event() {
     let second = tokio::time::timeout(Duration::from_millis(200), async {
         loop {
             match events.recv().await {
-                Ok(SmedEvent::RunFinished { .. } | SmedEvent::RunFailed { .. }) => return true,
+                Ok(MjolnrEvent::RunFinished { .. } | MjolnrEvent::RunFailed { .. }) => return true,
                 Ok(_) => {}
                 Err(_) => return false,
             }
@@ -263,9 +263,9 @@ async fn a_failure_after_output_records_the_text_and_does_not_retry() {
     open_session(&runtime).await;
 
     runtime
-        .dispatch(SmedCommand::SendUserMessage {
+        .dispatch(MjolnrCommand::SendUserMessage {
             text: "hello".to_owned(),
-            source: smed::core::directive::DirectiveSource::Human,
+            source: mjolnr::core::directive::DirectiveSource::Human,
         })
         .await
         .expect("send");
@@ -273,13 +273,13 @@ async fn a_failure_after_output_records_the_text_and_does_not_retry() {
     let terminal = wait_for(&mut events, "terminal event", |event| {
         matches!(
             event,
-            SmedEvent::RunFinished { .. } | SmedEvent::RunFailed { .. }
+            MjolnrEvent::RunFinished { .. } | MjolnrEvent::RunFailed { .. }
         )
     })
     .await;
 
     match terminal {
-        SmedEvent::RunFailed { code, .. } => {
+        MjolnrEvent::RunFailed { code, .. } => {
             assert_eq!(code.as_str(), "PROVIDER_PROTOCOL");
         }
         other => panic!("expected a failed run, got {other:?}"),
@@ -334,15 +334,15 @@ async fn a_slow_consumer_applies_backpressure_without_unbounded_growth() {
 
     for index in 0..RUNS_TO_OVERFLOW_THE_FEED {
         runtime
-            .dispatch(SmedCommand::SendUserMessage {
+            .dispatch(MjolnrCommand::SendUserMessage {
                 text: format!("message {index}"),
-                source: smed::core::directive::DirectiveSource::Human,
+                source: mjolnr::core::directive::DirectiveSource::Human,
             })
             .await
             .expect("send");
 
         wait_for(&mut watcher, "run finished", |event| {
-            matches!(event, SmedEvent::RunFinished { .. })
+            matches!(event, MjolnrEvent::RunFinished { .. })
         })
         .await;
     }
@@ -369,7 +369,7 @@ async fn a_slow_consumer_applies_backpressure_without_unbounded_growth() {
     let stored = store.events(session).await.expect("events");
     let finished = stored
         .iter()
-        .filter(|event| matches!(event.event, SmedEvent::RunFinished { .. }))
+        .filter(|event| matches!(event.event, MjolnrEvent::RunFinished { .. }))
         .count();
     assert_eq!(
         finished, RUNS_TO_OVERFLOW_THE_FEED,
@@ -384,14 +384,14 @@ async fn durable_events_reach_the_store_in_order() {
 
     let mut events = runtime.subscribe();
     runtime
-        .dispatch(SmedCommand::SendUserMessage {
+        .dispatch(MjolnrCommand::SendUserMessage {
             text: "hello".to_owned(),
-            source: smed::core::directive::DirectiveSource::Human,
+            source: mjolnr::core::directive::DirectiveSource::Human,
         })
         .await
         .expect("send");
     wait_for(&mut events, "run finished", |event| {
-        matches!(event, SmedEvent::RunFinished { .. })
+        matches!(event, MjolnrEvent::RunFinished { .. })
     })
     .await;
 
@@ -402,10 +402,13 @@ async fn durable_events_reach_the_store_in_order() {
     let expected: Vec<u64> = (0..sequences.len() as u64).collect();
     assert_eq!(sequences, expected, "sequences must be dense and ordered");
 
-    assert!(matches!(stored[0].event, SmedEvent::SessionCreated { .. }));
+    assert!(matches!(
+        stored[0].event,
+        MjolnrEvent::SessionCreated { .. }
+    ));
     assert!(matches!(
         stored.last().map(|event| &event.event),
-        Some(SmedEvent::RunFinished { .. })
+        Some(MjolnrEvent::RunFinished { .. })
     ));
 }
 
@@ -421,21 +424,21 @@ async fn a_model_switch_is_refused_while_a_run_is_active() {
     open_session(&runtime).await;
 
     runtime
-        .dispatch(SmedCommand::SendUserMessage {
+        .dispatch(MjolnrCommand::SendUserMessage {
             text: "hello".to_owned(),
-            source: smed::core::directive::DirectiveSource::Human,
+            source: mjolnr::core::directive::DirectiveSource::Human,
         })
         .await
         .expect("send");
 
     wait_for(&mut events, "first delta", |event| {
-        matches!(event, SmedEvent::TextDelta { .. })
+        matches!(event, MjolnrEvent::TextDelta { .. })
     })
     .await;
 
     // : switching mid-run must not happen silently.
     runtime
-        .dispatch(SmedCommand::SelectModel {
+        .dispatch(MjolnrCommand::SelectModel {
             provider: ProviderId::new(FakeProvider::ID),
             model: ModelId::new("some-other-model"),
         })
@@ -445,17 +448,17 @@ async fn a_model_switch_is_refused_while_a_run_is_active() {
     let refusal = wait_for(&mut events, "model switch refusal", |event| {
         matches!(
             event,
-            SmedEvent::ModelChangeRefused {
-                code: smed::core::error::ReasonCode::RunActive,
+            MjolnrEvent::ModelChangeRefused {
+                code: mjolnr::core::error::ReasonCode::RunActive,
                 ..
             }
         )
     })
     .await;
-    assert!(matches!(refusal, SmedEvent::ModelChangeRefused { .. }));
+    assert!(matches!(refusal, MjolnrEvent::ModelChangeRefused { .. }));
 
     wait_for(&mut events, "run finished", |event| {
-        matches!(event, SmedEvent::RunFinished { .. })
+        matches!(event, MjolnrEvent::RunFinished { .. })
     })
     .await;
 

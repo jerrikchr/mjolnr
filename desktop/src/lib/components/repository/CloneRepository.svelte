@@ -43,7 +43,7 @@
   <div>
     <h3 class="font-medium">Clone a project</h3>
     <p class="mt-1 text-sm text-muted-foreground">
-      Start from a repository URL or local source. smed will create a new folder, verify it, and
+      Start from a repository URL or local source. mjolnr will create a new folder, verify it, and
       make it the project root.
     </p>
   </div>
@@ -69,7 +69,7 @@
         <Dialog.Title>Review clone</Dialog.Title>
         <Dialog.Description>
           This operator-controlled action uses the network when the source is remote and creates
-          files at the destination. smed will not overwrite an existing folder.
+          files at the destination. mjolnr will not overwrite an existing folder.
         </Dialog.Description>
       </Dialog.Header>
 

@@ -23,7 +23,7 @@ never ruled on:
   **Repository** panel at its foot showing branch/head/dirty/staged/sync —
   the target for D5's UI;
 - a two-pane canvas (`pane-conversation` / `pane-editor`) with file tabs and a
-  trust label (`smed-governed · read-only`) — the target for D7's editor surface;
+  trust label (`mjolnr-governed · read-only`) — the target for D7's editor surface;
 - a bottom terminal pane with tabs, status orbs per process, and an
   `operator-controlled` label — the target for D8's terminal surface.
 

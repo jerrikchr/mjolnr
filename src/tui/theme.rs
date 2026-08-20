@@ -1,4 +1,4 @@
-//! smed's theme contract and semantic palettes.
+//! mjolnr's theme contract and semantic palettes.
 //!
 //! Colour communicates governance state: sky/cyan proposes, citron/amber asks,
 //! green confirms, and red/magenta refuses. Render code asks for meaning
@@ -318,12 +318,17 @@ pub fn active_preference_name() -> String {
 /// root rather than reaching into `tui` directly.
 #[must_use]
 pub fn persist_preference(name: &str) -> bool {
+    use etcetera::app_strategy::{AppStrategy, AppStrategyArgs, choose_native_strategy};
     let Some(id) = ThemeId::parse(name) else {
         return false;
     };
     set_active_theme_id(id);
-    if let Some(directory) = crate::core::paths::resolve_user_config_dir() {
-        let path = directory.join("theme");
+    if let Ok(strategy) = choose_native_strategy(AppStrategyArgs {
+        top_level_domain: String::new(),
+        author: String::new(),
+        app_name: "mjolnr".to_owned(),
+    }) {
+        let path = strategy.config_dir().join("theme");
         let parent_ok = path
             .parent()
             .is_none_or(|parent| std::fs::create_dir_all(parent).is_ok());
@@ -548,7 +553,7 @@ pub(crate) fn syntax() -> SyntaxPalette {
     SyntaxPalette::for_theme(&active_theme())
 }
 
-/// Convert a syntax-engine RGB token back through smed's detected terminal
+/// Convert a syntax-engine RGB token back through mjolnr's detected terminal
 /// depth. Keeping this constructor here preserves the "no colour literals in
 /// widgets" contract and prevents truecolor from leaking onto 16/256 terminals.
 pub(crate) fn syntax_rgb(r: u8, g: u8, b: u8) -> Color {

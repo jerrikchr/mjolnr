@@ -44,7 +44,7 @@ pub struct ClientSnapshot {
     pub context_diagnostics: Vec<ClientContextDiagnostic>,
     pub models: Vec<ClientModelChoice>,
     pub resume_advice: Option<ClientResumeAdvice>,
-    /// One entry per provider smed is configured to talk to (§E2). Sourced
+    /// One entry per provider mjolnr is configured to talk to (§E2). Sourced
     /// from `RuntimeSnapshot::providers`, itself refreshed by
     /// `refresh_provider_catalogs` — never resolved from the credential store
     /// on this conversion path, which runs on every snapshot broadcast and

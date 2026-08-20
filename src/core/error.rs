@@ -8,7 +8,7 @@
 
 use thiserror::Error;
 
-pub type SmedResult<T> = Result<T, SmedError>;
+pub type MjolnrResult<T> = Result<T, MjolnrError>;
 
 /// The stable vocabulary of refusals and failures.
 ///
@@ -80,7 +80,7 @@ pub enum ReasonCode {
     /// answer, a cursor issued for a different filter, a page walked past the
     /// enumeration bound. The two send a user to different remedies, which is
     /// why `StoreError::Refused` exists and why collapsing it into
-    /// `SmedError::Store` (a code-less "the store is broken") lost the
+    /// `MjolnrError::Store` (a code-less "the store is broken") lost the
     /// distinction the store had just made.
     WorkspaceSearchRefused,
     /// The workspace root cannot change because a session is already open on
@@ -90,14 +90,14 @@ pub enum ReasonCode {
     /// [`RunActive`](Self::RunActive): no run needs to be in flight for the
     /// root to be locked.
     WorkspaceRootLocked,
-    /// A repository operation stopped on an unmerged path (Phase D5). smed
+    /// A repository operation stopped on an unmerged path (Phase D5). mjolnr
     /// never resolves a conflict on the human's behalf.
     RepositoryConflict,
     /// The repository has no branch checked out, so a branch-relative
     /// operation has no meaning (Phase D5).
     RepositoryDetachedHead,
     /// A repository hook refused the operation (Phase D5). The hook is the
-    /// owner's own gate; smed reports it rather than bypassing it with
+    /// owner's own gate; mjolnr reports it rather than bypassing it with
     /// `--no-verify`.
     RepositoryHookRefused,
     /// Commit signing failed (Phase D5). Reported rather than retried
@@ -253,7 +253,7 @@ impl ReasonCode {
             Self::PathOutsideWorkspace => "The proposed path was outside the open workspace.",
             Self::PathSymlinkEscape => "A symlink would have escaped the open workspace.",
             Self::FileNotObserved => "The file must be read before it can be changed.",
-            Self::StaleFileVersion => "The file changed after smed read it.",
+            Self::StaleFileVersion => "The file changed after mjolnr read it.",
             Self::ApprovalRequired => "A human decision is required before this can run.",
             Self::ApprovalDenied => "The proposed action was not authorised.",
             Self::PolicyReadOnly => "The active policy refuses side effects.",
@@ -317,7 +317,7 @@ impl ReasonCode {
             Self::RepositoryHookRefused => "A repository hook refused the operation.",
             Self::RepositorySigningFailed => "The commit could not be signed.",
             Self::RepositoryUncertainEffect => {
-                "smed cannot prove whether the repository operation took effect."
+                "mjolnr cannot prove whether the repository operation took effect."
             }
             Self::RepositoryNoUpstream => {
                 "The current branch has no upstream configured, so there is no push destination."
@@ -360,7 +360,7 @@ pub enum ProviderError {
     /// carrying none of that is the endpoint refusing the request for some
     /// other reason — most often a credential it does not accept here — and
     /// rendering it as "wait for the limit to reset" sends the user to wait out
-    /// a quota they never touched. smed reports the refusal and says plainly
+    /// a quota they never touched. mjolnr reports the refusal and says plainly
     /// that no limit was named, rather than guessing at either explanation.
     #[error("provider refused the request with 429 but reported no limit")]
     RateLimitUnexplained,
@@ -368,7 +368,7 @@ pub enum ProviderError {
     /// The upstream was out of capacity — Anthropic's HTTP 529 and
     /// `overloaded_error`. Distinct from [`Self::RateLimit`] on purpose: both
     /// used to render as "rate limited", which tells a user with an untouched
-    /// quota that they exhausted it. smed does not misreport whose fault a
+    /// quota that they exhausted it. mjolnr does not misreport whose fault a
     /// failure is.
     #[error("provider is temporarily overloaded{}", retry_after_seconds.map_or_else(String::new, |seconds| format!("; retry after {seconds}s")))]
     Overloaded { retry_after_seconds: Option<u64> },
@@ -379,7 +379,7 @@ pub enum ProviderError {
     #[error("provider gateway could not relay the request")]
     Relay,
 
-    /// The upstream said something smed could not interpret. Carries a
+    /// The upstream said something mjolnr could not interpret. Carries a
     /// description, never the raw body — bodies can contain credentials.
     #[error("provider protocol error: {detail}")]
     Protocol { detail: String },
@@ -444,7 +444,7 @@ impl ToolError {
 
 /// Failures from the runtime itself.
 #[derive(Debug, Error)]
-pub enum SmedError {
+pub enum MjolnrError {
     #[error("no session is open")]
     NoSession,
 
@@ -481,7 +481,7 @@ pub enum SmedError {
     WorkspaceRefused { code: ReasonCode, detail: String },
 }
 
-impl SmedError {
+impl MjolnrError {
     #[must_use]
     pub fn plan_invalid_transition(
         from: impl Into<String>,
@@ -709,7 +709,7 @@ mod tests {
         let guidance = ReasonCode::ProviderRateLimitUnexplained.sentence();
         assert!(
             !guidance.contains("Wait for the limit"),
-            "guidance must not point at a reset smed cannot confirm: {guidance}"
+            "guidance must not point at a reset mjolnr cannot confirm: {guidance}"
         );
         assert!(
             guidance.contains("credential"),

@@ -1,10 +1,10 @@
 //! The Ratatui client.
 //!
-//! **This module is a leaf.** Nothing else in smed may import it, and it may
+//! **This module is a leaf.** Nothing else in mjolnr may import it, and it may
 //! not import `providers` or `store`. It talks to the runtime through the
-//! [`SmedRuntime`](crate::core::runtime::SmedRuntime) trait and nothing else.
+//! [`MjolnrRuntime`](crate::core::runtime::MjolnrRuntime) trait and nothing else.
 //!
-//! There is no process boundary enforcing that — smed is one binary by design
+//! There is no process boundary enforcing that — mjolnr is one binary by design
 //! . `tests/architecture.rs` enforces it instead, which is why the rule
 //! survives contact with a deadline.
 

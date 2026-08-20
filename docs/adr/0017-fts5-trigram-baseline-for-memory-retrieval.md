@@ -7,12 +7,12 @@
 
 ## Context
 
-Phase 1 of smed's capability modernization introduced the **Memory Capability Module** (`src/memory/`), spanning:
-- Tier 1: Frozen session rules snapshots (`.smed/rules/*.md`, `.smed/USER.md`).
+Phase 1 of mjolnr's capability modernization introduced the **Memory Capability Module** (`src/memory/`), spanning:
+- Tier 1: Frozen session rules snapshots (`.mjolnr/rules/*.md`, `.mjolnr/USER.md`).
 - Tier 2 & 3: Temporal knowledge triples and progressive recall tools (`memory_search`, `memory_timeline`, `memory_expand`).
 - Episodic consolidation: Background distillers synthesizing past turns into searchable episodes.
 
-A key design question in Phase 1 (§2.4 of the Master Implementation Plan) was the retrieval engine behind `memory_search`: whether to integrate embedded neural vector embeddings (e.g. `fastembed-rs`, `ort`, `candle-transformers`) into smed's binary or to rely on SQLite FTS5 with trigram tokenization and recency weighting.
+A key design question in Phase 1 (§2.4 of the Master Implementation Plan) was the retrieval engine behind `memory_search`: whether to integrate embedded neural vector embeddings (e.g. `fastembed-rs`, `ort`, `candle-transformers`) into mjolnr's binary or to rely on SQLite FTS5 with trigram tokenization and recency weighting.
 
 ## Options Evaluated
 
@@ -34,7 +34,7 @@ A key design question in Phase 1 (§2.4 of the Master Implementation Plan) was t
   - Semantic similarity matching across synonyms.
 - **Cons:**
   - **Massive binary bloat:** `ort` and ONNX Runtime require 60-150MB of compiled C++ runtime artifacts.
-  - **Toolchain friction:** Requires `cmake`, Python, or system C++ compilers, breaking smed's clean `cargo build` and cross-compilation pipeline on macOS, Linux, and Windows.
+  - **Toolchain friction:** Requires `cmake`, Python, or system C++ compilers, breaking mjolnr's clean `cargo build` and cross-compilation pipeline on macOS, Linux, and Windows.
   - **Cold start & RAM penalty:** Loading model weights consumes 200MB+ RAM and introduces noticeable delay on session startup.
   - **Identifier blindspot:** Small embedding models frequently score syntactic tokens (function names, error codes) worse than BM25/trigram matching.
 
@@ -49,13 +49,13 @@ A key design question in Phase 1 (§2.4 of the Master Implementation Plan) was t
 
 ## Decision
 
-**smed ships FTS5 with trigram tokenization and recency weighting as the first-party memory search baseline. Embedded neural vector search is deferred from core and may be added as an optional plugin in Phase 2 via the Capability Module Plugin Protocol (ADR-0016).**
+**mjolnr ships FTS5 with trigram tokenization and recency weighting as the first-party memory search baseline. Embedded neural vector search is deferred from core and may be added as an optional plugin in Phase 2 via the Capability Module Plugin Protocol (ADR-0016).**
 
 ### Rationale
 
 1. **Deterministic & Fail-Safe:** FTS5 trigram indexes require no network, no external model files, and no platform-dependent C++ runtimes.
 2. **Coding Harness Characteristics:** In developer workflows, exact symbol matching, identifier prefixes, error codes, and temporal proximity account for over 90% of relevant context recall. Trigram FTS5 excels at this domain.
-3. **Extraction & Dependency Hygiene (AGENTS.md §2.2, §8):** Adding ONNX/Torch C-bindings into smed core would violate the extraction test and permanently burden every contributor and CI runner.
+3. **Extraction & Dependency Hygiene (AGENTS.md §2.2, §8):** Adding ONNX/Torch C-bindings into mjolnr core would violate the extraction test and permanently burden every contributor and CI runner.
 4. **Clean Upgrade Path:** Because memory search is accessed strictly through the `memory_search` runtime actor query and `MemoryStore` abstraction, a vector backend can be swapped in or plugged in as an external capability module (ADR-0016) without modifying the client or core harness contracts.
 
 ## Consequences

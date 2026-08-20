@@ -25,17 +25,17 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use smed::core::command::{ApprovalDecision, SmedCommand};
-use smed::core::error::ProviderError;
-use smed::core::event::{FinishReason, ProviderEvent, SessionId, SmedEvent};
-use smed::core::message::{ContentBlock, ToolCall};
-use smed::core::model::{ModelCapabilities, ModelDescriptor, ModelId, ProviderId};
-use smed::core::policy::PolicyMode;
-use smed::core::provider::{Provider, ProviderCompletion, ProviderRequest};
-use smed::core::runtime::{RuntimeSnapshot, RuntimeSubscription, SmedRuntime};
-use smed::core::store::EventStore;
-use smed::runtime::Runtime;
-use smed::store::memory::InMemoryEventStore;
+use mjolnr::core::command::{ApprovalDecision, MjolnrCommand};
+use mjolnr::core::error::ProviderError;
+use mjolnr::core::event::{FinishReason, MjolnrEvent, ProviderEvent, SessionId};
+use mjolnr::core::message::{ContentBlock, ToolCall};
+use mjolnr::core::model::{ModelCapabilities, ModelDescriptor, ModelId, ProviderId};
+use mjolnr::core::policy::PolicyMode;
+use mjolnr::core::provider::{Provider, ProviderCompletion, ProviderRequest};
+use mjolnr::core::runtime::{MjolnrRuntime, RuntimeSnapshot, RuntimeSubscription};
+use mjolnr::core::store::EventStore;
+use mjolnr::runtime::Runtime;
+use mjolnr::store::memory::InMemoryEventStore;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
@@ -130,8 +130,8 @@ impl Provider for CommandProvider {
 async fn wait_for(
     events: &mut RuntimeSubscription,
     label: &str,
-    mut predicate: impl FnMut(&SmedEvent) -> bool,
-) -> SmedEvent {
+    mut predicate: impl FnMut(&MjolnrEvent) -> bool,
+) -> MjolnrEvent {
     tokio::time::timeout(Duration::from_secs(5), async {
         loop {
             match events.recv().await {
@@ -156,13 +156,13 @@ async fn settle(runtime: &Runtime, ready: impl Fn(&RuntimeSnapshot) -> bool) -> 
     panic!("the runtime never reached the expected state");
 }
 
-fn is_command_proposal(event: &SmedEvent) -> bool {
-    matches!(event, SmedEvent::ToolProposed { call, .. } if call.name == "run_command")
+fn is_command_proposal(event: &MjolnrEvent) -> bool {
+    matches!(event, MjolnrEvent::ToolProposed { call, .. } if call.name == "run_command")
 }
 
-fn approval_of(event: &SmedEvent) -> Option<smed::core::command::ApprovalId> {
+fn approval_of(event: &MjolnrEvent) -> Option<mjolnr::core::command::ApprovalId> {
     match event {
-        SmedEvent::ToolProposed { approval, .. } => *approval,
+        MjolnrEvent::ToolProposed { approval, .. } => *approval,
         other => panic!("expected a tool proposal, got {other:?}"),
     }
 }
@@ -176,20 +176,20 @@ async fn an_exact_command_grant_does_not_cross_a_fork() {
     let mut events = runtime.subscribe();
 
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: repo.path().to_owned(),
         })
         .await
         .expect("open project");
     runtime
-        .dispatch(SmedCommand::CreateSession {
+        .dispatch(MjolnrCommand::CreateSession {
             provider: ProviderId::new(PROVIDER),
             model: ModelId::new(MODEL),
         })
         .await
         .expect("create session");
     runtime
-        .dispatch(SmedCommand::SetPolicy {
+        .dispatch(MjolnrCommand::SetPolicy {
             mode: PolicyMode::WorkspaceWrite,
         })
         .await
@@ -199,32 +199,32 @@ async fn an_exact_command_grant_does_not_cross_a_fork() {
 
     // Turn 1: no grant yet, so the command is gated. Approve it for the session.
     runtime
-        .dispatch(SmedCommand::SendUserMessage {
+        .dispatch(MjolnrCommand::SendUserMessage {
             text: "run it".to_owned(),
-            source: smed::core::directive::DirectiveSource::Human,
+            source: mjolnr::core::directive::DirectiveSource::Human,
         })
         .await
         .expect("send");
     let first = wait_for(&mut events, "first proposal", is_command_proposal).await;
     let approval = approval_of(&first).expect("the first command must be gated");
     runtime
-        .dispatch(SmedCommand::ResolveApproval {
+        .dispatch(MjolnrCommand::ResolveApproval {
             approval,
             decision: ApprovalDecision::ApproveExactForSession,
         })
         .await
         .expect("grant the command for the session");
     wait_for(&mut events, "first run finished", |event| {
-        matches!(event, SmedEvent::RunFinished { .. })
+        matches!(event, MjolnrEvent::RunFinished { .. })
     })
     .await;
 
     // Turn 2, same session: the grant now auto-runs the identical command, so
     // the proposal carries no approval. This proves the grant is real.
     runtime
-        .dispatch(SmedCommand::SendUserMessage {
+        .dispatch(MjolnrCommand::SendUserMessage {
             text: "run it again".to_owned(),
-            source: smed::core::directive::DirectiveSource::Human,
+            source: mjolnr::core::directive::DirectiveSource::Human,
         })
         .await
         .expect("send");
@@ -234,13 +234,13 @@ async fn an_exact_command_grant_does_not_cross_a_fork() {
         "the granted command must auto-run within the session, not re-ask"
     );
     wait_for(&mut events, "second run finished", |event| {
-        matches!(event, SmedEvent::RunFinished { .. })
+        matches!(event, MjolnrEvent::RunFinished { .. })
     })
     .await;
 
     // Fork the branch into a new session. Policy carries; the grant must not.
     runtime
-        .dispatch(SmedCommand::ForkSession { before: None })
+        .dispatch(MjolnrCommand::ForkSession { before: None })
         .await
         .expect("fork");
     let forked: SessionId = settle(&runtime, |snapshot| {
@@ -260,9 +260,9 @@ async fn an_exact_command_grant_does_not_cross_a_fork() {
     // cross. If `reset_keeping_project` had kept it, this would auto-run and the
     // proposal would carry no approval.
     runtime
-        .dispatch(SmedCommand::SendUserMessage {
+        .dispatch(MjolnrCommand::SendUserMessage {
             text: "run it in the fork".to_owned(),
-            source: smed::core::directive::DirectiveSource::Human,
+            source: mjolnr::core::directive::DirectiveSource::Human,
         })
         .await
         .expect("send");

@@ -1,4 +1,4 @@
-//! Traits and types. Depends on nothing else in smed.
+//! Traits and types. Depends on nothing else in mjolnr.
 //!
 //! `core` is the base of the dependency direction in `AGENTS.md` §2.1:
 //!
@@ -9,7 +9,7 @@
 //! ```
 //!
 //! Everything here is either a contract (`Provider`, `Tool`, `EventStore`,
-//! `SmedRuntime`) or a value that crosses one. If something in `core` needs to
+//! `MjolnrRuntime`) or a value that crosses one. If something in `core` needs to
 //! import an implementation, the boundary has been drawn in the wrong place.
 
 pub mod board;

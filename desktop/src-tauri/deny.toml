@@ -1,4 +1,4 @@
-# cargo-deny policy for smed-desktop Tauri 2 backend crate.
+# cargo-deny policy for mjolnr-desktop Tauri 2 backend crate.
 # Backs AGENTS.md §8 (dependencies and provenance).
 
 [graph]
@@ -41,7 +41,7 @@ version = 2
 confidence-threshold = 0.93
 
 # Permissive licences plus MPL-2.0 for Tauri desktop transitives (`webkit2gtk`, `option-ext`).
-# MPL-2.0 is a file-level weak copyleft licence that does not restrict smed's core licensing or
+# MPL-2.0 is a file-level weak copyleft licence that does not restrict mjolnr's core licensing or
 # impose copyleft on surrounding code.
 allow = [
     "MIT",
@@ -64,8 +64,8 @@ private = { ignore = true }
 multiple-versions = "warn"
 # Wildcards are denied globally, with one mechanism-scoped carve-out:
 # `allow-wildcard-paths` permits a wildcard version requirement only on
-# path dependencies. Today the sole path dependency is the smed
-# governance core (smed = { path = "../../" }), which always appears
+# path dependencies. Today the sole path dependency is the mjolnr
+# governance core (mjolnr = { path = "../../" }), which always appears
 # as a wildcard (no crates.io semver) while referenced by path. Any
 # future *registry* wildcard dependency is refused by this policy.
 # Adding another path wildcard means adding a path dependency at all —

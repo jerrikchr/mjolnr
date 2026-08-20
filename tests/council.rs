@@ -11,24 +11,24 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use smed::core::command::SmedCommand;
-use smed::core::model::{ModelId, ProviderId};
-use smed::core::provider::Provider;
-use smed::core::runtime::{RuntimeSnapshot, SmedRuntime};
-use smed::core::store::EventStore;
-use smed::providers::fake::FakeProvider;
-use smed::runtime::Runtime;
-use smed::store::memory::InMemoryEventStore;
+use mjolnr::core::command::MjolnrCommand;
+use mjolnr::core::model::{ModelId, ProviderId};
+use mjolnr::core::provider::Provider;
+use mjolnr::core::runtime::{MjolnrRuntime, RuntimeSnapshot};
+use mjolnr::core::store::EventStore;
+use mjolnr::providers::fake::FakeProvider;
+use mjolnr::runtime::Runtime;
+use mjolnr::store::memory::InMemoryEventStore;
 
 /// The text `FakeProvider` streams — a real member turn surfaces it; the
 /// fabricated council never could, because it never called a model.
-const MEMBER_TEXT: &str = "smed streams text incrementally";
+const MEMBER_TEXT: &str = "mjolnr streams text incrementally";
 
 async fn open_council_project(council_yaml: &str) -> (Runtime, tempfile::TempDir) {
     let temp = tempfile::tempdir().expect("tempdir");
-    let smed_dir = temp.path().join(".smed");
-    std::fs::create_dir_all(&smed_dir).expect("create .smed");
-    std::fs::write(smed_dir.join("council.yaml"), council_yaml).expect("write council.yaml");
+    let mjolnr_dir = temp.path().join(".mjolnr");
+    std::fs::create_dir_all(&mjolnr_dir).expect("create .mjolnr");
+    std::fs::write(mjolnr_dir.join("council.yaml"), council_yaml).expect("write council.yaml");
 
     let store = Arc::new(InMemoryEventStore::new());
     let runtime = Runtime::spawn(
@@ -36,13 +36,13 @@ async fn open_council_project(council_yaml: &str) -> (Runtime, tempfile::TempDir
         store as Arc<dyn EventStore>,
     );
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: temp.path().to_path_buf(),
         })
         .await
         .expect("open project");
     runtime
-        .dispatch(SmedCommand::CreateSession {
+        .dispatch(MjolnrCommand::CreateSession {
             provider: ProviderId::new(FakeProvider::ID),
             model: ModelId::new(FakeProvider::MODEL),
         })
@@ -70,7 +70,7 @@ fn council_message(snapshot: &RuntimeSnapshot) -> Option<String> {
         .messages
         .iter()
         .map(|entry| entry.text())
-        .find(|text| text.contains("SMED COUNCIL"))
+        .find(|text| text.contains("MJOLNR COUNCIL"))
 }
 
 #[tokio::test]
@@ -79,7 +79,7 @@ async fn a_council_convenes_real_members_to_the_round_cap_and_preserves_dissent(
         open_council_project("roles: [\"alpha\", \"beta\"]\nmax_rounds: 2\n").await;
 
     runtime
-        .dispatch(SmedCommand::ConveneCouncil {
+        .dispatch(MjolnrCommand::ConveneCouncil {
             question: "How should governance scale under concurrency?".to_owned(),
             plan_file: None,
         })
@@ -115,10 +115,10 @@ async fn a_council_convenes_real_members_to_the_round_cap_and_preserves_dissent(
     let review = runtime.snapshot().last_council.clone().expect("review");
     let finding = review.findings.first().expect("structured finding");
     runtime
-        .dispatch(SmedCommand::ResolveCouncilFinding {
+        .dispatch(MjolnrCommand::ResolveCouncilFinding {
             review_id: review.review_id,
             finding_id: finding.id,
-            disposition: smed::core::council::CouncilDisposition::Defer,
+            disposition: mjolnr::core::council::CouncilDisposition::Defer,
             note: Some("Need a human to compare the competing risks.".to_owned()),
         })
         .await
@@ -139,7 +139,7 @@ async fn a_council_convenes_real_members_to_the_round_cap_and_preserves_dissent(
                 .and_then(|finding| finding.disposition.as_ref())
                 .map(|disposition| disposition.disposition)
         }),
-        Some(smed::core::council::CouncilDisposition::Defer)
+        Some(mjolnr::core::council::CouncilDisposition::Defer)
     );
 }
 
@@ -152,7 +152,7 @@ async fn a_council_whose_budget_cannot_fund_the_rounds_refuses_upfront() {
     .await;
 
     runtime
-        .dispatch(SmedCommand::ConveneCouncil {
+        .dispatch(MjolnrCommand::ConveneCouncil {
             question: "unfundable".to_owned(),
             plan_file: None,
         })

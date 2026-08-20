@@ -1,6 +1,6 @@
 //! Deterministic model and provider routing.
 //!
-//! smed selects a turn's, a subagent spawn's, or a scheduled run's
+//! mjolnr selects a turn's, a subagent spawn's, or a scheduled run's
 //! provider/model from a diffable per-project routing table, and advances
 //! along an ordered fallback chain on typed conditions — quota reserve
 //! breached, typed provider failure, circuit breaker open — with every

@@ -8,16 +8,16 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 use async_trait::async_trait;
-use smed::core::command::{ApprovalDecision, SmedCommand};
-use smed::core::error::ProviderError;
-use smed::core::event::{FinishReason, ProviderEvent, SmedEvent};
-use smed::core::message::{ContentBlock, ToolCall};
-use smed::core::model::{ModelCapabilities, ModelDescriptor, ModelId, ProviderId};
-use smed::core::provider::{Provider, ProviderCompletion, ProviderRequest};
-use smed::core::runtime::SmedRuntime;
-use smed::core::store::EventStore;
-use smed::runtime::Runtime;
-use smed::store::memory::InMemoryEventStore;
+use mjolnr::core::command::{ApprovalDecision, MjolnrCommand};
+use mjolnr::core::error::ProviderError;
+use mjolnr::core::event::{FinishReason, MjolnrEvent, ProviderEvent};
+use mjolnr::core::message::{ContentBlock, ToolCall};
+use mjolnr::core::model::{ModelCapabilities, ModelDescriptor, ModelId, ProviderId};
+use mjolnr::core::provider::{Provider, ProviderCompletion, ProviderRequest};
+use mjolnr::core::runtime::MjolnrRuntime;
+use mjolnr::core::store::EventStore;
+use mjolnr::runtime::Runtime;
+use mjolnr::store::memory::InMemoryEventStore;
 use tempfile::TempDir;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
@@ -95,10 +95,10 @@ impl Provider for CommandProvider {
 }
 
 async fn wait_for(
-    events: &mut smed::core::runtime::RuntimeSubscription,
+    events: &mut mjolnr::core::runtime::RuntimeSubscription,
     label: &str,
-    mut predicate: impl FnMut(&SmedEvent) -> bool,
-) -> SmedEvent {
+    mut predicate: impl FnMut(&MjolnrEvent) -> bool,
+) -> MjolnrEvent {
     tokio::time::timeout(Duration::from_secs(5), async {
         loop {
             match events.recv().await {
@@ -125,31 +125,31 @@ async fn cancel_kills_descendants_and_prevents_later_provider_calls() {
     let mut events = runtime.subscribe();
 
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: workspace.path().to_owned(),
         })
         .await
         .expect("open workspace");
     runtime
-        .dispatch(SmedCommand::CreateSession {
+        .dispatch(MjolnrCommand::CreateSession {
             provider: ProviderId::new(PROVIDER),
             model: ModelId::new(MODEL),
         })
         .await
         .expect("create session");
     runtime
-        .dispatch(SmedCommand::SendUserMessage {
+        .dispatch(MjolnrCommand::SendUserMessage {
             text: "start the cancellable command".to_owned(),
-            source: smed::core::directive::DirectiveSource::Human,
+            source: mjolnr::core::directive::DirectiveSource::Human,
         })
         .await
         .expect("start run");
 
     let proposal = wait_for(&mut events, "command approval", |event| {
-        matches!(event, SmedEvent::ToolProposed { approval: Some(_), call, .. } if call.name == "run_command")
+        matches!(event, MjolnrEvent::ToolProposed { approval: Some(_), call, .. } if call.name == "run_command")
     })
     .await;
-    let SmedEvent::ToolProposed {
+    let MjolnrEvent::ToolProposed {
         approval: Some(approval),
         preview,
         ..
@@ -159,7 +159,7 @@ async fn cancel_kills_descendants_and_prevents_later_provider_calls() {
     };
     assert!(preview.contains("touch started; sleep 1; touch later"));
     runtime
-        .dispatch(SmedCommand::ResolveApproval {
+        .dispatch(MjolnrCommand::ResolveApproval {
             approval,
             decision: ApprovalDecision::ApproveOnce,
         })
@@ -174,19 +174,19 @@ async fn cancel_kills_descendants_and_prevents_later_provider_calls() {
     .await
     .expect("child command starts");
     runtime
-        .dispatch(SmedCommand::CancelRun)
+        .dispatch(MjolnrCommand::CancelRun)
         .await
         .expect("cancel run");
 
     let terminal = wait_for(&mut events, "cancelled terminal event", |event| {
         matches!(
             event,
-            SmedEvent::RunFinished { .. } | SmedEvent::RunFailed { .. }
+            MjolnrEvent::RunFinished { .. } | MjolnrEvent::RunFailed { .. }
         )
     })
     .await;
     match terminal {
-        SmedEvent::RunFinished { reason, .. } => assert_eq!(reason, FinishReason::Cancelled),
+        MjolnrEvent::RunFinished { reason, .. } => assert_eq!(reason, FinishReason::Cancelled),
         other => panic!("cancel must finish cleanly: {other:?}"),
     }
 

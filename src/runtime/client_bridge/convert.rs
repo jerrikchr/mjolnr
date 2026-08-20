@@ -21,7 +21,7 @@ use crate::core::client::{
     truncate_text,
 };
 use crate::core::context::{PersonaSummary, SkillScope};
-use crate::core::event::SmedEvent;
+use crate::core::event::MjolnrEvent;
 use crate::core::message::{CanonicalMessage, ContentBlock, Role, ToolOutcome, TranscriptEntry};
 use crate::core::plan::{
     PlanApproval, PlanHandoff, PlanProposal, PlanReview, PlanStage, PlanWorkflow, PrdRequirement,
@@ -672,11 +672,11 @@ const fn tier_label(tier: ToolTier) -> &'static str {
 
 #[allow(
     clippy::too_many_lines,
-    reason = "exhaustive conversion across all SmedEvent variants"
+    reason = "exhaustive conversion across all MjolnrEvent variants"
 )]
-pub(super) fn event_to_client(event: &SmedEvent) -> Option<ClientEvent> {
+pub(super) fn event_to_client(event: &MjolnrEvent) -> Option<ClientEvent> {
     let mapped = match event {
-        SmedEvent::SessionCreated {
+        MjolnrEvent::SessionCreated {
             session,
             provider,
             model,
@@ -685,10 +685,10 @@ pub(super) fn event_to_client(event: &SmedEvent) -> Option<ClientEvent> {
             provider: provider.as_str().to_owned(),
             model: model.as_str().to_owned(),
         },
-        SmedEvent::RunStarted { run, .. } => ClientEvent::RunStarted {
+        MjolnrEvent::RunStarted { run, .. } => ClientEvent::RunStarted {
             run: run.to_string(),
         },
-        SmedEvent::TextDelta { run, text, .. } => {
+        MjolnrEvent::TextDelta { run, text, .. } => {
             let (text, text_truncated) = truncate_text(text, MAX_ACTIVITY_TEXT);
             ClientEvent::TextDelta {
                 run: run.to_string(),
@@ -696,7 +696,7 @@ pub(super) fn event_to_client(event: &SmedEvent) -> Option<ClientEvent> {
                 text_truncated,
             }
         }
-        SmedEvent::ReasoningDelta { run, text, .. } => {
+        MjolnrEvent::ReasoningDelta { run, text, .. } => {
             let (text, text_truncated) = truncate_text(text, MAX_ACTIVITY_TEXT);
             ClientEvent::ReasoningDelta {
                 run: run.to_string(),
@@ -704,11 +704,11 @@ pub(super) fn event_to_client(event: &SmedEvent) -> Option<ClientEvent> {
                 text_truncated,
             }
         }
-        SmedEvent::ToolAssembling { run, name, .. } => ClientEvent::ToolAssembling {
+        MjolnrEvent::ToolAssembling { run, name, .. } => ClientEvent::ToolAssembling {
             run: run.to_string(),
             name: name.clone(),
         },
-        SmedEvent::ToolProposed {
+        MjolnrEvent::ToolProposed {
             run,
             approval,
             call,
@@ -720,7 +720,7 @@ pub(super) fn event_to_client(event: &SmedEvent) -> Option<ClientEvent> {
             name: call.name.clone(),
             preview: preview.clone(),
         },
-        SmedEvent::ApprovalResolved {
+        MjolnrEvent::ApprovalResolved {
             run,
             approval,
             decision,
@@ -730,7 +730,7 @@ pub(super) fn event_to_client(event: &SmedEvent) -> Option<ClientEvent> {
             approval: approval.to_string(),
             decision: (*decision).into(),
         },
-        SmedEvent::ToolCompleted {
+        MjolnrEvent::ToolCompleted {
             run, name, result, ..
         } => {
             let (outcome, reason_code) = outcome_to_client(&result.outcome);
@@ -741,7 +741,7 @@ pub(super) fn event_to_client(event: &SmedEvent) -> Option<ClientEvent> {
                 reason_code,
             }
         }
-        SmedEvent::ToolFailed {
+        MjolnrEvent::ToolFailed {
             run, name, code, ..
         } => ClientEvent::ToolCompleted {
             run: run.to_string(),
@@ -749,11 +749,11 @@ pub(super) fn event_to_client(event: &SmedEvent) -> Option<ClientEvent> {
             outcome: ClientToolOutcome::Failed,
             reason_code: Some(code.as_str().to_owned()),
         },
-        SmedEvent::RunFinished { run, reason, .. } => ClientEvent::RunFinished {
+        MjolnrEvent::RunFinished { run, reason, .. } => ClientEvent::RunFinished {
             run: run.to_string(),
             reason: (*reason).into(),
         },
-        SmedEvent::RunFailed {
+        MjolnrEvent::RunFailed {
             run, code, detail, ..
         } => {
             let (detail, detail_truncated) = truncate_text(detail, MAX_ACTIVITY_TEXT);
@@ -764,16 +764,16 @@ pub(super) fn event_to_client(event: &SmedEvent) -> Option<ClientEvent> {
                 detail_truncated,
             }
         }
-        SmedEvent::PolicyChanged { mode, .. } => ClientEvent::PolicyChanged {
+        MjolnrEvent::PolicyChanged { mode, .. } => ClientEvent::PolicyChanged {
             policy: (*mode).into(),
         },
-        SmedEvent::ModelChanged {
+        MjolnrEvent::ModelChanged {
             provider, model, ..
         } => ClientEvent::ModelChanged {
             provider: provider.as_str().to_owned(),
             model: model.as_str().to_owned(),
         },
-        SmedEvent::FileSaved {
+        MjolnrEvent::FileSaved {
             path,
             observed_digest,
             new_digest,
@@ -785,11 +785,11 @@ pub(super) fn event_to_client(event: &SmedEvent) -> Option<ClientEvent> {
             new_digest: new_digest.clone(),
             size_bytes: u32::try_from(*size_bytes).unwrap_or(u32::MAX),
         },
-        SmedEvent::SubagentActivity { child, label, .. } => ClientEvent::SubagentActivity {
+        MjolnrEvent::SubagentActivity { child, label, .. } => ClientEvent::SubagentActivity {
             child: child.to_string(),
             label: label.clone(),
         },
-        SmedEvent::SubagentSpawned {
+        MjolnrEvent::SubagentSpawned {
             child,
             directive,
             branch,
@@ -805,74 +805,74 @@ pub(super) fn event_to_client(event: &SmedEvent) -> Option<ClientEvent> {
                 worktree: worktree.clone(),
             }
         }
-        SmedEvent::RecoveryRequired { work, .. } => ClientEvent::RecoveryRequired {
+        MjolnrEvent::RecoveryRequired { work, .. } => ClientEvent::RecoveryRequired {
             work: Box::new(recovery_work_to_client(work)),
         },
-        SmedEvent::RecoveryResolved { decision, .. } => ClientEvent::RecoveryResolved {
+        MjolnrEvent::RecoveryResolved { decision, .. } => ClientEvent::RecoveryResolved {
             decision: (*decision).into(),
         },
-        SmedEvent::SessionEnded { .. } => ClientEvent::SessionEnded,
-        SmedEvent::MessageAppended { .. }
-        | SmedEvent::QuotaReported { .. }
-        | SmedEvent::QuotaBoundaryReached { .. }
-        | SmedEvent::HandoffCreated { .. }
-        | SmedEvent::UsageReported { .. }
-        | SmedEvent::PolicyClamped { .. }
-        | SmedEvent::ExtensionLoaded { .. }
-        | SmedEvent::BudgetExhausted { .. }
-        | SmedEvent::ModelChangeRefused { .. }
-        | SmedEvent::SpawnEnvelopeArmed { .. }
-        | SmedEvent::SpawnEnvelopeDrawn { .. }
-        | SmedEvent::SpawnEnvelopeCleared { .. }
-        | SmedEvent::SubagentResultLate { .. }
-        | SmedEvent::ReadSetCollision { .. }
-        | SmedEvent::TriggerFired { .. }
-        | SmedEvent::TriggerSettled { .. }
-        | SmedEvent::TriggerSkipped { .. }
-        | SmedEvent::TriggerQueued { .. }
-        | SmedEvent::TriggerReplaced { .. }
-        | SmedEvent::TriggerDisabled { .. }
-        | SmedEvent::TriggerRearmed { .. }
-        | SmedEvent::RouteSelected { .. }
-        | SmedEvent::RouteAdvanced { .. }
-        | SmedEvent::RouteExhausted { .. }
-        | SmedEvent::BreakerStateChanged { .. }
-        | SmedEvent::PlanQuestionAsked { .. }
-        | SmedEvent::PlanQuestionAnswered { .. }
-        | SmedEvent::PlanProposed { .. }
-        | SmedEvent::PlanReviewed { .. }
-        | SmedEvent::PlanApproved { .. }
-        | SmedEvent::PlanHandoffCreated { .. }
-        | SmedEvent::CouncilReviewed { .. }
-        | SmedEvent::PlanInterviewStarted { .. }
-        | SmedEvent::PlanPrdProposed { .. }
-        | SmedEvent::CouncilFindingDispositionRecorded { .. }
+        MjolnrEvent::SessionEnded { .. } => ClientEvent::SessionEnded,
+        MjolnrEvent::MessageAppended { .. }
+        | MjolnrEvent::QuotaReported { .. }
+        | MjolnrEvent::QuotaBoundaryReached { .. }
+        | MjolnrEvent::HandoffCreated { .. }
+        | MjolnrEvent::UsageReported { .. }
+        | MjolnrEvent::PolicyClamped { .. }
+        | MjolnrEvent::ExtensionLoaded { .. }
+        | MjolnrEvent::BudgetExhausted { .. }
+        | MjolnrEvent::ModelChangeRefused { .. }
+        | MjolnrEvent::SpawnEnvelopeArmed { .. }
+        | MjolnrEvent::SpawnEnvelopeDrawn { .. }
+        | MjolnrEvent::SpawnEnvelopeCleared { .. }
+        | MjolnrEvent::SubagentResultLate { .. }
+        | MjolnrEvent::ReadSetCollision { .. }
+        | MjolnrEvent::TriggerFired { .. }
+        | MjolnrEvent::TriggerSettled { .. }
+        | MjolnrEvent::TriggerSkipped { .. }
+        | MjolnrEvent::TriggerQueued { .. }
+        | MjolnrEvent::TriggerReplaced { .. }
+        | MjolnrEvent::TriggerDisabled { .. }
+        | MjolnrEvent::TriggerRearmed { .. }
+        | MjolnrEvent::RouteSelected { .. }
+        | MjolnrEvent::RouteAdvanced { .. }
+        | MjolnrEvent::RouteExhausted { .. }
+        | MjolnrEvent::BreakerStateChanged { .. }
+        | MjolnrEvent::PlanQuestionAsked { .. }
+        | MjolnrEvent::PlanQuestionAnswered { .. }
+        | MjolnrEvent::PlanProposed { .. }
+        | MjolnrEvent::PlanReviewed { .. }
+        | MjolnrEvent::PlanApproved { .. }
+        | MjolnrEvent::PlanHandoffCreated { .. }
+        | MjolnrEvent::CouncilReviewed { .. }
+        | MjolnrEvent::PlanInterviewStarted { .. }
+        | MjolnrEvent::PlanPrdProposed { .. }
+        | MjolnrEvent::CouncilFindingDispositionRecorded { .. }
         // Likewise the amendment: the draft reaches a client on the snapshot,
         // as `council.amendment`, so a late subscriber cannot hold a different
         // proposal from the one the runtime composed.
-        | SmedEvent::CouncilAmendmentProposed { .. }
+        | MjolnrEvent::CouncilAmendmentProposed { .. }
         // The review family's live state reaches a client on the snapshot, as
         // `reviewThreads`, for the reason the envelope's does: a subscriber
         // that joined late or lagged would otherwise hold a different set of
         // notes from the one the runtime has. There is no per-event delta to
         // reduce, so there is nothing to emit here.
-        | SmedEvent::ReviewNoteRecorded { .. }
-        | SmedEvent::ReviewCommentAdded { .. }
-        | SmedEvent::ReviewRequestSent { .. }
-        | SmedEvent::ReviewRequestAnswered { .. }
+        | MjolnrEvent::ReviewNoteRecorded { .. }
+        | MjolnrEvent::ReviewCommentAdded { .. }
+        | MjolnrEvent::ReviewRequestSent { .. }
+        | MjolnrEvent::ReviewRequestAnswered { .. }
         // Board state (decision tickets + imported items) reaches a client on
         // the snapshot as the board projection, not as a per-event delta — a
         // projected board is a cross-session query, and a single event knows
         // nothing about the board it will land on.
-        | SmedEvent::DecisionTicketOpened { .. }
-        | SmedEvent::DecisionTicketResolved { .. }
-        | SmedEvent::ImportedItemFetched { .. }
-        | SmedEvent::ImportedItemRefreshed { .. }
+        | MjolnrEvent::DecisionTicketOpened { .. }
+        | MjolnrEvent::DecisionTicketResolved { .. }
+        | MjolnrEvent::ImportedItemFetched { .. }
+        | MjolnrEvent::ImportedItemRefreshed { .. }
         // Imported acts/comments (D6 step 5) are board history, projected the same
         // way: the board snapshot renders them, and no single event maps to a
         // client delta.
-        | SmedEvent::ImportedActRecorded { .. }
-        | SmedEvent::ImportedCommentRecorded { .. } => return None,
+        | MjolnrEvent::ImportedActRecorded { .. }
+        | MjolnrEvent::ImportedCommentRecorded { .. } => return None,
     };
     Some(mapped)
 }
@@ -886,7 +886,7 @@ mod tests {
     fn summary(status: SessionStatus, event_count: u64, leased: bool) -> SessionSummary {
         SessionSummary {
             id: SessionId::new(),
-            project_root: std::path::PathBuf::from("/tmp/smed-rollup-test"),
+            project_root: std::path::PathBuf::from("/tmp/mjolnr-rollup-test"),
             title: "rollup test".to_owned(),
             status,
             provider: None,

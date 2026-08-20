@@ -6,19 +6,22 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use smed::core::command::SmedCommand;
-use smed::core::event::{SmedEvent, StoredEvent};
-use smed::core::model::{ModelId, ProviderId};
-use smed::core::plan::{PlanApproval, PlanHandoff, PlanStage, ReviewVerdict};
-use smed::core::provider::Provider;
-use smed::core::runtime::SmedRuntime;
-use smed::core::store::EventStore;
-use smed::providers::fake::{FakeProvider, FakeScript};
-use smed::runtime::Runtime;
-use smed::store::memory::InMemoryEventStore;
+use mjolnr::core::command::MjolnrCommand;
+use mjolnr::core::event::{MjolnrEvent, StoredEvent};
+use mjolnr::core::model::{ModelId, ProviderId};
+use mjolnr::core::plan::{PlanApproval, PlanHandoff, PlanStage, ReviewVerdict};
+use mjolnr::core::provider::Provider;
+use mjolnr::core::runtime::MjolnrRuntime;
+use mjolnr::core::store::EventStore;
+use mjolnr::providers::fake::{FakeProvider, FakeScript};
+use mjolnr::runtime::Runtime;
+use mjolnr::store::memory::InMemoryEventStore;
 use tempfile::TempDir;
 
-async fn settle(runtime: &Runtime, ready: impl Fn(&smed::core::runtime::RuntimeSnapshot) -> bool) {
+async fn settle(
+    runtime: &Runtime,
+    ready: impl Fn(&mjolnr::core::runtime::RuntimeSnapshot) -> bool,
+) {
     tokio::time::timeout(Duration::from_secs(15), async {
         loop {
             if ready(&runtime.snapshot()) {
@@ -33,12 +36,12 @@ async fn settle(runtime: &Runtime, ready: impl Fn(&smed::core::runtime::RuntimeS
 
 async fn open_session(
     store: Arc<InMemoryEventStore>,
-) -> (Runtime, TempDir, smed::core::event::SessionId) {
+) -> (Runtime, TempDir, mjolnr::core::event::SessionId) {
     let workspace = tempfile::tempdir().expect("workspace");
-    let smed_dir = workspace.path().join(".smed");
-    std::fs::create_dir_all(&smed_dir).expect(".smed");
+    let mjolnr_dir = workspace.path().join(".mjolnr");
+    std::fs::create_dir_all(&mjolnr_dir).expect(".mjolnr");
     std::fs::write(
-        smed_dir.join("council.yaml"),
+        mjolnr_dir.join("council.yaml"),
         "roles: [\"plan\"]\nmax_rounds: 1\n",
     )
     .expect("council config");
@@ -46,13 +49,13 @@ async fn open_session(
     let provider: Arc<dyn Provider> = Arc::new(FakeProvider::new(FakeScript::PlanInterview));
     let runtime = Runtime::spawn(vec![provider], store.clone() as Arc<dyn EventStore>);
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: workspace.path().to_owned(),
         })
         .await
         .expect("open project");
     runtime
-        .dispatch(SmedCommand::CreateSession {
+        .dispatch(MjolnrCommand::CreateSession {
             provider: ProviderId::new(FakeProvider::ID),
             model: ModelId::new(FakeProvider::MODEL),
         })
@@ -63,7 +66,7 @@ async fn open_session(
     (runtime, workspace, session)
 }
 
-fn event_index(events: &[StoredEvent], predicate: impl Fn(&SmedEvent) -> bool) -> usize {
+fn event_index(events: &[StoredEvent], predicate: impl Fn(&MjolnrEvent) -> bool) -> usize {
     events
         .iter()
         .position(|stored| predicate(&stored.event))
@@ -72,36 +75,36 @@ fn event_index(events: &[StoredEvent], predicate: impl Fn(&SmedEvent) -> bool) -
 
 fn assert_event_order(
     events: &[StoredEvent],
-    plan_id: smed::core::plan::PlanId,
-    prd_id: smed::core::plan::PrdId,
+    plan_id: mjolnr::core::plan::PlanId,
+    prd_id: mjolnr::core::plan::PrdId,
 ) {
     let started = event_index(events, |event| {
-        matches!(event, SmedEvent::PlanInterviewStarted { .. })
+        matches!(event, MjolnrEvent::PlanInterviewStarted { .. })
     });
     let asked = event_index(events, |event| {
-        matches!(event, SmedEvent::PlanQuestionAsked { .. })
+        matches!(event, MjolnrEvent::PlanQuestionAsked { .. })
     });
     let answered = event_index(events, |event| {
-        matches!(event, SmedEvent::PlanQuestionAnswered { .. })
+        matches!(event, MjolnrEvent::PlanQuestionAnswered { .. })
     });
     let prd_proposed = event_index(events, |event| {
-        matches!(event, SmedEvent::PlanPrdProposed { .. })
+        matches!(event, MjolnrEvent::PlanPrdProposed { .. })
     });
     let council = event_index(
         events,
-        |event| matches!(event, SmedEvent::CouncilReviewed { review, .. } if review.plan_id == Some(plan_id) && review.prd_id == Some(prd_id)),
+        |event| matches!(event, MjolnrEvent::CouncilReviewed { review, .. } if review.plan_id == Some(plan_id) && review.prd_id == Some(prd_id)),
     );
     let proposed = event_index(
         events,
-        |event| matches!(event, SmedEvent::PlanProposed { proposal, .. } if proposal.plan_id == plan_id),
+        |event| matches!(event, MjolnrEvent::PlanProposed { proposal, .. } if proposal.plan_id == plan_id),
     );
     let approved = event_index(
         events,
-        |event| matches!(event, SmedEvent::PlanApproved { approval, .. } if approval.plan_id == plan_id),
+        |event| matches!(event, MjolnrEvent::PlanApproved { approval, .. } if approval.plan_id == plan_id),
     );
     let handoff = event_index(
         events,
-        |event| matches!(event, SmedEvent::PlanHandoffCreated { handoff, .. } if handoff.plan_id == plan_id),
+        |event| matches!(event, MjolnrEvent::PlanHandoffCreated { handoff, .. } if handoff.plan_id == plan_id),
     );
     assert!(started < asked && asked < answered && answered < prd_proposed);
     assert!(
@@ -120,7 +123,7 @@ async fn approve_and_handoff_generated_plan(runtime: &Runtime) {
         })
         .expect("generated proposal revision");
     runtime
-        .dispatch(SmedCommand::ApprovePlan {
+        .dispatch(MjolnrCommand::ApprovePlan {
             approval: PlanApproval {
                 plan_id,
                 revision_id,
@@ -140,7 +143,7 @@ async fn approve_and_handoff_generated_plan(runtime: &Runtime) {
     })
     .await;
     runtime
-        .dispatch(SmedCommand::HandoffPlan {
+        .dispatch(MjolnrCommand::HandoffPlan {
             handoff: PlanHandoff {
                 plan_id,
                 revision_id,
@@ -165,7 +168,7 @@ async fn interview_prd_council_and_approved_handoff_are_durable_and_linked() {
     let (runtime, workspace, session) = open_session(store.clone()).await;
 
     runtime
-        .dispatch(SmedCommand::StartPlanInterview {
+        .dispatch(MjolnrCommand::StartPlanInterview {
             goal: "Turn a user idea into a reviewed implementation plan".to_owned(),
         })
         .await
@@ -188,9 +191,9 @@ async fn interview_prd_council_and_approved_handoff_are_durable_and_linked() {
         })
         .expect("interview question");
     runtime
-        .dispatch(SmedCommand::AnswerPlanQuestion {
+        .dispatch(MjolnrCommand::AnswerPlanQuestion {
             plan_id,
-            answer: smed::core::plan::QuestionAnswer {
+            answer: mjolnr::core::plan::QuestionAnswer {
                 question_id: question.id,
                 selected_options: vec!["Narrow vertical slice".to_owned()],
                 freeform_text: Some("Keep the first release local-first".to_owned()),
@@ -227,13 +230,13 @@ async fn interview_prd_council_and_approved_handoff_are_durable_and_linked() {
     let provider: Arc<dyn Provider> = Arc::new(FakeProvider::new(FakeScript::PlanInterview));
     let resumed = Runtime::spawn(vec![provider], store.clone() as Arc<dyn EventStore>);
     resumed
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: workspace.path().to_owned(),
         })
         .await
         .expect("reopen project");
     resumed
-        .dispatch(SmedCommand::ResumeSession { session })
+        .dispatch(MjolnrCommand::ResumeSession { session })
         .await
         .expect("resume session");
     settle(&resumed, |snapshot| {

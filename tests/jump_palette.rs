@@ -5,9 +5,9 @@
     reason = "AGENTS.md §7: tests may index and unwrap freely"
 )]
 
-use smed::core::event::{RunId, SessionId, SmedEvent};
-use smed::tui::jump_palette::{JumpKind, JumpState, build_jump_items, filter_jump_items};
-use smed::tui::reducer::ViewState;
+use mjolnr::core::event::{MjolnrEvent, RunId, SessionId};
+use mjolnr::tui::jump_palette::{JumpKind, JumpState, build_jump_items, filter_jump_items};
+use mjolnr::tui::reducer::ViewState;
 
 #[test]
 fn jump_palette_indexes_and_filters_fleet_agents() {
@@ -16,13 +16,13 @@ fn jump_palette_indexes_and_filters_fleet_agents() {
     let child_2 = SessionId::new();
     let run = RunId::new();
 
-    view.apply(&SmedEvent::SubagentActivity {
+    view.apply(&MjolnrEvent::SubagentActivity {
         session: SessionId::new(),
         run,
         child: child_1,
         label: "indexer starting".to_owned(),
     });
-    view.apply(&SmedEvent::SubagentActivity {
+    view.apply(&MjolnrEvent::SubagentActivity {
         session: SessionId::new(),
         run,
         child: child_2,

@@ -21,7 +21,7 @@ use crate::core::secrets::{SecretError, SecretStore};
 
 const DEFAULT_BASE_URL: &str = "https://api.anthropic.com/v1";
 const API_VERSION: &str = "2023-06-01";
-// smed's request ceiling, not a claim about each model's provider maximum.
+// mjolnr's request ceiling, not a claim about each model's provider maximum.
 // Keeping one bounded client-side limit is intentional until output budgets are
 // configurable in the canonical request contract.
 const MJOLNR_MAX_OUTPUT_TOKENS: u32 = 16_384;
@@ -229,7 +229,7 @@ fn map_http_error(
         reqwest::StatusCode::UNAUTHORIZED | reqwest::StatusCode::FORBIDDEN => ProviderError::Auth,
         // A throttle names the limit it enforced: a retry-after, a rate-limit
         // window, or `rate_limit_error` in the body. With none of the three,
-        // the 429 is a refusal smed cannot attribute to the caller's quota,
+        // the 429 is a refusal mjolnr cannot attribute to the caller's quota,
         // and saying "wait for the reset" would invent a cause.
         reqwest::StatusCode::TOO_MANY_REQUESTS
             if retry_after_seconds.is_some()

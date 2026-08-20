@@ -22,7 +22,7 @@
 //! It does **not** prove a live OpenAI credential stays out, because no live
 //! call runs here. The structural argument for that is stronger than a test
 //! anyway: the runtime never holds a credential — only the provider adapter
-//! does, and [`EventPayload`](smed) has no field one could occupy. This scan is
+//! does, and [`EventPayload`](mjolnr) has no field one could occupy. This scan is
 //! the belt to that braces, and it is what would catch a `Debug` leak that the
 //! structure did not anticipate.
 
@@ -37,17 +37,17 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use smed::core::command::{ApprovalDecision, ApprovalId, SmedCommand};
-use smed::core::event::{RunId, SessionId, SmedEvent};
-use smed::core::message::{CanonicalMessage, ToolEffect, ToolResult};
-use smed::core::model::{ModelId, ProviderId};
-use smed::core::provider::Provider;
-use smed::core::runtime::SmedRuntime;
-use smed::core::secrets::{Secret, environment_variable};
-use smed::core::store::EventStore;
-use smed::providers::fake::{FakeProvider, FakeScript};
-use smed::runtime::Runtime;
-use smed::store::sqlite::SqliteEventStore;
+use mjolnr::core::command::{ApprovalDecision, ApprovalId, MjolnrCommand};
+use mjolnr::core::event::{MjolnrEvent, RunId, SessionId};
+use mjolnr::core::message::{CanonicalMessage, ToolEffect, ToolResult};
+use mjolnr::core::model::{ModelId, ProviderId};
+use mjolnr::core::provider::Provider;
+use mjolnr::core::runtime::MjolnrRuntime;
+use mjolnr::core::secrets::{Secret, environment_variable};
+use mjolnr::core::store::EventStore;
+use mjolnr::providers::fake::{FakeProvider, FakeScript};
+use mjolnr::runtime::Runtime;
+use mjolnr::store::sqlite::SqliteEventStore;
 use tempfile::TempDir;
 
 /// The shapes a leaked credential or environment snapshot takes.
@@ -72,7 +72,7 @@ const FORBIDDEN: &[(&str, &str)] = &[
 ///
 /// The `-wal` file is the one a naive check forgets: a committed transaction can
 /// live there long before it reaches the main file, so scanning only
-/// `smed.sqlite3` would read a database that has not been written yet.
+/// `mjolnr.sqlite3` would read a database that has not been written yet.
 fn database_files(database: &std::path::Path) -> Vec<PathBuf> {
     let mut files = vec![database.to_path_buf()];
     for suffix in ["-wal", "-shm", "-journal"] {
@@ -119,7 +119,7 @@ struct Fixture {
 
 fn fixture() -> Fixture {
     let directory = TempDir::new().expect("temp dir");
-    let database = directory.path().join("smed.sqlite3");
+    let database = directory.path().join("mjolnr.sqlite3");
     let workspace = directory
         .path()
         .canonicalize()
@@ -138,11 +138,11 @@ async fn a_credential_never_renders_itself() {
     // The mechanism the file scan depends on. If `Secret` ever derived `Debug`,
     // one `tracing` call or one error string would carry a key into the database
     // and every structural argument above would be void.
-    let secret = Secret::new("sk-smed-test-DO-NOT-PERSIST-4a9f2c8e1b7d".to_owned());
+    let secret = Secret::new("sk-mjolnr-test-DO-NOT-PERSIST-4a9f2c8e1b7d".to_owned());
 
     let rendered = format!("{secret:?}");
     assert_eq!(rendered, "Secret(<redacted>)");
-    assert!(!rendered.contains("sk-smed"));
+    assert!(!rendered.contains("sk-mjolnr"));
     assert!(
         !rendered.contains("40") && !rendered.contains("41"),
         "not even the length: that is information about the credential"
@@ -162,22 +162,22 @@ async fn a_session_driven_end_to_end_leaves_no_credential_shaped_data() {
         let provider: Arc<dyn Provider> = Arc::new(FakeProvider::new(FakeScript::Text));
         let runtime = Runtime::spawn(vec![provider], Arc::clone(&store) as Arc<dyn EventStore>);
         runtime
-            .dispatch(SmedCommand::OpenProject {
+            .dispatch(MjolnrCommand::OpenProject {
                 root: fixture.workspace.clone(),
             })
             .await
             .expect("open project");
         runtime
-            .dispatch(SmedCommand::CreateSession {
+            .dispatch(MjolnrCommand::CreateSession {
                 provider: ProviderId::new(FakeProvider::ID),
                 model: ModelId::new(FakeProvider::MODEL),
             })
             .await
             .expect("create session");
         runtime
-            .dispatch(SmedCommand::SendUserMessage {
+            .dispatch(MjolnrCommand::SendUserMessage {
                 text: "hello".to_owned(),
-                source: smed::core::directive::DirectiveSource::Human,
+                source: mjolnr::core::directive::DirectiveSource::Human,
             })
             .await
             .expect("send");
@@ -222,20 +222,20 @@ async fn an_approval_grant_is_never_written_to_disk() {
     let run = RunId::new();
     let approval = ApprovalId::new();
     for event in [
-        SmedEvent::SessionCreated {
+        MjolnrEvent::SessionCreated {
             session,
             provider: ProviderId::new(FakeProvider::ID),
             model: ModelId::new(FakeProvider::MODEL),
         },
-        SmedEvent::RunStarted { session, run },
-        // A human granting the broadest authority smed can express.
-        SmedEvent::ApprovalResolved {
+        MjolnrEvent::RunStarted { session, run },
+        // A human granting the broadest authority mjolnr can express.
+        MjolnrEvent::ApprovalResolved {
             session,
             run,
             approval,
             decision: ApprovalDecision::ApproveExactForSession,
         },
-        SmedEvent::ToolCompleted {
+        MjolnrEvent::ToolCompleted {
             session,
             run,
             call_id: "call_1".to_owned(),
@@ -253,10 +253,10 @@ async fn an_approval_grant_is_never_written_to_disk() {
     // A checkpoint is where a grant would leak if `SessionCheckpoint` ever grew a
     // field for one, so one is written before the scan.
     store
-        .write_checkpoint(smed::core::checkpoint::SessionCheckpoint {
+        .write_checkpoint(mjolnr::core::checkpoint::SessionCheckpoint {
             project_root: Some(fixture.workspace.clone()),
             messages: vec![CanonicalMessage::user("run it")],
-            ..smed::core::checkpoint::SessionCheckpoint::empty(session)
+            ..mjolnr::core::checkpoint::SessionCheckpoint::empty(session)
         })
         .await
         .expect("checkpoint");
@@ -273,12 +273,12 @@ async fn an_approval_grant_is_never_written_to_disk() {
 #[tokio::test]
 async fn the_environment_variable_name_this_scan_looks_for_is_the_real_one() {
     // Guards the scan itself. If `environment_variable` changed shape, the list
-    // above would be searching for a string smed no longer uses, and the test
+    // above would be searching for a string mjolnr no longer uses, and the test
     // would pass by looking in the wrong place.
     let variable = environment_variable(&ProviderId::new("openai"));
     assert_eq!(variable, "OPENAI_API_KEY");
     assert!(
         FORBIDDEN.iter().any(|(needle, _)| *needle == variable),
-        "the scan must look for the variable smed actually reads"
+        "the scan must look for the variable mjolnr actually reads"
     );
 }

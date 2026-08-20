@@ -7,9 +7,9 @@
 //!    `policy::paths` — the real gate, not the TUI's display-only check in
 //!    `tui/image.rs`. A path validated at paste time is a path that may have
 //!    become a symlink since.
-//! 2. **Bounds are smed's own and enforced before the provider's.** A
+//! 2. **Bounds are mjolnr's own and enforced before the provider's.** A
 //!    provider-side rejection spends a round trip and the tokens with it to
-//!    learn something smed could have said instantly.
+//!    learn something mjolnr could have said instantly.
 //! 3. **A model that cannot accept images never receives a broken request.**
 //!    Either the run is refused before it opens a socket, or the block is
 //!    projected into a labelled placeholder — never silently dropped, which
@@ -115,7 +115,7 @@ pub fn any_images(messages: &[CanonicalMessage]) -> bool {
 /// Replace every `ImageRef` with a labelled text placeholder.
 ///
 /// Used when the resolved model cannot accept images but the history contains
-/// one. smed's history is mixed by construction — `/model` mid-session, Phase
+/// one. mjolnr's history is mixed by construction — `/model` mid-session, Phase
 /// 24 handoff, and Phase 15 fallback routing all change models, the last two
 /// without the user asking each time — so a transcript with one screenshot in it
 /// is routinely replayed to a model that cannot take it.
@@ -157,7 +157,7 @@ pub fn placeholder_images(messages: &[CanonicalMessage], model: &str) -> Vec<Can
         .collect()
 }
 
-/// The media types smed will send, for a refusal that names them.
+/// The media types mjolnr will send, for a refusal that names them.
 #[must_use]
 pub fn supported_media_types() -> String {
     SUPPORTED_MEDIA_TYPES.join(", ")

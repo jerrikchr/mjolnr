@@ -20,7 +20,7 @@ use crate::core::message::ToolResult;
 use crate::runtime::subagent::{ChildRecord, ChildSpec};
 
 /// Directory under the OS temp root that holds every subagent worktree.
-const WORKTREES_DIR: &str = "smed-worktrees";
+const WORKTREES_DIR: &str = "mjolnr-worktrees";
 
 /// The path a child's worktree lives at.
 pub(super) fn worktree_path(child: SessionId) -> PathBuf {
@@ -165,12 +165,12 @@ pub(super) async fn finish(workspace: &Path, spec: &ChildSpec, record: &mut Chil
                     worktree,
                     &[
                         "-c",
-                        "user.name=smed",
+                        "user.name=mjolnr",
                         "-c",
-                        "user.email=smed@localhost",
+                        "user.email=mjolnr@localhost",
                         "commit",
                         "-m",
-                        "smed: preserve subagent work at settlement",
+                        "mjolnr: preserve subagent work at settlement",
                     ],
                 )
                 .await
@@ -234,10 +234,10 @@ pub(super) async fn finish(workspace: &Path, spec: &ChildSpec, record: &mut Chil
     }
 }
 
-/// Remove orphaned subagent worktrees whose owning smed process is gone.
+/// Remove orphaned subagent worktrees whose owning mjolnr process is gone.
 ///
 /// Conservative on purpose: a worktree whose marker names a live process is
-/// left alone, whatever its session state — smed cannot prove the owner is
+/// left alone, whatever its session state — mjolnr cannot prove the owner is
 /// done with it. Run on project open, detached from the actor.
 pub async fn cleanup_orphans(workspace: PathBuf) {
     let Ok(listing) = git(&workspace, &["worktree", "list", "--porcelain"]).await else {
@@ -265,7 +265,7 @@ pub async fn cleanup_orphans(workspace: PathBuf) {
                 .and_then(|marker| marker.get("pid").and_then(serde_json::Value::as_u64))
                 .is_some_and(process_alive),
             // No marker: either already half-cleaned or not this process's
-            // bookkeeping; registration under smed's namespace is itself the
+            // bookkeeping; registration under mjolnr's namespace is itself the
             // orphan signal.
             Err(_) => false,
         };
@@ -345,9 +345,12 @@ mod tests {
 
     #[test]
     fn markers_live_beside_the_worktree_not_inside_it() {
-        let worktree = PathBuf::from("/tmp/smed-worktrees/abc");
+        let worktree = PathBuf::from("/tmp/mjolnr-worktrees/abc");
         let marker = marker_path(&worktree);
-        assert_eq!(marker, PathBuf::from("/tmp/smed-worktrees/abc.owner.json"));
+        assert_eq!(
+            marker,
+            PathBuf::from("/tmp/mjolnr-worktrees/abc.owner.json")
+        );
         assert!(!marker.starts_with(&worktree));
     }
 }

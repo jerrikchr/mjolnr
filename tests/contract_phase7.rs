@@ -9,15 +9,15 @@
 
 use std::sync::Arc;
 
-use smed::core::error::ProviderError;
-use smed::core::event::{FinishReason, ProviderEvent};
-use smed::core::message::CanonicalMessage;
-use smed::core::model::{ModelId, ProviderId};
-use smed::core::provider::{Provider, ProviderRequest};
-use smed::core::secrets::{
+use mjolnr::core::error::ProviderError;
+use mjolnr::core::event::{FinishReason, ProviderEvent};
+use mjolnr::core::message::CanonicalMessage;
+use mjolnr::core::model::{ModelId, ProviderId};
+use mjolnr::core::provider::{Provider, ProviderRequest};
+use mjolnr::core::secrets::{
     Credential, CredentialKind, ResolvedCredential, Secret, SecretError, SecretSource, SecretStore,
 };
-use smed::providers::{gemini, ollama, openrouter};
+use mjolnr::providers::{gemini, ollama, openrouter};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use wiremock::matchers::{header, method, path};
@@ -54,7 +54,7 @@ fn request(model: &str) -> ProviderRequest {
         messages: vec![CanonicalMessage::user("hello")],
         system: Some("be concise".to_owned()),
         tools: Vec::new(),
-        images: smed::core::image::ImageSidecar::new(),
+        images: mjolnr::core::image::ImageSidecar::new(),
     }
 }
 

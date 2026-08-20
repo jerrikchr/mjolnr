@@ -1,4 +1,4 @@
-smed
+mjolnr
 Copyright 2026 Jerrik Christiansen
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,7 +15,7 @@ limitations under the License.
 
 ---
 
-This product includes no third-party source code. smed's dependencies are
+This product includes no third-party source code. mjolnr's dependencies are
 linked from crates.io under their own licences and are inventoried, with
 purpose and source, in THIRD_PARTY.md. Licence, advisory, and source policy
 for those dependencies is enforced mechanically by `cargo deny check`

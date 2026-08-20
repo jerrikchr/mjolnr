@@ -10,17 +10,17 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use smed::core::command::SmedCommand;
-use smed::core::event::SmedEvent;
-use smed::core::model::{ModelId, ProviderId};
-use smed::core::provider::Provider;
-use smed::core::runtime::{RuntimeSnapshot, SmedRuntime};
-use smed::core::store::EventStore;
-use smed::providers::fake::FakeProvider;
-use smed::routing::definition::{load_dir, parse_route};
-use smed::runtime::Runtime;
-use smed::store::memory::InMemoryEventStore;
-use smed::tui::reducer::{Overlay, ViewState};
+use mjolnr::core::command::MjolnrCommand;
+use mjolnr::core::event::MjolnrEvent;
+use mjolnr::core::model::{ModelId, ProviderId};
+use mjolnr::core::provider::Provider;
+use mjolnr::core::runtime::{MjolnrRuntime, RuntimeSnapshot};
+use mjolnr::core::store::EventStore;
+use mjolnr::providers::fake::FakeProvider;
+use mjolnr::routing::definition::{load_dir, parse_route};
+use mjolnr::runtime::Runtime;
+use mjolnr::store::memory::InMemoryEventStore;
+use mjolnr::tui::reducer::{Overlay, ViewState};
 
 const ROUTE_FILE: &str = "# a route file a hand-editor wrote\n\
     hops:\n  - provider: \"openai\"\n    model: \"gpt-5.4\"\n\
@@ -52,7 +52,7 @@ fn config_overlay_toggles_cleanly() {
 #[tokio::test]
 async fn binding_a_persona_through_config_writes_the_route_file_and_reloads_live() {
     let temp = tempfile::tempdir().expect("tempdir");
-    let routes = temp.path().join(".smed").join("routes");
+    let routes = temp.path().join(".mjolnr").join("routes");
     std::fs::create_dir_all(&routes).expect("create routes dir");
     let route_path = routes.join("main.yaml");
     std::fs::write(&route_path, ROUTE_FILE).expect("write route");
@@ -63,14 +63,14 @@ async fn binding_a_persona_through_config_writes_the_route_file_and_reloads_live
         store.clone() as Arc<dyn EventStore>,
     );
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: temp.path().to_path_buf(),
         })
         .await
         .expect("open project");
     settle_until(&runtime, |snap| snap.workspace_root.is_some()).await;
     runtime
-        .dispatch(SmedCommand::CreateSession {
+        .dispatch(MjolnrCommand::CreateSession {
             provider: ProviderId::new(FakeProvider::ID),
             model: ModelId::new(FakeProvider::MODEL),
         })
@@ -81,7 +81,7 @@ async fn binding_a_persona_through_config_writes_the_route_file_and_reloads_live
 
     // The edit a hand-editor would make, made through the surface instead.
     runtime
-        .dispatch(SmedCommand::BindRoutePersona {
+        .dispatch(MjolnrCommand::BindRoutePersona {
             route: "main".to_owned(),
             persona: Some("mentor".to_owned()),
         })
@@ -114,7 +114,7 @@ async fn binding_a_persona_through_config_writes_the_route_file_and_reloads_live
 
     // Clearing it through the surface removes the line and round-trips.
     runtime
-        .dispatch(SmedCommand::BindRoutePersona {
+        .dispatch(MjolnrCommand::BindRoutePersona {
             route: "main".to_owned(),
             persona: None,
         })
@@ -132,7 +132,7 @@ async fn binding_a_persona_through_config_writes_the_route_file_and_reloads_live
     assert!(
         !events
             .iter()
-            .any(|stored| matches!(stored.event, SmedEvent::PolicyChanged { .. })),
+            .any(|stored| matches!(stored.event, MjolnrEvent::PolicyChanged { .. })),
         "/config must not record a policy event"
     );
 }

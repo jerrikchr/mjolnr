@@ -115,7 +115,7 @@
           {changes.files.length} file{changes.files.length === 1 ? '' : 's'} changed
         </Badge>
         <!--
-          The freshness marker, not a currency claim. smed re-reads git on
+          The freshness marker, not a currency claim. mjolnr re-reads git on
           explicit triggers only, so the honest statement is when it last
           looked — never that this is what the tree contains now.
         -->
@@ -131,7 +131,7 @@
       <Alert.Title>Pending exact effect</Alert.Title>
       <Alert.Description>
         <div class="flex flex-col gap-3">
-          <p>smed is waiting on human approval before the next side effect is allowed.</p>
+          <p>mjolnr is waiting on human approval before the next side effect is allowed.</p>
           <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
             <dt class="text-muted-foreground">Tool</dt>
             <dd><code>{snap.pendingApproval.toolName}</code></dd>
@@ -167,7 +167,7 @@
         <Alert.Root>
           <Alert.Title>This change set is partial</Alert.Title>
           <Alert.Description>
-            Files were dropped at smed's projection bound, or git's own output was cut. What is
+            Files were dropped at mjolnr's projection bound, or git's own output was cut. What is
             below is part of the working tree, not all of it — review it as such.
           </Alert.Description>
         </Alert.Root>
@@ -201,21 +201,21 @@
               {threads.length} review note{threads.length === 1 ? '' : 's'}
             </span>
             <Button size="sm" disabled={selectedIds.length === 0} onclick={sendSelected}>
-              Send {selectedIds.length} to smed
+              Send {selectedIds.length} to mjolnr
             </Button>
           </div>
           <!--
             What sending is, said plainly. It is a message, not an instruction
-            smed must obey and not an approval: the ordinary gates still apply
+            mjolnr must obey and not an approval: the ordinary gates still apply
             to anything it does about them.
           -->
           <p class="text-muted-foreground text-xs">
             Sending posts the selected notes as your message in this session. It approves nothing
-            and changes no policy, and smed is never marked as having addressed a note.
+            and changes no policy, and mjolnr is never marked as having addressed a note.
           </p>
           {#if snap.reviewThreads.truncated}
             <p class="text-muted-foreground text-xs">
-              More notes exist than smed carries in one snapshot; not all are shown.
+              More notes exist than mjolnr carries in one snapshot; not all are shown.
             </p>
           {/if}
           {#if sendRefusal}
@@ -338,7 +338,7 @@
                               <p class="text-sm whitespace-pre-wrap">{comment.body}</p>
                               {#if comment.bodyTruncated}
                                 <span class="text-muted-foreground text-xs">
-                                  This note was longer than smed carries and is shown in part.
+                                  This note was longer than mjolnr carries and is shown in part.
                                 </span>
                               {/if}
                             {/each}
@@ -349,7 +349,7 @@
                             {/if}
                             {#if thread.responseMessageId}
                               <span class="text-muted-foreground text-xs">
-                                smed answered in message {thread.responseMessageId}. That is a
+                                mjolnr answered in message {thread.responseMessageId}. That is a
                                 reply, not a claim that the note was addressed.
                               </span>
                             {/if}
@@ -445,7 +445,7 @@
                 {#if file.content === 'binary'}
                   git reports this file as binary and does not produce a text diff.
                 {:else if file.content === 'undecodable'}
-                  git returned bytes that are not valid UTF-8. smed will not guess at an encoding,
+                  git returned bytes that are not valid UTF-8. mjolnr will not guess at an encoding,
                   so no content is shown.
                 {:else if file.status === 'added'}
                   Added, with no content to diff.

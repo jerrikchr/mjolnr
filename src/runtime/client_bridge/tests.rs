@@ -13,11 +13,11 @@ use crate::core::client::{
     ClientPolicy, ClientRecovery, ClientRecoveryDecision, ClientResumeChoice, ClientToolOutcome,
     ClientUpdate,
 };
-use crate::core::command::{ApprovalDecision, SmedCommand};
+use crate::core::command::{ApprovalDecision, MjolnrCommand};
 use crate::core::council::{CouncilContribution, CouncilReview};
 use crate::core::directive::DirectiveSource;
-use crate::core::error::{ReasonCode, SmedError};
-use crate::core::event::{FinishReason, RunId, SessionId, SmedEvent};
+use crate::core::error::{MjolnrError, ReasonCode};
+use crate::core::event::{FinishReason, MjolnrEvent, RunId, SessionId};
 use crate::core::message::{CanonicalMessage, ToolCall, ToolEffect, ToolOutcome, ToolResult};
 use crate::core::model::{ModelId, ProviderId};
 use crate::core::plan::{
@@ -26,11 +26,11 @@ use crate::core::plan::{
 };
 use crate::core::policy::{PendingApproval, PolicyMode};
 use crate::core::recovery::{Authority, InterruptedKind, InterruptedWork, RecoveryState};
-use crate::core::runtime::{RuntimeSnapshot, RuntimeSubscription, SmedRuntime, SnapshotStream};
+use crate::core::runtime::{MjolnrRuntime, RuntimeSnapshot, RuntimeSubscription, SnapshotStream};
 use crate::core::tool::ToolTier;
 
 use super::bridge::ClientBridge;
-use super::command::command_to_smed;
+use super::command::command_to_mjolnr;
 use super::convert::{event_to_client, snapshot_to_client};
 use crate::core::client::MAX_ACTIVITY_TEXT;
 use crate::core::client::MAX_MESSAGE_TEXT;
@@ -39,11 +39,11 @@ use crate::core::client::MAX_SNAPSHOT_MESSAGES;
 /// A mock runtime for testing the bridge async behaviors.
 #[derive(Debug)]
 struct TestRuntime {
-    events_tx: broadcast::Sender<SmedEvent>,
+    events_tx: broadcast::Sender<MjolnrEvent>,
     snapshot_tx: std::sync::Mutex<Option<watch::Sender<RuntimeSnapshot>>>,
-    dispatched_commands: std::sync::Mutex<Vec<SmedCommand>>,
-    refuse_dispatch_with: std::sync::Mutex<Option<SmedError>>,
-    board: std::sync::Mutex<Option<Result<crate::core::frontier::BoardOverview, SmedError>>>,
+    dispatched_commands: std::sync::Mutex<Vec<MjolnrCommand>>,
+    refuse_dispatch_with: std::sync::Mutex<Option<MjolnrError>>,
+    board: std::sync::Mutex<Option<Result<crate::core::frontier::BoardOverview, MjolnrError>>>,
 }
 
 impl TestRuntime {
@@ -59,21 +59,21 @@ impl TestRuntime {
         }
     }
 
-    fn commands(&self) -> Vec<SmedCommand> {
+    fn commands(&self) -> Vec<MjolnrCommand> {
         self.dispatched_commands.lock().unwrap().clone()
     }
 
-    fn refuse_dispatch_with(&self, error: SmedError) {
+    fn refuse_dispatch_with(&self, error: MjolnrError) {
         *self.refuse_dispatch_with.lock().unwrap() = Some(error);
     }
 
-    fn answer_board_with(&self, result: Result<crate::core::frontier::BoardOverview, SmedError>) {
+    fn answer_board_with(&self, result: Result<crate::core::frontier::BoardOverview, MjolnrError>) {
         *self.board.lock().unwrap() = Some(result);
     }
 }
 
 #[async_trait]
-impl SmedRuntime for TestRuntime {
+impl MjolnrRuntime for TestRuntime {
     fn snapshot(&self) -> RuntimeSnapshot {
         self.snapshot_tx
             .lock()
@@ -97,7 +97,7 @@ impl SmedRuntime for TestRuntime {
         RuntimeSubscription::new(self.events_tx.subscribe())
     }
 
-    async fn dispatch(&self, command: SmedCommand) -> Result<(), SmedError> {
+    async fn dispatch(&self, command: MjolnrCommand) -> Result<(), MjolnrError> {
         self.dispatched_commands.lock().unwrap().push(command);
         if let Some(error) = self.refuse_dispatch_with.lock().unwrap().take() {
             return Err(error);
@@ -108,8 +108,8 @@ impl SmedRuntime for TestRuntime {
     async fn read_workspace_files(
         &self,
         _request: crate::core::workspace_files::WorkspaceFileRequest,
-    ) -> Result<crate::core::workspace_files::WorkspaceFileAnswer, SmedError> {
-        Err(SmedError::workspace_refused(
+    ) -> Result<crate::core::workspace_files::WorkspaceFileAnswer, MjolnrError> {
+        Err(MjolnrError::workspace_refused(
             ReasonCode::WorkspaceCapabilityUnavailable,
             "this test runtime opens no project, so there is nothing to read files from",
         ))
@@ -118,17 +118,17 @@ impl SmedRuntime for TestRuntime {
     async fn search_workspace(
         &self,
         _filter: crate::core::store::WorkspaceSearchFilter,
-    ) -> Result<crate::core::store::WorkspaceSearchPage, SmedError> {
-        Err(SmedError::workspace_refused(
+    ) -> Result<crate::core::store::WorkspaceSearchPage, MjolnrError> {
+        Err(MjolnrError::workspace_refused(
             ReasonCode::WorkspaceCapabilityUnavailable,
             "workspace search is not yet implemented (contract landed in D4)",
         ))
     }
 
-    async fn query_board(&self) -> Result<crate::core::frontier::BoardOverview, SmedError> {
+    async fn query_board(&self) -> Result<crate::core::frontier::BoardOverview, MjolnrError> {
         match self.board.lock().unwrap().take() {
             Some(result) => result,
-            None => Err(SmedError::workspace_refused(
+            None => Err(MjolnrError::workspace_refused(
                 ReasonCode::WorkspaceCapabilityUnavailable,
                 "this test runtime opens no project, so there is no board to answer from",
             )),
@@ -138,14 +138,14 @@ impl SmedRuntime for TestRuntime {
     async fn query_repository_history(
         &self,
         _limit: u32,
-    ) -> Result<crate::core::repository::RepositoryHistory, SmedError> {
-        Err(SmedError::workspace_refused(
+    ) -> Result<crate::core::repository::RepositoryHistory, MjolnrError> {
+        Err(MjolnrError::workspace_refused(
             ReasonCode::WorkspaceCapabilityUnavailable,
             "this test runtime opens no project, so there is no repository history to answer from",
         ))
     }
 
-    async fn close(&self) -> Result<(), SmedError> {
+    async fn close(&self) -> Result<(), MjolnrError> {
         self.snapshot_tx.lock().unwrap().take();
         Ok(())
     }
@@ -398,12 +398,12 @@ fn the_command_allowlist_maps_one_for_one() {
     // Minted once and cloned so both sides of the imported-item cases carry
     // the same id: `valid_imported_item()` mints a fresh one per call.
     let imported_item = valid_imported_item();
-    let cases: Vec<(ClientCommand, SmedCommand)> = vec![
+    let cases: Vec<(ClientCommand, MjolnrCommand)> = vec![
         (
             ClientCommand::OpenProject {
                 root: "/work".to_owned(),
             },
-            SmedCommand::OpenProject {
+            MjolnrCommand::OpenProject {
                 root: std::path::PathBuf::from("/work"),
             },
         ),
@@ -412,7 +412,7 @@ fn the_command_allowlist_maps_one_for_one() {
                 provider: "openai".to_owned(),
                 model: "gpt-4o".to_owned(),
             },
-            SmedCommand::CreateSession {
+            MjolnrCommand::CreateSession {
                 provider: ProviderId::new("openai"),
                 model: ModelId::new("gpt-4o"),
             },
@@ -421,7 +421,7 @@ fn the_command_allowlist_maps_one_for_one() {
             ClientCommand::ResumeSession {
                 session: session.clone(),
             },
-            SmedCommand::ResumeSession {
+            MjolnrCommand::ResumeSession {
                 session: SessionId::from_uuid(uuid::Uuid::parse_str(&session).unwrap()),
             },
         ),
@@ -429,7 +429,7 @@ fn the_command_allowlist_maps_one_for_one() {
             ClientCommand::ResolveResume {
                 choice: ClientResumeChoice::Full,
             },
-            SmedCommand::ResolveResume {
+            MjolnrCommand::ResolveResume {
                 choice: crate::core::continuation::ResumeChoice::Full,
             },
         ),
@@ -437,18 +437,18 @@ fn the_command_allowlist_maps_one_for_one() {
             ClientCommand::SendMessage {
                 text: "hello".to_owned(),
             },
-            SmedCommand::SendUserMessage {
+            MjolnrCommand::SendUserMessage {
                 text: "hello".to_owned(),
                 source: DirectiveSource::Human,
             },
         ),
-        (ClientCommand::CancelRun, SmedCommand::CancelRun),
+        (ClientCommand::CancelRun, MjolnrCommand::CancelRun),
         (
             ClientCommand::ResolveApproval {
                 approval: approval.clone(),
                 decision: ClientApprovalDecision::ApproveExactForSession,
             },
-            SmedCommand::ResolveApproval {
+            MjolnrCommand::ResolveApproval {
                 approval: crate::core::command::ApprovalId::from_uuid(
                     uuid::Uuid::parse_str(&approval).unwrap(),
                 ),
@@ -459,7 +459,7 @@ fn the_command_allowlist_maps_one_for_one() {
             ClientCommand::ResolveRecovery {
                 decision: ClientRecoveryDecision::EndSession,
             },
-            SmedCommand::ResolveRecovery {
+            MjolnrCommand::ResolveRecovery {
                 decision: crate::core::recovery::RecoveryDecision::EndSession,
             },
         ),
@@ -467,17 +467,17 @@ fn the_command_allowlist_maps_one_for_one() {
             ClientCommand::SetPolicy {
                 policy: ClientPolicy::ReadOnly,
             },
-            SmedCommand::SetPolicy {
+            MjolnrCommand::SetPolicy {
                 mode: PolicyMode::ReadOnly,
             },
         ),
-        (ClientCommand::EndSession, SmedCommand::EndSession),
+        (ClientCommand::EndSession, MjolnrCommand::EndSession),
         (
             ClientCommand::CreateWorktree {
                 name: "branch1".to_owned(),
                 base_revision: "main".to_owned(),
             },
-            SmedCommand::CreateWorktree {
+            MjolnrCommand::CreateWorktree {
                 name: "branch1".to_owned(),
                 base_revision: "main".to_owned(),
             },
@@ -487,7 +487,7 @@ fn the_command_allowlist_maps_one_for_one() {
                 name: "branch1".to_owned(),
                 base_revision: "main".to_owned(),
             },
-            SmedCommand::ForkWork {
+            MjolnrCommand::ForkWork {
                 name: "branch1".to_owned(),
                 base_revision: "main".to_owned(),
             },
@@ -499,7 +499,7 @@ fn the_command_allowlist_maps_one_for_one() {
                 policy_ceiling: Some(ClientPolicy::Ask),
                 budget: Some(10),
             },
-            SmedCommand::StartChild {
+            MjolnrCommand::StartChild {
                 name: "child1".to_owned(),
                 directive: "do work".to_owned(),
                 policy_ceiling: Some(PolicyMode::Ask),
@@ -515,7 +515,7 @@ fn the_command_allowlist_maps_one_for_one() {
                 policy_ceiling: None,
                 budget: None,
             },
-            SmedCommand::StartChild {
+            MjolnrCommand::StartChild {
                 name: "child2".to_owned(),
                 directive: "do more work".to_owned(),
                 policy_ceiling: None,
@@ -526,7 +526,7 @@ fn the_command_allowlist_maps_one_for_one() {
             ClientCommand::CancelChild {
                 name: "child1".to_owned(),
             },
-            SmedCommand::CancelChild {
+            MjolnrCommand::CancelChild {
                 name: "child1".to_owned(),
             },
         ),
@@ -534,7 +534,7 @@ fn the_command_allowlist_maps_one_for_one() {
             ClientCommand::PreserveBranch {
                 name: "branch1".to_owned(),
             },
-            SmedCommand::PreserveBranch {
+            MjolnrCommand::PreserveBranch {
                 name: "branch1".to_owned(),
             },
         ),
@@ -542,7 +542,7 @@ fn the_command_allowlist_maps_one_for_one() {
             ClientCommand::SettleChild {
                 name: "child1".to_owned(),
             },
-            SmedCommand::SettleChild {
+            MjolnrCommand::SettleChild {
                 name: "child1".to_owned(),
             },
         ),
@@ -550,7 +550,7 @@ fn the_command_allowlist_maps_one_for_one() {
             ClientCommand::DiscardSettledWorktree {
                 name: "branch1".to_owned(),
             },
-            SmedCommand::DiscardSettledWorktree {
+            MjolnrCommand::DiscardSettledWorktree {
                 name: "branch1".to_owned(),
             },
         ),
@@ -558,7 +558,7 @@ fn the_command_allowlist_maps_one_for_one() {
             ClientCommand::ImportWorkItem {
                 item: imported_item.clone(),
             },
-            SmedCommand::ImportWorkItem {
+            MjolnrCommand::ImportWorkItem {
                 item: imported_item.clone(),
             },
         ),
@@ -567,7 +567,7 @@ fn the_command_allowlist_maps_one_for_one() {
                 expected_revision: "rev1".to_owned(),
                 item: imported_item.clone(),
             },
-            SmedCommand::RefreshImportedItem {
+            MjolnrCommand::RefreshImportedItem {
                 expected_revision: "rev1".to_owned(),
                 item: imported_item.clone(),
             },
@@ -575,14 +575,14 @@ fn the_command_allowlist_maps_one_for_one() {
     ];
 
     for (client_command, expected) in cases {
-        let mapped = command_to_smed(&client_command)
+        let mapped = command_to_mjolnr(&client_command)
             .expect("mapped")
             .expect("a runtime command");
         assert_eq!(mapped, expected);
     }
 
     assert!(
-        command_to_smed(&ClientCommand::RequestSnapshot)
+        command_to_mjolnr(&ClientCommand::RequestSnapshot)
             .expect("mapped")
             .is_none(),
         "RequestSnapshot is bridge-handled and never reaches the runtime"
@@ -592,21 +592,21 @@ fn the_command_allowlist_maps_one_for_one() {
 #[test]
 fn a_repository_refresh_actually_reaches_the_runtime() {
     // Asserted as `Some(RefreshRepository)` rather than merely "does not
-    // error". A missing arm in `command_to_smed` falls through to the
+    // error". A missing arm in `command_to_mjolnr` falls through to the
     // catch-all `Ok(None)`, the bridge reads that as "no command, emit
     // snapshot", and the user gets a re-sent snapshot with nothing refreshed —
     // the exact silent no-op the D6 report recorded. A weaker assertion
     // passes against that bug.
-    let mapped = command_to_smed(&ClientCommand::RefreshRepository)
+    let mapped = command_to_mjolnr(&ClientCommand::RefreshRepository)
         .expect("mapped")
         .expect("a refresh must reach the runtime, not be swallowed as a no-op");
-    assert_eq!(mapped, SmedCommand::RefreshRepository);
+    assert_eq!(mapped, MjolnrCommand::RefreshRepository);
 }
 
 #[test]
 fn a_repository_refresh_carries_no_root_a_caller_could_supply() {
     // The command is deliberately field-free: accepting a root here would be a
-    // second way to point smed at a directory, bypassing every refusal
+    // second way to point mjolnr at a directory, bypassing every refusal
     // `OpenProject` applies. This pins that on the wire, so adding a field
     // fails here before it ships.
     let json = serde_json::to_value(ClientCommand::RefreshRepository).expect("serialize");
@@ -620,7 +620,7 @@ fn a_repository_refresh_carries_no_root_a_caller_could_supply() {
 
 #[test]
 fn a_save_file_carries_the_client_digest_and_text_to_the_runtime() {
-    let mapped = command_to_smed(&ClientCommand::SaveFile {
+    let mapped = command_to_mjolnr(&ClientCommand::SaveFile {
         path: "src/main.rs".to_owned(),
         expected_digest: "a".repeat(64),
         text: "fn main() {}\n".to_owned(),
@@ -630,7 +630,7 @@ fn a_save_file_carries_the_client_digest_and_text_to_the_runtime() {
 
     assert_eq!(
         mapped,
-        SmedCommand::SaveFile {
+        MjolnrCommand::SaveFile {
             path: "src/main.rs".to_owned(),
             expected_digest: "a".repeat(64),
             text: "fn main() {}\n".to_owned(),
@@ -640,7 +640,7 @@ fn a_save_file_carries_the_client_digest_and_text_to_the_runtime() {
 
 #[test]
 fn a_send_message_always_arrives_as_human_text() {
-    let mapped = command_to_smed(&ClientCommand::SendMessage {
+    let mapped = command_to_mjolnr(&ClientCommand::SendMessage {
         text: "from the client".to_owned(),
     })
     .expect("mapped")
@@ -648,7 +648,7 @@ fn a_send_message_always_arrives_as_human_text() {
     assert!(
         matches!(
             mapped,
-            SmedCommand::SendUserMessage {
+            MjolnrCommand::SendUserMessage {
                 source: DirectiveSource::Human,
                 ..
             }
@@ -661,7 +661,7 @@ fn a_send_message_always_arrives_as_human_text() {
 fn plan_question_commands_preserve_the_explicit_workflow_identity() {
     let plan_id = crate::core::plan::PlanId::new();
     let question_id = crate::core::plan::QuestionId::new();
-    let asked = command_to_smed(&ClientCommand::AskPlanQuestion {
+    let asked = command_to_mjolnr(&ClientCommand::AskPlanQuestion {
         plan_id: plan_id.to_string(),
         prompt: "Which scope?".to_string(),
         options: vec!["Narrow".to_string()],
@@ -669,7 +669,7 @@ fn plan_question_commands_preserve_the_explicit_workflow_identity() {
     })
     .expect("mapped")
     .expect("command");
-    let answered = command_to_smed(&ClientCommand::AnswerPlanQuestion {
+    let answered = command_to_mjolnr(&ClientCommand::AnswerPlanQuestion {
         plan_id: plan_id.to_string(),
         question_id: question_id.to_string(),
         selected_options: vec!["Narrow".to_string()],
@@ -680,14 +680,14 @@ fn plan_question_commands_preserve_the_explicit_workflow_identity() {
 
     assert!(matches!(
         asked,
-        SmedCommand::AskPlanQuestion {
+        MjolnrCommand::AskPlanQuestion {
             plan_id: mapped,
             ..
         } if mapped == plan_id
     ));
     assert!(matches!(
         answered,
-        SmedCommand::AnswerPlanQuestion {
+        MjolnrCommand::AnswerPlanQuestion {
             plan_id: mapped,
             answer,
         } if mapped == plan_id && answer.question_id == question_id
@@ -704,7 +704,7 @@ fn every_plan_command_maps_its_identity_revision_and_decision() {
         description: "Read the contract".to_owned(),
     }];
 
-    let proposed = command_to_smed(&ClientCommand::ProposePlan {
+    let proposed = command_to_mjolnr(&ClientCommand::ProposePlan {
         plan_id: id.clone(),
         revision: 2,
         title: "Plan".to_owned(),
@@ -713,7 +713,7 @@ fn every_plan_command_maps_its_identity_revision_and_decision() {
     })
     .expect("mapped")
     .expect("command");
-    let reviewed = command_to_smed(&ClientCommand::ReviewPlan {
+    let reviewed = command_to_mjolnr(&ClientCommand::ReviewPlan {
         plan_id: id.clone(),
         revision: 2,
         reviewer: "Architect".to_owned(),
@@ -722,7 +722,7 @@ fn every_plan_command_maps_its_identity_revision_and_decision() {
     })
     .expect("mapped")
     .expect("command");
-    let approved = command_to_smed(&ClientCommand::ApprovePlan {
+    let approved = command_to_mjolnr(&ClientCommand::ApprovePlan {
         plan_id: id.clone(),
         revision: 2,
         decision: crate::core::client::ClientReviewVerdict::Approve,
@@ -730,7 +730,7 @@ fn every_plan_command_maps_its_identity_revision_and_decision() {
     })
     .expect("mapped")
     .expect("command");
-    let handed_off = command_to_smed(&ClientCommand::HandoffPlan {
+    let handed_off = command_to_mjolnr(&ClientCommand::HandoffPlan {
         plan_id: id,
         revision: 2,
         note: "Execute".to_owned(),
@@ -740,21 +740,21 @@ fn every_plan_command_maps_its_identity_revision_and_decision() {
 
     assert!(matches!(
         proposed,
-        SmedCommand::ProposePlan { proposal }
+        MjolnrCommand::ProposePlan { proposal }
             if proposal.plan_id == plan_id
                 && proposal.revision_id == RevisionId::new(2)
                 && proposal.steps.len() == 1
     ));
     assert!(matches!(
         reviewed,
-        SmedCommand::ReviewPlan { review }
+        MjolnrCommand::ReviewPlan { review }
             if review.plan_id == plan_id
                 && review.revision_id == RevisionId::new(2)
                 && review.verdict == ReviewVerdict::Iterate
     ));
     assert!(matches!(
         approved,
-        SmedCommand::ApprovePlan { approval }
+        MjolnrCommand::ApprovePlan { approval }
             if approval.plan_id == plan_id
                 && approval.revision_id == RevisionId::new(2)
                 && approval.decision == ReviewVerdict::Approve
@@ -762,7 +762,7 @@ fn every_plan_command_maps_its_identity_revision_and_decision() {
     ));
     assert!(matches!(
         handed_off,
-        SmedCommand::HandoffPlan { handoff }
+        MjolnrCommand::HandoffPlan { handoff }
             if handoff.plan_id == plan_id
                 && handoff.revision_id == RevisionId::new(2)
     ));
@@ -772,7 +772,7 @@ fn every_plan_command_maps_its_identity_revision_and_decision() {
 fn council_disposition_command_preserves_review_finding_and_note() {
     let review_id = crate::core::council::CouncilReviewId::new();
     let finding_id = crate::core::council::CouncilFindingId::new();
-    let mapped = command_to_smed(&ClientCommand::ResolveCouncilFinding {
+    let mapped = command_to_mjolnr(&ClientCommand::ResolveCouncilFinding {
         review_id: review_id.to_string(),
         finding_id: finding_id.to_string(),
         disposition: crate::core::client::ClientCouncilDisposition::Defer,
@@ -783,7 +783,7 @@ fn council_disposition_command_preserves_review_finding_and_note() {
 
     assert!(matches!(
         mapped,
-        SmedCommand::ResolveCouncilFinding {
+        MjolnrCommand::ResolveCouncilFinding {
             review_id: mapped_review,
             finding_id: mapped_finding,
             disposition: crate::core::council::CouncilDisposition::Defer,
@@ -795,7 +795,7 @@ fn council_disposition_command_preserves_review_finding_and_note() {
 #[test]
 fn council_amendment_command_carries_the_review_and_refuses_a_malformed_id() {
     let review_id = crate::core::council::CouncilReviewId::new();
-    let mapped = command_to_smed(&ClientCommand::ProposeCouncilAmendment {
+    let mapped = command_to_mjolnr(&ClientCommand::ProposeCouncilAmendment {
         review_id: review_id.to_string(),
     })
     .expect("mapped")
@@ -803,12 +803,12 @@ fn council_amendment_command_carries_the_review_and_refuses_a_malformed_id() {
 
     assert!(matches!(
         mapped,
-        SmedCommand::ProposeCouncilAmendment {
+        MjolnrCommand::ProposeCouncilAmendment {
             review_id: mapped_review,
         } if mapped_review == review_id
     ));
 
-    command_to_smed(&ClientCommand::ProposeCouncilAmendment {
+    command_to_mjolnr(&ClientCommand::ProposeCouncilAmendment {
         review_id: "not-a-uuid".to_owned(),
     })
     .expect_err("a malformed review id is refused at the bridge");
@@ -880,7 +880,7 @@ fn malformed_commands_are_refused_with_stable_codes() {
         },
     ];
     for command in cases {
-        let error = command_to_smed(&command).expect_err("must refuse");
+        let error = command_to_mjolnr(&command).expect_err("must refuse");
         assert_eq!(
             error.reason_code(),
             Some(ReasonCode::SchemaInvalid),
@@ -897,7 +897,7 @@ fn malformed_commands_are_refused_with_stable_codes() {
 #[tokio::test]
 async fn child_run_commands_fail_closed_with_a_typed_refusal() {
     let runtime = Arc::new(TestRuntime::new());
-    runtime.refuse_dispatch_with(SmedError::workspace_refused(
+    runtime.refuse_dispatch_with(MjolnrError::workspace_refused(
         ReasonCode::WorkspaceCapabilityUnavailable,
         "Capability 'startChild' is unavailable: child-run execution is not yet implemented",
     ));
@@ -926,7 +926,7 @@ async fn child_run_commands_fail_closed_with_a_typed_refusal() {
             Some(ReasonCode::WorkspaceCapabilityUnavailable),
             "the typed code must round-trip to the client: {error}"
         );
-        runtime.refuse_dispatch_with(SmedError::workspace_refused(
+        runtime.refuse_dispatch_with(MjolnrError::workspace_refused(
             ReasonCode::WorkspaceCapabilityUnavailable,
             "Capability 'childRun' is unavailable: child-run execution is not yet implemented",
         ));
@@ -992,7 +992,7 @@ fn repository_commands_refuse_hostile_or_unbounded_input_at_the_bridge() {
             name: "ok".to_owned(),
             base_revision: String::new(),
         },
-        // An empty message would make smed the author of an unauditable
+        // An empty message would make mjolnr the author of an unauditable
         // record, and an absent expected revision makes the staleness guard
         // opt-in.
         ClientCommand::Commit {
@@ -1023,7 +1023,7 @@ fn repository_commands_refuse_hostile_or_unbounded_input_at_the_bridge() {
         },
     ];
     for command in cases {
-        let error = command_to_smed(&command).expect_err("must refuse");
+        let error = command_to_mjolnr(&command).expect_err("must refuse");
         assert_eq!(
             error.reason_code(),
             Some(ReasonCode::SchemaInvalid),
@@ -1061,14 +1061,14 @@ fn clone_and_rebase_commands_refuse_unsafe_input_at_the_bridge() {
         },
     ];
     for command in cases {
-        let error = command_to_smed(&command).expect_err("must refuse");
+        let error = command_to_mjolnr(&command).expect_err("must refuse");
         assert_eq!(error.reason_code(), Some(ReasonCode::SchemaInvalid));
     }
 }
 
 #[test]
 fn well_formed_repository_commands_map_through_with_their_expected_revisions() {
-    let mapped = command_to_smed(&ClientCommand::Commit {
+    let mapped = command_to_mjolnr(&ClientCommand::Commit {
         message: "Fix the thing".to_owned(),
         expected_index_revision: "4b825dc642cb6eb9a060e54bf8d69288fbee4904".to_owned(),
     })
@@ -1076,14 +1076,14 @@ fn well_formed_repository_commands_map_through_with_their_expected_revisions() {
     .expect("a command");
     assert!(matches!(
         mapped,
-        SmedCommand::Commit {
+        MjolnrCommand::Commit {
             ref message,
             ref expected_index_revision,
         } if message == "Fix the thing"
             && expected_index_revision == "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
     ));
 
-    let mapped = command_to_smed(&ClientCommand::IntegrateChildBranch {
+    let mapped = command_to_mjolnr(&ClientCommand::IntegrateChildBranch {
         name: "mjolnr/sub-1".to_owned(),
         message: "Take the child's work after review".to_owned(),
         expected_head: "deadbeef".to_owned(),
@@ -1092,11 +1092,11 @@ fn well_formed_repository_commands_map_through_with_their_expected_revisions() {
     .expect("a command");
     assert!(matches!(
         mapped,
-        SmedCommand::IntegrateChildBranch { ref message, .. }
+        MjolnrCommand::IntegrateChildBranch { ref message, .. }
             if message == "Take the child's work after review"
     ));
 
-    let mapped = command_to_smed(&ClientCommand::IntegrateUpstream {
+    let mapped = command_to_mjolnr(&ClientCommand::IntegrateUpstream {
         message: "Take the fetched upstream".to_owned(),
         expected_head: "deadbeef".to_owned(),
     })
@@ -1104,7 +1104,7 @@ fn well_formed_repository_commands_map_through_with_their_expected_revisions() {
     .expect("a command");
     assert!(matches!(
         mapped,
-        SmedCommand::IntegrateUpstream {
+        MjolnrCommand::IntegrateUpstream {
             ref message,
             ref expected_head,
         } if message == "Take the fetched upstream" && expected_head == "deadbeef"
@@ -1113,7 +1113,7 @@ fn well_formed_repository_commands_map_through_with_their_expected_revisions() {
 
 #[test]
 fn well_formed_clone_and_rebase_commands_keep_their_explicit_values() {
-    let mapped = command_to_smed(&ClientCommand::CloneProject {
+    let mapped = command_to_mjolnr(&ClientCommand::CloneProject {
         source: "https://example.invalid/repo".to_owned(),
         destination: "/tmp/new-project".to_owned(),
     })
@@ -1121,12 +1121,12 @@ fn well_formed_clone_and_rebase_commands_keep_their_explicit_values() {
     .expect("a command");
     assert!(matches!(
         mapped,
-        SmedCommand::CloneProject { ref source, ref destination }
+        MjolnrCommand::CloneProject { ref source, ref destination }
             if source == "https://example.invalid/repo"
                 && destination == std::path::Path::new("/tmp/new-project")
     ));
 
-    let mapped = command_to_smed(&ClientCommand::Rebase {
+    let mapped = command_to_mjolnr(&ClientCommand::Rebase {
         onto: "main".to_owned(),
         expected_head: "deadbeef".to_owned(),
     })
@@ -1134,7 +1134,7 @@ fn well_formed_clone_and_rebase_commands_keep_their_explicit_values() {
     .expect("a command");
     assert!(matches!(
         mapped,
-        SmedCommand::Rebase { ref onto, ref expected_head }
+        MjolnrCommand::Rebase { ref onto, ref expected_head }
             if onto == "main" && expected_head == "deadbeef"
     ));
 }
@@ -1192,7 +1192,7 @@ fn board_commands_refuse_hostile_or_unbounded_input_at_the_bridge() {
         },
     ];
     for command in cases {
-        let error = command_to_smed(&command).expect_err("must refuse");
+        let error = command_to_mjolnr(&command).expect_err("must refuse");
         assert_eq!(
             error.reason_code(),
             Some(ReasonCode::SchemaInvalid),
@@ -1298,7 +1298,7 @@ fn imported_item_commands_refuse_hostile_or_unbounded_input_at_the_bridge() {
         },
     ];
     for command in cases {
-        let error = command_to_smed(&command).expect_err("must refuse");
+        let error = command_to_mjolnr(&command).expect_err("must refuse");
         assert_eq!(
             error.reason_code(),
             Some(ReasonCode::SchemaInvalid),
@@ -1310,18 +1310,18 @@ fn imported_item_commands_refuse_hostile_or_unbounded_input_at_the_bridge() {
     // guard useless in practice, which is how guards get removed.
     let mut newline_title = valid_imported_item();
     newline_title.title = "line one\nline two".to_owned();
-    let mapped = command_to_smed(&ClientCommand::ImportWorkItem {
+    let mapped = command_to_mjolnr(&ClientCommand::ImportWorkItem {
         item: newline_title,
     })
     .expect("a newline in third-party prose survives validation")
     .expect("a command");
-    assert!(matches!(mapped, SmedCommand::ImportWorkItem { .. }));
+    assert!(matches!(mapped, MjolnrCommand::ImportWorkItem { .. }));
 }
 
 #[test]
 fn well_formed_board_commands_map_through_their_kinds_and_references() {
     let blocker = uuid::Uuid::now_v7();
-    let mapped = command_to_smed(&ClientCommand::OpenDecisionTicket {
+    let mapped = command_to_mjolnr(&ClientCommand::OpenDecisionTicket {
         question: "Which format for the knowledge bundle?".to_owned(),
         kind: crate::core::client::ClientDecisionTicketKind::Grilling,
         options: vec!["okf".to_owned(), "adr set".to_owned()],
@@ -1331,7 +1331,7 @@ fn well_formed_board_commands_map_through_their_kinds_and_references() {
     .expect("a command");
     assert!(matches!(
         mapped,
-        SmedCommand::OpenDecisionTicket {
+        MjolnrCommand::OpenDecisionTicket {
             ref kind,
             ref options,
             ref blocked_by,
@@ -1342,7 +1342,7 @@ fn well_formed_board_commands_map_through_their_kinds_and_references() {
     ));
 
     let ticket = uuid::Uuid::now_v7();
-    let mapped = command_to_smed(&ClientCommand::ResolveDecisionTicket {
+    let mapped = command_to_mjolnr(&ClientCommand::ResolveDecisionTicket {
         ticket: ticket.to_string(),
         chosen_option: 1,
         note: Some("the queue is out of scope".to_owned()),
@@ -1351,7 +1351,7 @@ fn well_formed_board_commands_map_through_their_kinds_and_references() {
     .expect("a command");
     assert!(matches!(
         mapped,
-        SmedCommand::ResolveDecisionTicket {
+        MjolnrCommand::ResolveDecisionTicket {
             ticket: mapped_ticket,
             chosen_option: 1,
             ref note,
@@ -1366,7 +1366,7 @@ fn well_formed_board_commands_map_through_their_kinds_and_references() {
 #[tokio::test]
 async fn repository_commands_without_an_open_project_are_refused_not_dropped() {
     let runtime = Arc::new(TestRuntime::new());
-    runtime.refuse_dispatch_with(SmedError::workspace_refused(
+    runtime.refuse_dispatch_with(MjolnrError::workspace_refused(
         ReasonCode::WorkspaceCapabilityUnavailable,
         "No project is open, so there is no repository to act on",
     ));
@@ -1440,7 +1440,7 @@ fn integration_commands_bound_and_sanitize_externally_supplied_text() {
         },
     ];
     for command in cases {
-        let error = command_to_smed(&command).expect_err("must refuse");
+        let error = command_to_mjolnr(&command).expect_err("must refuse");
         assert_eq!(
             error.reason_code(),
             Some(ReasonCode::SchemaInvalid),
@@ -1468,7 +1468,7 @@ fn a_change_without_a_usable_revision_pin_is_refused_at_the_bridge() {
         },
     };
     for pin in ["", "   ", "rev\u{1b}[2J1", "rev\n1", &"r".repeat(513)] {
-        let error = command_to_smed(&with_pin(pin)).expect_err("must refuse");
+        let error = command_to_mjolnr(&with_pin(pin)).expect_err("must refuse");
         assert_eq!(
             error.reason_code(),
             Some(ReasonCode::SchemaInvalid),
@@ -1476,7 +1476,7 @@ fn a_change_without_a_usable_revision_pin_is_refused_at_the_bridge() {
         );
     }
     assert!(
-        command_to_smed(&with_pin("rev1")).is_ok(),
+        command_to_mjolnr(&with_pin("rev1")).is_ok(),
         "an ordinary pin must survive validation"
     );
 }
@@ -1486,7 +1486,7 @@ fn a_change_without_a_usable_revision_pin_is_refused_at_the_bridge() {
 /// every downstream test would still pass.
 #[test]
 fn the_revision_pin_survives_the_mapping_into_the_runtime_command() {
-    let mapped = command_to_smed(&ClientCommand::SubmitChange {
+    let mapped = command_to_mjolnr(&ClientCommand::SubmitChange {
         source: "github".to_owned(),
         request: crate::core::client::ClientRemoteChangeRequest {
             remote_id: "42".to_owned(),
@@ -1502,7 +1502,7 @@ fn the_revision_pin_survives_the_mapping_into_the_runtime_command() {
     .expect("a command");
     assert!(matches!(
         mapped,
-        SmedCommand::SubmitChange {
+        MjolnrCommand::SubmitChange {
             ref expected_revision,
             ..
         } if expected_revision == "rev7"
@@ -1513,7 +1513,7 @@ fn the_revision_pin_survives_the_mapping_into_the_runtime_command() {
 fn a_newline_in_a_remote_body_is_legitimate_and_survives_validation() {
     // An issue body has paragraphs. Refusing '\n' would make the guard useless
     // in practice, which is how guards get removed.
-    let mapped = command_to_smed(&ClientCommand::SubmitChange {
+    let mapped = command_to_mjolnr(&ClientCommand::SubmitChange {
         source: "github".to_owned(),
         request: crate::core::client::ClientRemoteChangeRequest {
             remote_id: "42".to_owned(),
@@ -1529,7 +1529,7 @@ fn a_newline_in_a_remote_body_is_legitimate_and_survives_validation() {
     .expect("a command");
     assert!(matches!(
         mapped,
-        SmedCommand::SubmitChange { ref body, .. } if body.contains("Second paragraph")
+        MjolnrCommand::SubmitChange { ref body, .. } if body.contains("Second paragraph")
     ));
 }
 
@@ -1560,7 +1560,7 @@ async fn integration_commands_are_refused_typed_rather_than_silently_dropped() {
             },
         },
     ] {
-        runtime.refuse_dispatch_with(SmedError::workspace_refused(
+        runtime.refuse_dispatch_with(MjolnrError::workspace_refused(
             ReasonCode::WorkspaceCapabilityUnavailable,
             "no integration performs network requests yet; no credential was read",
         ));
@@ -1581,13 +1581,13 @@ async fn integration_commands_are_refused_typed_rather_than_silently_dropped() {
     assert!(
         dispatched
             .iter()
-            .any(|command| matches!(command, SmedCommand::FetchTask { .. })),
+            .any(|command| matches!(command, MjolnrCommand::FetchTask { .. })),
         "fetchTask never reached the runtime: {dispatched:?}"
     );
     assert!(
         dispatched
             .iter()
-            .any(|command| matches!(command, SmedCommand::SubmitChange { .. })),
+            .any(|command| matches!(command, MjolnrCommand::SubmitChange { .. })),
         "submitChange never reached the runtime: {dispatched:?}"
     );
 }
@@ -1597,7 +1597,7 @@ fn the_event_vocabulary_is_a_deliberate_subset() {
     let session = SessionId::new();
     let run = RunId::new();
 
-    let kept = SmedEvent::RunFinished {
+    let kept = MjolnrEvent::RunFinished {
         session,
         run,
         reason: FinishReason::Cancelled,
@@ -1610,7 +1610,7 @@ fn the_event_vocabulary_is_a_deliberate_subset() {
         })
     ));
 
-    let saved = SmedEvent::FileSaved {
+    let saved = MjolnrEvent::FileSaved {
         session,
         path: "src/main.rs".to_owned(),
         observed_digest: "a".repeat(64),
@@ -1659,7 +1659,7 @@ fn parse_timestamp(raw: &str) -> time::OffsetDateTime {
 #[tokio::test]
 async fn async_integration_2_ordered_updates() {
     let runtime = Arc::new(TestRuntime::new());
-    let bridge = ClientBridge::start(Arc::clone(&runtime) as Arc<dyn SmedRuntime>);
+    let bridge = ClientBridge::start(Arc::clone(&runtime) as Arc<dyn MjolnrRuntime>);
     let mut rx = bridge.take_updates().expect("updates channel");
 
     // Consume initial snapshot
@@ -1668,7 +1668,7 @@ async fn async_integration_2_ordered_updates() {
     let run_id = RunId::new();
     runtime
         .events_tx
-        .send(SmedEvent::RunStarted {
+        .send(MjolnrEvent::RunStarted {
             session: SessionId::new(),
             run: run_id,
         })
@@ -1676,7 +1676,7 @@ async fn async_integration_2_ordered_updates() {
 
     runtime
         .events_tx
-        .send(SmedEvent::RunFinished {
+        .send(MjolnrEvent::RunFinished {
             session: SessionId::new(),
             run: run_id,
             reason: FinishReason::Stop,
@@ -1716,7 +1716,8 @@ async fn async_integration_2_ordered_updates() {
 async fn async_integration_3_lag_causes_explicit_resync() {
     let runtime = Arc::new(TestRuntime::new());
     // Start with capacity 1 to force lag quickly
-    let bridge = ClientBridge::start_with_capacity(Arc::clone(&runtime) as Arc<dyn SmedRuntime>, 1);
+    let bridge =
+        ClientBridge::start_with_capacity(Arc::clone(&runtime) as Arc<dyn MjolnrRuntime>, 1);
     let mut rx = bridge.take_updates().expect("updates channel");
 
     // Drain initial snapshot
@@ -1725,7 +1726,7 @@ async fn async_integration_3_lag_causes_explicit_resync() {
     // Send multiple events without reading from rx to fill the broadcast channel
     let run_id = RunId::new();
     for _ in 0..300 {
-        let _ = runtime.events_tx.send(SmedEvent::RunStarted {
+        let _ = runtime.events_tx.send(MjolnrEvent::RunStarted {
             session: SessionId::new(),
             run: run_id,
         });
@@ -1752,7 +1753,7 @@ async fn async_integration_3_lag_causes_explicit_resync() {
 #[tokio::test]
 async fn async_integration_4_explicit_request_snapshot() {
     let runtime = Arc::new(TestRuntime::new());
-    let bridge = ClientBridge::start(Arc::clone(&runtime) as Arc<dyn SmedRuntime>);
+    let bridge = ClientBridge::start(Arc::clone(&runtime) as Arc<dyn MjolnrRuntime>);
     let mut rx = bridge.take_updates().expect("updates channel");
 
     // Drain initial snapshot
@@ -1779,7 +1780,7 @@ async fn async_integration_4_explicit_request_snapshot() {
 #[tokio::test]
 async fn async_integration_5_detached_closed_clients() {
     let runtime = Arc::new(TestRuntime::new());
-    let bridge = ClientBridge::start(Arc::clone(&runtime) as Arc<dyn SmedRuntime>);
+    let bridge = ClientBridge::start(Arc::clone(&runtime) as Arc<dyn MjolnrRuntime>);
     let mut rx = bridge.take_updates().expect("updates channel");
 
     bridge.close().await.expect("close runtime bridge");
@@ -1803,7 +1804,7 @@ async fn async_integration_5_detached_closed_clients() {
 #[tokio::test]
 async fn async_integration_6_cancellation_reaches_runtime() {
     let runtime = Arc::new(TestRuntime::new());
-    let bridge = ClientBridge::start(Arc::clone(&runtime) as Arc<dyn SmedRuntime>);
+    let bridge = ClientBridge::start(Arc::clone(&runtime) as Arc<dyn MjolnrRuntime>);
 
     bridge
         .dispatch(ClientCommand::CancelRun)
@@ -1812,13 +1813,13 @@ async fn async_integration_6_cancellation_reaches_runtime() {
 
     let cmds = runtime.commands();
     assert_eq!(cmds.len(), 1);
-    assert_eq!(cmds[0], SmedCommand::CancelRun);
+    assert_eq!(cmds[0], MjolnrCommand::CancelRun);
 }
 
 #[tokio::test]
 async fn async_integration_7_exactly_one_terminal_cancellation_outcome() {
     let runtime = Arc::new(TestRuntime::new());
-    let bridge = ClientBridge::start(Arc::clone(&runtime) as Arc<dyn SmedRuntime>);
+    let bridge = ClientBridge::start(Arc::clone(&runtime) as Arc<dyn MjolnrRuntime>);
     let mut rx = bridge.take_updates().expect("updates channel");
 
     // Consume initial snapshot
@@ -1827,7 +1828,7 @@ async fn async_integration_7_exactly_one_terminal_cancellation_outcome() {
     let run_id = RunId::new();
     runtime
         .events_tx
-        .send(SmedEvent::RunFinished {
+        .send(MjolnrEvent::RunFinished {
             session: SessionId::new(),
             run: run_id,
             reason: FinishReason::Cancelled,
@@ -2033,13 +2034,13 @@ impl crate::core::store::EventStore for FailingEventStore {
         &self,
     ) -> Result<Vec<crate::core::store::SessionSummary>, crate::core::store::StoreError> {
         Err(crate::core::store::StoreError::Unavailable {
-            detail: "SQLite disk I/O error [SMED-ERR-STORE-001]".to_owned(),
+            detail: "SQLite disk I/O error [MJOLNR-ERR-STORE-001]".to_owned(),
         })
     }
 
     async fn append(
         &self,
-        event: crate::core::event::SmedEvent,
+        event: crate::core::event::MjolnrEvent,
     ) -> Result<crate::core::event::StoredEvent, crate::core::store::StoreError> {
         Ok(crate::core::event::StoredEvent {
             id: crate::core::event::EventId::new(),
@@ -2173,13 +2174,13 @@ async fn the_board_query_reaches_the_client_as_wire_shape() {
     let blocker = BoardNodeView {
         id: NodeId::Decision(crate::core::board::DecisionTicketId::new()),
         kind: NodeKind::Decision,
-        provenance: Provenance::SmedGoverned,
+        provenance: Provenance::MjolnrGoverned,
         label: "the blocker question".to_owned(),
     };
     let fogged = BoardNodeView {
         id: NodeId::Plan(PlanId::new()),
         kind: NodeKind::Implementation,
-        provenance: Provenance::SmedGoverned,
+        provenance: Provenance::MjolnrGoverned,
         label: "the plan title".to_owned(),
     };
     let settled = BoardNodeView {
@@ -2213,7 +2214,7 @@ async fn the_board_query_reaches_the_client_as_wire_shape() {
     assert_eq!(board.frontier[0].kind, "decision");
     assert_eq!(
         board.frontier[0].provenance,
-        crate::core::client::workspace::TrustClass::SmedGoverned
+        crate::core::client::workspace::TrustClass::MjolnrGoverned
     );
 
     assert_eq!(board.fog.len(), 1);
@@ -2267,7 +2268,7 @@ fn the_board_overview_over_the_wire_limit_is_refused() {
         frontier.push(BoardNodeView {
             id: NodeId::Decision(crate::core::board::DecisionTicketId::new()),
             kind: NodeKind::Decision,
-            provenance: Provenance::SmedGoverned,
+            provenance: Provenance::MjolnrGoverned,
             label: "overflow ticket".to_owned(),
         });
     }

@@ -7,8 +7,7 @@
 //! default model. Pretending each needs its own adapter would be the opposite
 //! lie to the one §30.3 warns about.
 //!
-//! Base URLs may be overridden per provider with `MJOLNR_<ID>_BASE_URL`; the
-//! pre-rename `SMED_<ID>_BASE_URL` is still read as a fallback (ADR-0018)
+//! Base URLs may be overridden per provider with `MJOLNR_<ID>_BASE_URL`
 //! (hyphens become underscores), which is how account-scoped gateways and
 //! non-default local ports are configured.
 
@@ -49,7 +48,7 @@ pub struct CompatDescriptor {
     pub label: &'static str,
     /// Default endpoint root (the adapter appends `/chat/completions`).
     /// Empty means "no usable default" — the URL is account-specific and must
-    /// come from `MJOLNR_<ID>_BASE_URL`, or the legacy `SMED_<ID>_BASE_URL`.
+    /// come from `MJOLNR_<ID>_BASE_URL`.
     pub default_base_url: &'static str,
     /// Model requested when the user has not picked one.
     pub default_model: &'static str,
@@ -60,7 +59,7 @@ pub struct CompatDescriptor {
 
 /// Phase 16 catalog. Base URLs verified against each provider's published
 /// OpenAI-compatible endpoint (2026-07-21); defaults borrowed from oh-my-pi's
-/// catalog where smed has no prior opinion.
+/// catalog where mjolnr has no prior opinion.
 pub static CATALOG: &[CompatDescriptor] = &[
     CompatDescriptor {
         id: "nvidia",
@@ -217,7 +216,7 @@ pub static CATALOG: &[CompatDescriptor] = &[
         // Verified 2026-07-31 against TokenRouter's published quick-start.
         default_base_url: "https://api.tokenrouter.com/v1",
         // A free-tier promotional route at the time this was added — the
-        // owner's own choice, not a smed default; TokenRouter's own docs
+        // owner's own choice, not a mjolnr default; TokenRouter's own docs
         // warn free capacity is unguaranteed and can vanish without notice.
         default_model: "moonshotai/kimi-k3-free",
         model_display: "Kimi K3 (TokenRouter free tier)",
@@ -231,22 +230,11 @@ pub fn base_url_variable(id: &str) -> String {
     format!("MJOLNR_{}_BASE_URL", id.to_uppercase().replace('-', "_"))
 }
 
-/// The pre-rename spelling of [`base_url_variable`], still read as a fallback.
-///
-/// ADR-0018 renamed the product, and an environment variable is a contract with
-/// whoever exported it in their shell profile. The canonical name wins; the old
-/// one keeps working rather than silently sending traffic to the default host.
-#[must_use]
-pub fn legacy_base_url_variable(id: &str) -> String {
-    format!("SMED_{}_BASE_URL", id.to_uppercase().replace('-', "_"))
-}
-
 const LM_STUDIO_ID: &str = "lm-studio";
 const LM_STUDIO_CONFIG_FILE: &str = "lm-studio.url";
 
 fn environment_base_url(descriptor: &CompatDescriptor) -> Option<String> {
     std::env::var(base_url_variable(descriptor.id))
-        .or_else(|_| std::env::var(legacy_base_url_variable(descriptor.id)))
         .ok()
         .map(|value| value.trim().trim_end_matches('/').to_owned())
         .filter(|value| !value.is_empty())
@@ -331,10 +319,10 @@ pub fn persist_lm_studio_base_url(workspace_root: &Path, input: &str) -> Result<
         .ok_or_else(|| "LM Studio configuration path has no parent".to_owned())?;
     let canonical_root = std::fs::canonicalize(workspace_root)
         .map_err(|error| format!("could not resolve {}: {error}", workspace_root.display()))?;
-    let smed_dir = crate::core::paths::resolve_workspace_config_dir(workspace_root);
-    if smed_dir.exists() {
-        let resolved = std::fs::canonicalize(&smed_dir)
-            .map_err(|error| format!("could not resolve {}: {error}", smed_dir.display()))?;
+    let mjolnr_dir = crate::core::paths::resolve_workspace_config_dir(workspace_root);
+    if mjolnr_dir.exists() {
+        let resolved = std::fs::canonicalize(&mjolnr_dir)
+            .map_err(|error| format!("could not resolve {}: {error}", mjolnr_dir.display()))?;
         if !resolved.starts_with(&canonical_root) {
             return Err(
                 "workspace config directory resolves outside the current project".to_owned(),
@@ -866,7 +854,7 @@ impl Provider for OpenAiCompatProvider {
             return Ok(discovered);
         }
 
-        // A generic `/models` row proves availability, not smed's required
+        // A generic `/models` row proves availability, not mjolnr's required
         // streaming + tool contract. Keep only the descriptor this named
         // adapter has reviewed; provider-specific adapters may apply richer
         // official metadata or their own curated intersection.
@@ -1166,7 +1154,7 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn lm_studio_address_refuses_a_smed_directory_outside_the_project() {
+    fn lm_studio_address_refuses_a_mjolnr_directory_outside_the_project() {
         use std::os::unix::fs::symlink;
 
         let workspace = tempfile::tempdir().unwrap();

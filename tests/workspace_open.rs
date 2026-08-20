@@ -10,15 +10,15 @@
 
 use std::sync::Arc;
 
-use smed::core::command::SmedCommand;
-use smed::core::error::{ReasonCode, SmedError};
-use smed::core::model::{ModelId, ProviderId};
-use smed::core::provider::Provider;
-use smed::core::runtime::SmedRuntime;
-use smed::core::store::EventStore;
-use smed::providers::fake::FakeProvider;
-use smed::runtime::Runtime;
-use smed::store::memory::InMemoryEventStore;
+use mjolnr::core::command::MjolnrCommand;
+use mjolnr::core::error::{MjolnrError, ReasonCode};
+use mjolnr::core::model::{ModelId, ProviderId};
+use mjolnr::core::provider::Provider;
+use mjolnr::core::runtime::MjolnrRuntime;
+use mjolnr::core::store::EventStore;
+use mjolnr::providers::fake::FakeProvider;
+use mjolnr::runtime::Runtime;
+use mjolnr::store::memory::InMemoryEventStore;
 
 fn spawn_runtime() -> Runtime {
     Runtime::spawn(
@@ -29,7 +29,7 @@ fn spawn_runtime() -> Runtime {
 
 /// The refusal code, or a panic naming what came back instead. Asserting on the
 /// code rather than the prose is the contract (AGENTS.md §6).
-fn refusal_code(error: &SmedError) -> ReasonCode {
+fn refusal_code(error: &MjolnrError) -> ReasonCode {
     error
         .reason_code()
         .unwrap_or_else(|| panic!("expected a coded refusal, got: {error}"))
@@ -41,7 +41,7 @@ async fn opening_a_real_directory_is_acknowledged_and_sets_the_root() {
     let runtime = spawn_runtime();
 
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: temp.path().to_path_buf(),
         })
         .await
@@ -66,7 +66,7 @@ async fn a_path_that_is_not_a_directory_is_refused_not_reported_as_a_store_failu
     let runtime = spawn_runtime();
 
     let error = runtime
-        .dispatch(SmedCommand::OpenProject { root: file })
+        .dispatch(MjolnrCommand::OpenProject { root: file })
         .await
         .expect_err("a file is not a workspace root");
 
@@ -93,7 +93,7 @@ async fn a_missing_directory_is_refused_with_a_path_code() {
     let runtime = spawn_runtime();
 
     let error = runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: temp.path().join("no-such-directory"),
         })
         .await
@@ -110,7 +110,7 @@ async fn an_empty_root_is_refused_before_it_reaches_the_filesystem() {
     let runtime = spawn_runtime();
 
     let error = runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: std::path::PathBuf::new(),
         })
         .await
@@ -133,13 +133,13 @@ async fn the_root_is_locked_while_a_session_is_open_and_says_so() {
     let runtime = spawn_runtime();
 
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: first.path().to_path_buf(),
         })
         .await
         .expect("open first project");
     runtime
-        .dispatch(SmedCommand::CreateSession {
+        .dispatch(MjolnrCommand::CreateSession {
             provider: ProviderId::new(FakeProvider::ID),
             model: ModelId::new(FakeProvider::MODEL),
         })
@@ -149,7 +149,7 @@ async fn the_root_is_locked_while_a_session_is_open_and_says_so() {
     let opened = runtime.snapshot().workspace_root.expect("first root");
 
     let error = runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: second.path().to_path_buf(),
         })
         .await

@@ -1,6 +1,6 @@
 //! Syntax highlighting for transcript code and diffs (Phase 20).
 //!
-//! `syntect` supplies the grammars; the colours are smed's own, derived from
+//! `syntect` supplies the grammars; the colours are mjolnr's own, derived from
 //! the active theme's semantic roles (`theme::syntax`) so a `/theme` switch
 //! re-skins highlighted code for free. The heavy `SyntaxSet` is loaded once
 //! behind a `OnceLock` — immutable after init, so this is not the mutable
@@ -106,7 +106,7 @@ fn item(scope: &str, foreground: Color, font_style: Option<FontStyle>) -> ThemeI
     }
 }
 
-/// Build a syntect theme from the active smed palette. Scope coverage is the
+/// Build a syntect theme from the active mjolnr palette. Scope coverage is the
 /// classic minimal editor set; anything unscoped falls to `settings.foreground`.
 fn syntect_theme() -> Theme {
     let palette: SyntaxPalette = theme::syntax();
@@ -119,8 +119,8 @@ fn syntect_theme() -> Theme {
         ..ThemeSettings::default()
     };
     Theme {
-        name: Some("smed".to_owned()),
-        author: Some("smed".to_owned()),
+        name: Some("mjolnr".to_owned()),
+        author: Some("mjolnr".to_owned()),
         settings,
         scopes: vec![
             item("comment", palette.comment, italic),

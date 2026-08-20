@@ -18,7 +18,7 @@ use std::path::Path;
 use sha2::{Digest, Sha256};
 
 use crate::core::error::ReasonCode;
-use crate::core::event::{SessionId, SmedEvent, StoredEvent};
+use crate::core::event::{MjolnrEvent, SessionId, StoredEvent};
 use crate::core::store::{EventStore, ProjectId, StoreError};
 use crate::core::trigger::TriggerOutcome;
 
@@ -30,7 +30,7 @@ use crate::core::trigger::TriggerOutcome;
 #[must_use]
 pub fn control_session_id(project_root_realpath: &str, trigger_name: &str) -> SessionId {
     let mut hasher = Sha256::new();
-    hasher.update(b"smed-trigger-control-session:v1:");
+    hasher.update(b"mjolnr-trigger-control-session:v1:");
     hasher.update(project_root_realpath.as_bytes());
     hasher.update(b":");
     hasher.update(trigger_name.as_bytes());
@@ -92,8 +92,8 @@ pub struct TriggerRuntimeState {
 /// Fold a control session's durable events into the trigger's current state.
 ///
 /// Event-sourced rather than a mutable row: the same posture every other
-/// piece of smed state takes (`AGENTS.md` — "do not invent a side channel").
-/// A human re-arming a disabled trigger is a later [`SmedEvent::TriggerRearmed`]
+/// piece of mjolnr state takes (`AGENTS.md` — "do not invent a side channel").
+/// A human re-arming a disabled trigger is a later [`MjolnrEvent::TriggerRearmed`]
 /// event, so "is it disabled" is answered by "is the last disable/rearm event
 /// a disable", not by a flag that could drift from the log that explains it.
 #[must_use]
@@ -101,7 +101,7 @@ pub fn replay(events: &[StoredEvent], trigger_name: &str) -> TriggerRuntimeState
     let mut state = TriggerRuntimeState::default();
     for stored in events {
         match &stored.event {
-            SmedEvent::TriggerSettled {
+            MjolnrEvent::TriggerSettled {
                 trigger, outcome, ..
             } if trigger == trigger_name => {
                 state.last_outcome = Some(*outcome);
@@ -111,10 +111,10 @@ pub fn replay(events: &[StoredEvent], trigger_name: &str) -> TriggerRuntimeState
                     state.consecutive_failures = 0;
                 }
             }
-            SmedEvent::TriggerDisabled { trigger, code, .. } if trigger == trigger_name => {
+            MjolnrEvent::TriggerDisabled { trigger, code, .. } if trigger == trigger_name => {
                 state.disabled_reason = Some(*code);
             }
-            SmedEvent::TriggerRearmed { trigger, .. } if trigger == trigger_name => {
+            MjolnrEvent::TriggerRearmed { trigger, .. } if trigger == trigger_name => {
                 state.disabled_reason = None;
                 state.consecutive_failures = 0;
             }
@@ -153,7 +153,7 @@ mod tests {
         assert_ne!(a, d);
     }
 
-    fn stored(event: SmedEvent, sequence: u64) -> StoredEvent {
+    fn stored(event: MjolnrEvent, sequence: u64) -> StoredEvent {
         StoredEvent {
             id: crate::core::event::EventId::new(),
             sequence,
@@ -168,7 +168,7 @@ mod tests {
         let child = SessionId::new();
         let events = vec![
             stored(
-                SmedEvent::TriggerSettled {
+                MjolnrEvent::TriggerSettled {
                     session: control,
                     trigger: "t".to_owned(),
                     child,
@@ -178,7 +178,7 @@ mod tests {
                 0,
             ),
             stored(
-                SmedEvent::TriggerSettled {
+                MjolnrEvent::TriggerSettled {
                     session: control,
                     trigger: "t".to_owned(),
                     child,
@@ -188,7 +188,7 @@ mod tests {
                 1,
             ),
             stored(
-                SmedEvent::TriggerSettled {
+                MjolnrEvent::TriggerSettled {
                     session: control,
                     trigger: "t".to_owned(),
                     child,
@@ -207,7 +207,7 @@ mod tests {
     fn a_disable_event_disables_until_a_later_rearm() {
         let control = SessionId::new();
         let events = vec![stored(
-            SmedEvent::TriggerDisabled {
+            MjolnrEvent::TriggerDisabled {
                 session: control,
                 trigger: "t".to_owned(),
                 code: ReasonCode::TriggerDisabled,
@@ -220,7 +220,7 @@ mod tests {
 
         let mut rearmed = events;
         rearmed.push(stored(
-            SmedEvent::TriggerRearmed {
+            MjolnrEvent::TriggerRearmed {
                 session: control,
                 trigger: "t".to_owned(),
             },
@@ -235,7 +235,7 @@ mod tests {
     fn events_for_a_different_trigger_are_ignored() {
         let control = SessionId::new();
         let events = vec![stored(
-            SmedEvent::TriggerDisabled {
+            MjolnrEvent::TriggerDisabled {
                 session: control,
                 trigger: "other".to_owned(),
                 code: ReasonCode::TriggerDisabled,

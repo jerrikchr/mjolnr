@@ -20,20 +20,20 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use smed::context::{DiscoveryConfig, DiscoveryLimits, ProjectContext};
-use smed::core::command::{ApprovalDecision, SmedCommand};
-use smed::core::error::ProviderError;
-use smed::core::event::{ExtensionLoadAuthority, FinishReason, ProviderEvent, SmedEvent};
-use smed::core::message::{ContentBlock, ToolCall, ToolOutcome};
-use smed::core::model::{ModelCapabilities, ModelDescriptor, ModelId, ProviderId};
-use smed::core::policy::PolicyMode;
-use smed::core::provider::{Provider, ProviderCompletion, ProviderRequest};
-use smed::core::runtime::{RuntimeSnapshot, RuntimeSubscription, SmedRuntime};
-use smed::core::store::EventStore;
-use smed::core::tool::ToolTier;
-use smed::providers::fake::FakeProvider;
-use smed::runtime::Runtime;
-use smed::store::sqlite::SqliteEventStore;
+use mjolnr::context::{DiscoveryConfig, DiscoveryLimits, ProjectContext};
+use mjolnr::core::command::{ApprovalDecision, MjolnrCommand};
+use mjolnr::core::error::ProviderError;
+use mjolnr::core::event::{ExtensionLoadAuthority, FinishReason, MjolnrEvent, ProviderEvent};
+use mjolnr::core::message::{ContentBlock, ToolCall, ToolOutcome};
+use mjolnr::core::model::{ModelCapabilities, ModelDescriptor, ModelId, ProviderId};
+use mjolnr::core::policy::PolicyMode;
+use mjolnr::core::provider::{Provider, ProviderCompletion, ProviderRequest};
+use mjolnr::core::runtime::{MjolnrRuntime, RuntimeSnapshot, RuntimeSubscription};
+use mjolnr::core::store::EventStore;
+use mjolnr::core::tool::ToolTier;
+use mjolnr::providers::fake::FakeProvider;
+use mjolnr::runtime::Runtime;
+use mjolnr::store::sqlite::SqliteEventStore;
 use tempfile::TempDir;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
@@ -58,10 +58,10 @@ struct Fixture {
 impl Fixture {
     fn new() -> Self {
         let directory = TempDir::new().expect("temp dir");
-        let database = directory.path().join("smed.sqlite3");
+        let database = directory.path().join("mjolnr.sqlite3");
         let workspace = directory.path().join("workspace");
         let user = directory.path().join("user");
-        std::fs::create_dir_all(workspace.join(".smed/extensions")).expect("extensions dir");
+        std::fs::create_dir_all(workspace.join(".mjolnr/extensions")).expect("extensions dir");
         std::fs::create_dir_all(&user).expect("user dir");
         let workspace = workspace.canonicalize().expect("canonical workspace");
         Self {
@@ -73,17 +73,20 @@ impl Fixture {
     }
 
     fn write_extension(&self, file: &str, contents: &str) {
-        std::fs::write(self.workspace.join(".smed/extensions").join(file), contents)
-            .expect("write extension");
+        std::fs::write(
+            self.workspace.join(".mjolnr/extensions").join(file),
+            contents,
+        )
+        .expect("write extension");
     }
 
     fn context(&self) -> ProjectContext {
         ProjectContext::discover(DiscoveryConfig {
             project_root: self.workspace.clone(),
             working_directory: self.workspace.clone(),
-            user_native_skills: self.user.join("smed"),
+            user_native_skills: self.user.join("mjolnr"),
             user_agent_skills: self.user.join("agents"),
-            user_config: self.user.join("smed"),
+            user_config: self.user.join("mjolnr"),
             limits: DiscoveryLimits::default(),
         })
         .expect("discover context")
@@ -98,7 +101,7 @@ impl Fixture {
     }
 
     fn runtime(&self, store: &Arc<SqliteEventStore>) -> Runtime {
-        let provider: Arc<dyn smed::core::provider::Provider> = Arc::new(FakeProvider::default());
+        let provider: Arc<dyn mjolnr::core::provider::Provider> = Arc::new(FakeProvider::default());
         Runtime::spawn_with_project_context(
             vec![provider],
             Arc::clone(store) as Arc<dyn EventStore>,
@@ -120,13 +123,13 @@ async fn settle(runtime: &Runtime, ready: impl Fn(&RuntimeSnapshot) -> bool) -> 
 
 async fn open_session(runtime: &Runtime, workspace: &std::path::Path) -> RuntimeSnapshot {
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: workspace.to_path_buf(),
         })
         .await
         .expect("open project");
     runtime
-        .dispatch(SmedCommand::CreateSession {
+        .dispatch(MjolnrCommand::CreateSession {
             provider: ProviderId::new(FakeProvider::ID),
             model: ModelId::new(FakeProvider::MODEL),
         })
@@ -137,7 +140,7 @@ async fn open_session(runtime: &Runtime, workspace: &std::path::Path) -> Runtime
 
 async fn load(runtime: &Runtime, name: &str) -> RuntimeSnapshot {
     runtime
-        .dispatch(SmedCommand::LoadExtension {
+        .dispatch(MjolnrCommand::LoadExtension {
             name: name.to_owned(),
         })
         .await
@@ -192,7 +195,7 @@ async fn loading_records_a_typed_event_and_makes_the_tool_callable() {
     let recorded = events
         .iter()
         .filter_map(|stored| match &stored.event {
-            SmedEvent::ExtensionLoaded {
+            MjolnrEvent::ExtensionLoaded {
                 name, program, by, ..
             } => Some((name.clone(), program.clone(), *by)),
             _ => None,
@@ -212,7 +215,7 @@ async fn loading_records_a_typed_event_and_makes_the_tool_callable() {
     // *failure* report specifically — the successful first report is still on
     // the snapshot, so settling on the name alone would race it.
     runtime
-        .dispatch(SmedCommand::LoadExtension {
+        .dispatch(MjolnrCommand::LoadExtension {
             name: "count-lines".to_owned(),
         })
         .await
@@ -253,7 +256,7 @@ async fn an_unknown_extension_is_refused_without_recording_anything() {
     assert!(
         !events
             .iter()
-            .any(|stored| matches!(stored.event, SmedEvent::ExtensionLoaded { .. })),
+            .any(|stored| matches!(stored.event, MjolnrEvent::ExtensionLoaded { .. })),
         "a refused load must record no ExtensionLoaded event"
     );
 
@@ -347,8 +350,8 @@ impl Provider for CallingProvider {
 async fn wait_event(
     events: &mut RuntimeSubscription,
     label: &str,
-    mut predicate: impl FnMut(&SmedEvent) -> bool,
-) -> SmedEvent {
+    mut predicate: impl FnMut(&MjolnrEvent) -> bool,
+) -> MjolnrEvent {
     tokio::time::timeout(Duration::from_secs(5), async {
         loop {
             match events.recv().await {
@@ -376,20 +379,20 @@ async fn a_loaded_extension_call_is_previewed_gated_at_execute_and_refusable() {
     let mut events = runtime.subscribe();
 
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: fixture.workspace.clone(),
         })
         .await
         .expect("open project");
     runtime
-        .dispatch(SmedCommand::CreateSession {
+        .dispatch(MjolnrCommand::CreateSession {
             provider: ProviderId::new(CALLER),
             model: ModelId::new(CALLER_MODEL),
         })
         .await
         .expect("create session");
     runtime
-        .dispatch(SmedCommand::SetPolicy {
+        .dispatch(MjolnrCommand::SetPolicy {
             mode: PolicyMode::WorkspaceWrite,
         })
         .await
@@ -399,9 +402,9 @@ async fn a_loaded_extension_call_is_previewed_gated_at_execute_and_refusable() {
     // Load the extension, then ask the model to work — it calls count-lines.
     load(&runtime, "count-lines").await;
     runtime
-        .dispatch(SmedCommand::SendUserMessage {
+        .dispatch(MjolnrCommand::SendUserMessage {
             text: "count the readme".to_owned(),
-            source: smed::core::directive::DirectiveSource::Human,
+            source: mjolnr::core::directive::DirectiveSource::Human,
         })
         .await
         .expect("send");
@@ -412,11 +415,11 @@ async fn a_loaded_extension_call_is_previewed_gated_at_execute_and_refusable() {
     let proposal = wait_event(
         &mut events,
         "extension proposal",
-        |event| matches!(event, SmedEvent::ToolProposed { call, .. } if call.name == "count-lines"),
+        |event| matches!(event, MjolnrEvent::ToolProposed { call, .. } if call.name == "count-lines"),
     )
     .await;
     let approval = match proposal {
-        SmedEvent::ToolProposed {
+        MjolnrEvent::ToolProposed {
             approval,
             tier,
             preview,
@@ -434,7 +437,7 @@ async fn a_loaded_extension_call_is_previewed_gated_at_execute_and_refusable() {
 
     // Refusable exactly like a built-in: deny it, and it does not run.
     runtime
-        .dispatch(SmedCommand::ResolveApproval {
+        .dispatch(MjolnrCommand::ResolveApproval {
             approval,
             decision: ApprovalDecision::Deny,
         })
@@ -454,7 +457,7 @@ async fn a_loaded_extension_call_is_previewed_gated_at_execute_and_refusable() {
         .expect("the denied call must leave a refused tool result");
     assert_eq!(
         refused,
-        ToolOutcome::Refused(smed::core::error::ReasonCode::ApprovalDenied),
+        ToolOutcome::Refused(mjolnr::core::error::ReasonCode::ApprovalDenied),
         "a denied extension call is refused, not executed"
     );
 
@@ -582,20 +585,20 @@ async fn a_human_approving_a_trust_gated_agent_load_records_approved_authority()
     let mut events = runtime.subscribe();
 
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: fixture.workspace.clone(),
         })
         .await
         .expect("open project");
     runtime
-        .dispatch(SmedCommand::CreateSession {
+        .dispatch(MjolnrCommand::CreateSession {
             provider: ProviderId::new(AGENT),
             model: ModelId::new(AGENT_MODEL),
         })
         .await
         .expect("create session");
     runtime
-        .dispatch(SmedCommand::SetPolicy {
+        .dispatch(MjolnrCommand::SetPolicy {
             mode: PolicyMode::FullAuto,
         })
         .await
@@ -604,9 +607,9 @@ async fn a_human_approving_a_trust_gated_agent_load_records_approved_authority()
     let session = opened.session.expect("session");
 
     runtime
-        .dispatch(SmedCommand::SendUserMessage {
+        .dispatch(MjolnrCommand::SendUserMessage {
             text: "improve the tooling".to_owned(),
-            source: smed::core::directive::DirectiveSource::Human,
+            source: mjolnr::core::directive::DirectiveSource::Human,
         })
         .await
         .expect("send");
@@ -623,7 +626,7 @@ async fn a_human_approving_a_trust_gated_agent_load_records_approved_authority()
     .await;
     let approval = gated.pending_approval.expect("load is gated").id;
     runtime
-        .dispatch(SmedCommand::ResolveApproval {
+        .dispatch(MjolnrCommand::ResolveApproval {
             approval,
             decision: ApprovalDecision::ApproveOnce,
         })
@@ -633,11 +636,11 @@ async fn a_human_approving_a_trust_gated_agent_load_records_approved_authority()
     // The human approved the agent's proposal, so the record must not claim
     // that full-auto stood behind this load.
     let loaded = wait_event(&mut events, "extension loaded", |event| {
-        matches!(event, SmedEvent::ExtensionLoaded { .. })
+        matches!(event, MjolnrEvent::ExtensionLoaded { .. })
     })
     .await;
     match loaded {
-        SmedEvent::ExtensionLoaded { name, by, .. } => {
+        MjolnrEvent::ExtensionLoaded { name, by, .. } => {
             assert_eq!(name, "count-lines");
             assert_eq!(by, ExtensionLoadAuthority::Approved);
         }
@@ -649,7 +652,7 @@ async fn a_human_approving_a_trust_gated_agent_load_records_approved_authority()
     wait_event(
         &mut events,
         "count-lines called",
-        |event| matches!(event, SmedEvent::ToolProposed { call, .. } if call.name == "count-lines"),
+        |event| matches!(event, MjolnrEvent::ToolProposed { call, .. } if call.name == "count-lines"),
     )
     .await;
     let finished = settle(&runtime, |snapshot| !snapshot.run_active).await;
@@ -685,7 +688,7 @@ async fn a_resumed_session_does_not_silently_reload_the_extension() {
     let store = fixture.store().await;
     let runtime = fixture.runtime(&store);
     runtime
-        .dispatch(SmedCommand::ResumeSession { session })
+        .dispatch(MjolnrCommand::ResumeSession { session })
         .await
         .expect("resume");
     let resumed = settle(&runtime, |snapshot| snapshot.session == Some(session)).await;

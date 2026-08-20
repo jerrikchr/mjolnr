@@ -70,7 +70,7 @@ pub struct TriggerDefinition {
     /// `route` above, then to `provider`/`model`, so a role that no route
     /// claims can never leave a firing with nowhere to open.
     pub role: Option<String>,
-    /// Where a human would be told about an outcome. smed has no outbound
+    /// Where a human would be told about an outcome. mjolnr has no outbound
     /// notification channel yet, so this travels as inert, displayed metadata
     /// — never silently dropped, never silently acted on.
     pub notify: Option<String>,

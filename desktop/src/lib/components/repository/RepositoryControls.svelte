@@ -64,7 +64,7 @@
   }
 
   function capturedRepository(): boolean {
-    return repository.freshness.type === 'capturedAt' && repository.trust === 'smedGoverned';
+    return repository.freshness.type === 'capturedAt' && repository.trust === 'mjolnrGoverned';
   }
 
   function safePathSet(paths: string[]): boolean {
@@ -456,11 +456,11 @@
     </p>
   {:else if repository.pathsTruncated}
     <p class="text-xs text-muted-foreground" data-testid="repository-controls-truncated">
-      Controls are paused because smed did not receive the complete path list.
+      Controls are paused because mjolnr did not receive the complete path list.
     </p>
   {:else if repository.freshness.type !== 'capturedAt'}
     <p class="text-xs text-muted-foreground" data-testid="repository-controls-unavailable">
-      Controls appear after smed captures a readable repository.
+      Controls appear after mjolnr captures a readable repository.
     </p>
   {/if}
 
@@ -535,7 +535,7 @@
     <Dialog.Header>
       <Dialog.Title>Review repository action</Dialog.Title>
       <Dialog.Description>
-        This is an operator-controlled change. Review the exact values smed will pass to the
+        This is an operator-controlled change. Review the exact values mjolnr will pass to the
         governed repository command before confirming.
       </Dialog.Description>
     </Dialog.Header>
@@ -603,7 +603,7 @@
             />
           </label>
           <p class="text-[0.7rem] text-muted-foreground">
-            smed requires a clean tree and leaves conflicts paused for human resolution. It will
+            mjolnr requires a clean tree and leaves conflicts paused for human resolution. It will
             not stash, resolve, or discard work.
           </p>
         {:else if pending.kind === 'abortRebase'}
@@ -681,7 +681,7 @@
         disabled={busy || refusal?.code === 'REPOSITORY_UNCERTAIN_EFFECT' || !pending || !actionReady(pending)}
         onclick={confirm}
       >
-        {busy ? 'Waiting for smed…' : 'Confirm controlled change'}
+        {busy ? 'Waiting for mjolnr…' : 'Confirm controlled change'}
       </Button>
     </Dialog.Footer>
   </Dialog.Content>

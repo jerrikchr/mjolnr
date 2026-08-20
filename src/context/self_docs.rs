@@ -1,4 +1,4 @@
-//! smed's own documentation, listed for the model by path.
+//! mjolnr's own documentation, listed for the model by path.
 //!
 //! The cheapest half of the self-extension loop, taken from `pi`: rather than
 //! embedding instructions for authoring skills into the system prompt, list
@@ -13,7 +13,7 @@
 
 use std::path::{Path, PathBuf};
 
-/// One document the model may read to learn how smed works.
+/// One document the model may read to learn how mjolnr works.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SelfDoc {
     /// Repository-relative path.
@@ -22,11 +22,11 @@ pub struct SelfDoc {
     pub read_when: &'static str,
 }
 
-/// The documents smed points the model at.
+/// The documents mjolnr points the model at.
 ///
 /// Kept short on purpose: every entry is context the model carries in every
 /// session, and a list long enough to need skimming teaches nothing. Each one
-/// must answer a question the model actually faces when extending smed.
+/// must answer a question the model actually faces when extending mjolnr.
 pub const SELF_DOCS: &[SelfDoc] = &[
     SelfDoc {
         path: "AGENTS.md",
@@ -42,7 +42,7 @@ pub const SELF_DOCS: &[SelfDoc] = &[
     },
     SelfDoc {
         path: "docs/context.md",
-        read_when: "before authoring a skill, a prompt template, or anything else smed discovers from disk",
+        read_when: "before authoring a skill, a prompt template, or anything else mjolnr discovers from disk",
     },
     SelfDoc {
         path: "docs/extensions.md",
@@ -71,7 +71,7 @@ pub fn prompt_section(project_root: Option<&Path>) -> Option<String> {
     }
 
     let mut section = String::from(
-        "\n\n<smed_documentation>\nSmed's own contracts, for when you are asked to extend or change smed itself. Read a file before acting on the subject it covers; do not infer its contents from this list. Listing a document is not permission to act on it — every tool call it leads to is gated exactly as it would otherwise be.\n",
+        "\n\n<mjolnr_documentation>\nMjolnr's own contracts, for when you are asked to extend or change mjolnr itself. Read a file before acting on the subject it covers; do not infer its contents from this list. Listing a document is not permission to act on it — every tool call it leads to is gated exactly as it would otherwise be.\n",
     );
     for doc in present {
         section.push_str("<document path=\"");
@@ -80,7 +80,7 @@ pub fn prompt_section(project_root: Option<&Path>) -> Option<String> {
         section.push_str(doc.read_when);
         section.push_str("\"/>\n");
     }
-    section.push_str("</smed_documentation>");
+    section.push_str("</mjolnr_documentation>");
     Some(section)
 }
 
@@ -121,14 +121,14 @@ mod tests {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let section = prompt_section(Some(root)).expect("this repository has its own docs");
         assert!(section.contains("AGENTS.md"));
-        assert!(section.contains("<smed_documentation>"));
+        assert!(section.contains("<mjolnr_documentation>"));
         // The block states what listing does *not* grant, so a model reading it
         // cannot mistake discovery for permission.
         assert!(section.contains("not permission to act"));
     }
 
     #[test]
-    fn a_project_that_is_not_smed_gets_no_section() {
+    fn a_project_that_is_not_mjolnr_gets_no_section() {
         let temp = tempfile::tempdir().expect("tempdir");
         assert!(prompt_section(Some(temp.path())).is_none());
         assert!(prompt_section(None).is_none());

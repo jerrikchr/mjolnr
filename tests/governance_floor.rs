@@ -17,17 +17,17 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use smed::core::command::SmedCommand;
-use smed::core::error::ProviderError;
-use smed::core::event::{FinishReason, ProviderEvent, SmedEvent};
-use smed::core::governance::GovernanceTier;
-use smed::core::model::{ModelCapabilities, ModelDescriptor, ModelId, ProviderId};
-use smed::core::policy::PolicyMode;
-use smed::core::provider::{Provider, ProviderCompletion, ProviderRequest};
-use smed::core::runtime::{RuntimeSnapshot, SmedRuntime};
-use smed::core::store::EventStore;
-use smed::runtime::Runtime;
-use smed::store::memory::InMemoryEventStore;
+use mjolnr::core::command::MjolnrCommand;
+use mjolnr::core::error::ProviderError;
+use mjolnr::core::event::{FinishReason, MjolnrEvent, ProviderEvent};
+use mjolnr::core::governance::GovernanceTier;
+use mjolnr::core::model::{ModelCapabilities, ModelDescriptor, ModelId, ProviderId};
+use mjolnr::core::policy::PolicyMode;
+use mjolnr::core::provider::{Provider, ProviderCompletion, ProviderRequest};
+use mjolnr::core::runtime::{MjolnrRuntime, RuntimeSnapshot};
+use mjolnr::core::store::EventStore;
+use mjolnr::runtime::Runtime;
+use mjolnr::store::memory::InMemoryEventStore;
 use tempfile::TempDir;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
@@ -115,9 +115,9 @@ fn workspace(fixture: &TempDir, governance: Option<&str>) -> std::path::PathBuf 
     let root = fixture.path().join("workspace");
     std::fs::create_dir_all(&root).expect("workspace");
     if let Some(contents) = governance {
-        let smed = root.join(".smed");
-        std::fs::create_dir_all(&smed).expect(".smed");
-        std::fs::write(smed.join("governance.yaml"), contents).expect("governance.yaml");
+        let mjolnr = root.join(".mjolnr");
+        std::fs::create_dir_all(&mjolnr).expect(".mjolnr");
+        std::fs::write(mjolnr.join("governance.yaml"), contents).expect("governance.yaml");
     }
     root
 }
@@ -136,13 +136,13 @@ async fn open(root: &std::path::Path) -> (Runtime, Arc<InMemoryEventStore>) {
     ];
     let runtime = Runtime::spawn(providers, Arc::clone(&store) as Arc<dyn EventStore>);
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: root.to_path_buf(),
         })
         .await
         .expect("open");
     runtime
-        .dispatch(SmedCommand::CreateSession {
+        .dispatch(MjolnrCommand::CreateSession {
             provider: ProviderId::new("frontier"),
             model: ModelId::new("frontier-1"),
         })
@@ -170,7 +170,7 @@ async fn wait_answered(runtime: &Runtime) -> RuntimeSnapshot {
 
 async fn arm_full_auto(runtime: &Runtime) {
     runtime
-        .dispatch(SmedCommand::SetPolicy {
+        .dispatch(MjolnrCommand::SetPolicy {
             mode: PolicyMode::FullAuto,
         })
         .await
@@ -188,7 +188,7 @@ async fn switching_to_a_supervised_model_drops_full_auto_and_says_so() {
     arm_full_auto(&runtime).await;
 
     runtime
-        .dispatch(SmedCommand::SelectModel {
+        .dispatch(MjolnrCommand::SelectModel {
             provider: ProviderId::new("quick"),
             model: ModelId::new("quick-1"),
         })
@@ -216,7 +216,7 @@ async fn switching_to_a_supervised_model_drops_full_auto_and_says_so() {
     let clamp = events
         .iter()
         .find_map(|stored| match &stored.event {
-            SmedEvent::PolicyClamped {
+            MjolnrEvent::PolicyClamped {
                 from,
                 to,
                 tier,
@@ -242,9 +242,9 @@ async fn a_trusted_model_keeps_the_policy_the_owner_set() {
     arm_full_auto(&runtime).await;
 
     runtime
-        .dispatch(SmedCommand::SendUserMessage {
+        .dispatch(MjolnrCommand::SendUserMessage {
             text: "do the work".to_owned(),
-            source: smed::core::directive::DirectiveSource::Human,
+            source: mjolnr::core::directive::DirectiveSource::Human,
         })
         .await
         .expect("send");
@@ -267,7 +267,7 @@ async fn a_project_with_no_governance_file_is_untouched() {
     arm_full_auto(&runtime).await;
 
     runtime
-        .dispatch(SmedCommand::SelectModel {
+        .dispatch(MjolnrCommand::SelectModel {
             provider: ProviderId::new("quick"),
             model: ModelId::new("quick-1"),
         })
@@ -294,9 +294,9 @@ async fn an_unreadable_governance_file_is_narrowest_not_absent() {
     arm_full_auto(&runtime).await;
 
     runtime
-        .dispatch(SmedCommand::SendUserMessage {
+        .dispatch(MjolnrCommand::SendUserMessage {
             text: "do the work".to_owned(),
-            source: smed::core::directive::DirectiveSource::Human,
+            source: mjolnr::core::directive::DirectiveSource::Human,
         })
         .await
         .expect("send");

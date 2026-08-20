@@ -31,7 +31,7 @@ use sha2::{Digest, Sha256};
 use time::OffsetDateTime;
 use tokio_rusqlite::rusqlite::{Connection, Result as SqlResult, Transaction, params};
 
-use crate::core::event::{EventId, SessionId, SmedEvent};
+use crate::core::event::{EventId, MjolnrEvent, SessionId};
 use crate::core::store::{WorkspaceSearchFilter, WorkspaceSearchPage, WorkspaceSearchResult};
 
 /// Longest indexed text per event.
@@ -90,7 +90,7 @@ pub(super) struct IndexedDocument {
 /// The allowlist. Adding a kind here is a deliberate act with a security
 /// question attached — "can this event carry a credential?" — which is why the
 /// default is to index nothing.
-pub(super) fn document(event: &SmedEvent) -> Option<IndexedDocument> {
+pub(super) fn document(event: &MjolnrEvent) -> Option<IndexedDocument> {
     /// Every field but the text, which each arm supplies separately.
     fn base(kind: &str) -> IndexedDocument {
         IndexedDocument {
@@ -103,11 +103,11 @@ pub(super) fn document(event: &SmedEvent) -> Option<IndexedDocument> {
     }
 
     let mut document = match event {
-        SmedEvent::MessageAppended { message, .. } => IndexedDocument {
+        MjolnrEvent::MessageAppended { message, .. } => IndexedDocument {
             text: message_text(message),
             ..base("MessageAppended")
         },
-        SmedEvent::ToolProposed {
+        MjolnrEvent::ToolProposed {
             call,
             preview,
             tier,
@@ -117,26 +117,26 @@ pub(super) fn document(event: &SmedEvent) -> Option<IndexedDocument> {
             text: format!("{} {tier:?} {preview}", call.name),
             ..base("ToolProposed")
         },
-        SmedEvent::ToolCompleted { name, result, .. } => IndexedDocument {
+        MjolnrEvent::ToolCompleted { name, result, .. } => IndexedDocument {
             // `ToolResult` carries no reason code — a failure that has one
             // arrives as `ToolFailed`, which does. Leaving this empty is the
             // honest answer rather than deriving a code from an outcome.
             text: format!("{name} {}", result.content),
             ..base("ToolCompleted")
         },
-        SmedEvent::ToolFailed {
+        MjolnrEvent::ToolFailed {
             name, code, detail, ..
         } => IndexedDocument {
             reason_code: code.as_str().to_owned(),
             text: format!("{name} {detail}"),
             ..base("ToolFailed")
         },
-        SmedEvent::RunFailed { code, detail, .. } => IndexedDocument {
+        MjolnrEvent::RunFailed { code, detail, .. } => IndexedDocument {
             reason_code: code.as_str().to_owned(),
             text: detail.clone(),
             ..base("RunFailed")
         },
-        SmedEvent::ModelChangeRefused {
+        MjolnrEvent::ModelChangeRefused {
             provider,
             model,
             code,
@@ -148,7 +148,7 @@ pub(super) fn document(event: &SmedEvent) -> Option<IndexedDocument> {
             text: detail.clone(),
             ..base("ModelChangeRefused")
         },
-        SmedEvent::SessionCreated {
+        MjolnrEvent::SessionCreated {
             provider, model, ..
         } => {
             let pair = format!("{}/{}", provider.as_str(), model.as_str());
@@ -158,7 +158,7 @@ pub(super) fn document(event: &SmedEvent) -> Option<IndexedDocument> {
                 ..base("SessionCreated")
             }
         }
-        SmedEvent::ModelChanged {
+        MjolnrEvent::ModelChanged {
             provider, model, ..
         } => {
             let pair = format!("{}/{}", provider.as_str(), model.as_str());
@@ -168,13 +168,13 @@ pub(super) fn document(event: &SmedEvent) -> Option<IndexedDocument> {
                 ..base("ModelChanged")
             }
         }
-        SmedEvent::SubagentSpawned {
+        MjolnrEvent::SubagentSpawned {
             directive, branch, ..
         } => IndexedDocument {
             text: format!("{directive} {branch}"),
             ..base("SubagentSpawned")
         },
-        SmedEvent::ExtensionLoaded { name, program, .. } => IndexedDocument {
+        MjolnrEvent::ExtensionLoaded { name, program, .. } => IndexedDocument {
             text: format!("{name} {program}"),
             ..base("ExtensionLoaded")
         },
@@ -235,7 +235,7 @@ fn bound(text: &str, limit: usize) -> String {
 /// be a search hit for an event that does not exist.
 pub(super) fn index(
     transaction: &Transaction<'_>,
-    event: &SmedEvent,
+    event: &MjolnrEvent,
     event_id: &EventId,
 ) -> SqlResult<()> {
     let Some(document) = document(event) else {

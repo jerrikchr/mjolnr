@@ -14,33 +14,33 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use async_trait::async_trait;
-use smed::cli::triggers::TriggersCommand;
-use smed::context::ProjectContext;
-use smed::core::error::ReasonCode;
-use smed::core::event::{FinishReason, ProviderEvent, SmedEvent};
-use smed::core::model::{
+use mjolnr::cli::triggers::TriggersCommand;
+use mjolnr::context::ProjectContext;
+use mjolnr::core::error::ReasonCode;
+use mjolnr::core::event::{FinishReason, MjolnrEvent, ProviderEvent};
+use mjolnr::core::model::{
     ModelCapabilities, ModelDescriptor, ModelId, ProviderId, QuotaSnapshot, QuotaWindow, Usage,
 };
-use smed::core::policy::PolicyMode;
-use smed::core::provider::{Provider, ProviderCompletion, ProviderRequest};
-use smed::core::store::EventStore;
-use smed::core::trigger::TriggerOutcome;
-use smed::providers::fake::{FakeProvider, FakeScript};
-use smed::store::sqlite::SqliteEventStore;
-use smed::triggers::{control, definition, scheduler, status};
+use mjolnr::core::policy::PolicyMode;
+use mjolnr::core::provider::{Provider, ProviderCompletion, ProviderRequest};
+use mjolnr::core::store::EventStore;
+use mjolnr::core::trigger::TriggerOutcome;
+use mjolnr::providers::fake::{FakeProvider, FakeScript};
+use mjolnr::store::sqlite::SqliteEventStore;
+use mjolnr::triggers::{control, definition, scheduler, status};
 use tokio_util::sync::CancellationToken;
 
 const DEADLINE: Duration = Duration::from_secs(10);
 
 fn write_trigger(root: &Path, name: &str, content: &str) {
-    let directory = root.join(".smed").join("triggers");
+    let directory = root.join(".mjolnr").join("triggers");
     std::fs::create_dir_all(&directory).expect("mkdir");
     std::fs::write(directory.join(format!("{name}.yaml")), content).expect("write trigger");
 }
 
 async fn open_store(root: &Path) -> Arc<SqliteEventStore> {
     Arc::new(
-        SqliteEventStore::open(&root.join("smed.db"))
+        SqliteEventStore::open(&root.join("mjolnr.db"))
             .await
             .expect("store"),
     )
@@ -57,8 +57,8 @@ fn deps(
         workspace_root,
         project_context: ProjectContext::empty(),
         mcp_servers: Arc::new(Vec::new()),
-        tools: smed::tools::ToolRegistry::builtins(),
-        route_table: Arc::new(smed::core::routing::RouteTable::default()),
+        tools: mjolnr::tools::ToolRegistry::builtins(),
+        route_table: Arc::new(mjolnr::core::routing::RouteTable::default()),
     }
 }
 
@@ -66,7 +66,7 @@ async fn control_history(
     store: &dyn EventStore,
     root_realpath: &str,
     name: &str,
-) -> Vec<smed::core::event::StoredEvent> {
+) -> Vec<mjolnr::core::event::StoredEvent> {
     let session = control::control_session_id(root_realpath, name);
     control::history(store, session).await.expect("history")
 }
@@ -123,7 +123,7 @@ async fn a_webhook_firing_produces_an_ordinary_verified_session_carrying_its_pay
         loop {
             let history = control_history(store.as_ref(), &root_realpath, "incoming").await;
             if let Some(event) = history.iter().find_map(|stored| match &stored.event {
-                SmedEvent::TriggerSettled { outcome, child, .. } => Some((*outcome, *child)),
+                MjolnrEvent::TriggerSettled { outcome, child, .. } => Some((*outcome, *child)),
                 _ => None,
             }) {
                 return event;
@@ -144,11 +144,11 @@ async fn a_webhook_firing_produces_an_ordinary_verified_session_carrying_its_pay
     assert!(
         child_events
             .iter()
-            .any(|stored| matches!(stored.event, SmedEvent::SessionCreated { .. }))
+            .any(|stored| matches!(stored.event, MjolnrEvent::SessionCreated { .. }))
     );
     assert!(child_events.iter().any(|stored| matches!(
         stored.event,
-        SmedEvent::RunFinished {
+        MjolnrEvent::RunFinished {
             reason: FinishReason::Stop,
             ..
         }
@@ -168,10 +168,13 @@ async fn a_webhook_firing_produces_an_ordinary_verified_session_carrying_its_pay
         .await
         .into_iter()
         .find_map(|stored| match stored.event {
-            SmedEvent::TriggerFired { source, .. } => Some(source),
+            MjolnrEvent::TriggerFired { source, .. } => Some(source),
             _ => None,
         });
-    assert_eq!(fired, Some(smed::core::trigger::TriggerSourceKind::Webhook));
+    assert_eq!(
+        fired,
+        Some(mjolnr::core::trigger::TriggerSourceKind::Webhook)
+    );
 
     cancel.cancel();
     let _ = handle.await;
@@ -230,7 +233,7 @@ async fn a_trigger_disables_itself_after_repeated_failure_and_is_visibly_rearmab
         loop {
             let history = control_history(store.as_ref(), &root_realpath, "flaky").await;
             if let Some(code) = history.iter().find_map(|stored| match &stored.event {
-                SmedEvent::TriggerDisabled { code, .. } => Some(*code),
+                MjolnrEvent::TriggerDisabled { code, .. } => Some(*code),
                 _ => None,
             }) {
                 return code;
@@ -257,7 +260,7 @@ async fn a_trigger_disables_itself_after_repeated_failure_and_is_visibly_rearmab
     let _ = handle.await;
 
     // Re-armable: the same CLI path `mjolnr triggers rearm` drives.
-    let exit = smed::cli::triggers::run(
+    let exit = mjolnr::cli::triggers::run(
         TriggersCommand::Rearm {
             name: "flaky".to_owned(),
         },
@@ -307,8 +310,8 @@ impl Provider for AlwaysFailsProvider {
         _request: ProviderRequest,
         _events: tokio::sync::mpsc::Sender<ProviderEvent>,
         _cancel: CancellationToken,
-    ) -> Result<ProviderCompletion, smed::core::error::ProviderError> {
-        Err(smed::core::error::ProviderError::Protocol {
+    ) -> Result<ProviderCompletion, mjolnr::core::error::ProviderError> {
+        Err(mjolnr::core::error::ProviderError::Protocol {
             detail: "the fixture provider always fails".to_owned(),
         })
     }
@@ -341,7 +344,7 @@ async fn a_quota_drained_firing_lands_a_handoff_and_is_visible_as_stopped_not_fa
     // A tight quota reserve so the run's own accounting — not a provider
     // report — drives the drain, matching how a real subscription window is
     // configured for a trigger ( continuation).
-    scheduler_deps.tools = smed::tools::ToolRegistry::builtins();
+    scheduler_deps.tools = mjolnr::tools::ToolRegistry::builtins();
     let scheduler_cancel = cancel.clone();
     let handle = tokio::spawn(scheduler::run(scheduler_deps, scheduler_cancel));
 
@@ -353,7 +356,7 @@ async fn a_quota_drained_firing_lands_a_handoff_and_is_visible_as_stopped_not_fa
         loop {
             let history = control_history(store.as_ref(), &root_realpath, "drains").await;
             if let Some(event) = history.iter().find_map(|stored| match &stored.event {
-                SmedEvent::TriggerSettled { outcome, child, .. } => Some((*outcome, *child)),
+                MjolnrEvent::TriggerSettled { outcome, child, .. } => Some((*outcome, *child)),
                 _ => None,
             }) {
                 return event;
@@ -373,7 +376,7 @@ async fn a_quota_drained_firing_lands_a_handoff_and_is_visible_as_stopped_not_fa
     assert!(
         child_events
             .iter()
-            .any(|stored| matches!(stored.event, SmedEvent::HandoffCreated { .. })),
+            .any(|stored| matches!(stored.event, MjolnrEvent::HandoffCreated { .. })),
         "quota drain must land a handoff rather than dying mid-window"
     );
 
@@ -417,7 +420,7 @@ impl Provider for QuotaScriptedProvider {
         _request: ProviderRequest,
         events: tokio::sync::mpsc::Sender<ProviderEvent>,
         _cancel: CancellationToken,
-    ) -> Result<ProviderCompletion, smed::core::error::ProviderError> {
+    ) -> Result<ProviderCompletion, mjolnr::core::error::ProviderError> {
         // First turn crosses the *soft* threshold (default 0.8): the runtime
         // auto-continues with a landing turn rather than stopping outright.
         // The second call is that landing turn, with no further quota report,
@@ -434,7 +437,7 @@ impl Provider for QuotaScriptedProvider {
         events
             .send(ProviderEvent::Started)
             .await
-            .map_err(|_| smed::core::error::ProviderError::Cancelled)?;
+            .map_err(|_| mjolnr::core::error::ProviderError::Cancelled)?;
         if first_call {
             events
                 .send(ProviderEvent::Quota {
@@ -450,7 +453,7 @@ impl Provider for QuotaScriptedProvider {
                     },
                 })
                 .await
-                .map_err(|_| smed::core::error::ProviderError::Cancelled)?;
+                .map_err(|_| mjolnr::core::error::ProviderError::Cancelled)?;
         }
         events
             .send(ProviderEvent::TextDelta {
@@ -461,7 +464,7 @@ impl Provider for QuotaScriptedProvider {
                 },
             })
             .await
-            .map_err(|_| smed::core::error::ProviderError::Cancelled)?;
+            .map_err(|_| mjolnr::core::error::ProviderError::Cancelled)?;
         events
             .send(ProviderEvent::Usage {
                 usage: Usage {
@@ -470,13 +473,13 @@ impl Provider for QuotaScriptedProvider {
                 },
             })
             .await
-            .map_err(|_| smed::core::error::ProviderError::Cancelled)?;
+            .map_err(|_| mjolnr::core::error::ProviderError::Cancelled)?;
         events
             .send(ProviderEvent::Finished {
                 reason: FinishReason::Stop,
             })
             .await
-            .map_err(|_| smed::core::error::ProviderError::Cancelled)?;
+            .map_err(|_| mjolnr::core::error::ProviderError::Cancelled)?;
         Ok(ProviderCompletion {
             reason: FinishReason::Stop,
             usage: Some(Usage {
@@ -528,7 +531,7 @@ async fn a_trigger_never_widens_its_configured_policy_ceiling() {
         loop {
             let history = control_history(store.as_ref(), &root_realpath, "locked").await;
             if let Some(child) = history.iter().find_map(|stored| match &stored.event {
-                SmedEvent::TriggerFired { child, .. } => Some(*child),
+                MjolnrEvent::TriggerFired { child, .. } => Some(*child),
                 _ => None,
             }) {
                 return child;
@@ -544,7 +547,7 @@ async fn a_trigger_never_widens_its_configured_policy_ceiling() {
         loop {
             let events = store.events(child).await.unwrap_or_default();
             if let Some(mode) = events.iter().find_map(|stored| match &stored.event {
-                SmedEvent::PolicyChanged { mode, .. } => Some(*mode),
+                MjolnrEvent::PolicyChanged { mode, .. } => Some(*mode),
                 _ => None,
             }) {
                 return mode;

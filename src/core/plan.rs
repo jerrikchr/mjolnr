@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 use uuid::Uuid;
 
-use crate::core::error::{SmedError, SmedResult};
+use crate::core::error::{MjolnrError, MjolnrResult};
 
 /// Upper bound on the owner brief carried into an interview.
 pub const MAX_INTERVIEW_GOAL_CHARS: usize = 8_000;
@@ -522,16 +522,16 @@ impl PlanWorkflow {
     }
 
     /// Begin the bounded model-led interview for this workflow.
-    pub fn start_interview(&mut self, goal: String) -> SmedResult<()> {
+    pub fn start_interview(&mut self, goal: String) -> MjolnrResult<()> {
         if goal.trim().is_empty() || goal.chars().count() > MAX_INTERVIEW_GOAL_CHARS {
-            return Err(SmedError::plan_invalid_transition(
+            return Err(MjolnrError::plan_invalid_transition(
                 "no interview",
                 "start interview",
                 "the interview goal is empty or exceeds its bound",
             ));
         }
         if !matches!(self.stage, PlanStage::Idle) || self.interview_goal.is_some() {
-            return Err(SmedError::plan_invalid_transition(
+            return Err(MjolnrError::plan_invalid_transition(
                 "workflow already started",
                 "start interview",
                 "an interview can only start on a new idle workflow",
@@ -542,9 +542,9 @@ impl PlanWorkflow {
     }
 
     /// Record a question obligation.
-    pub fn ask_question(&mut self, question: Question) -> SmedResult<()> {
+    pub fn ask_question(&mut self, question: Question) -> MjolnrResult<()> {
         if self.questions.len() >= MAX_INTERVIEW_QUESTIONS {
-            return Err(SmedError::plan_invalid_transition(
+            return Err(MjolnrError::plan_invalid_transition(
                 "question budget exhausted",
                 "ask question",
                 "the bounded interview has reached its question limit",
@@ -556,7 +556,7 @@ impl PlanWorkflow {
                 self.stage = PlanStage::QuestionPending { question };
                 Ok(())
             }
-            PlanStage::QuestionPending { .. } => Err(SmedError::plan_invalid_transition(
+            PlanStage::QuestionPending { .. } => Err(MjolnrError::plan_invalid_transition(
                 "question pending",
                 "ask question",
                 "cannot ask a new question while another question is pending",
@@ -565,7 +565,7 @@ impl PlanWorkflow {
             | PlanStage::Reviewed { .. }
             | PlanStage::Approved { .. }
             | PlanStage::Rejected { .. }
-            | PlanStage::Handoff { .. } => Err(SmedError::plan_invalid_transition(
+            | PlanStage::Handoff { .. } => Err(MjolnrError::plan_invalid_transition(
                 "proposal decision",
                 "ask question",
                 "questions require an idle workflow or an explicit iterate decision",
@@ -574,11 +574,11 @@ impl PlanWorkflow {
     }
 
     /// Answer a pending question.
-    pub fn answer_question(&mut self, answer: &QuestionAnswer) -> SmedResult<()> {
+    pub fn answer_question(&mut self, answer: &QuestionAnswer) -> MjolnrResult<()> {
         match &self.stage {
             PlanStage::QuestionPending { question } => {
                 if question.id != answer.question_id {
-                    return Err(SmedError::plan_invalid_transition(
+                    return Err(MjolnrError::plan_invalid_transition(
                         "question pending",
                         "answer question",
                         "answer question_id does not match pending question",
@@ -588,7 +588,7 @@ impl PlanWorkflow {
                 self.stage = PlanStage::Idle;
                 Ok(())
             }
-            _ => Err(SmedError::plan_invalid_transition(
+            _ => Err(MjolnrError::plan_invalid_transition(
                 "not question pending",
                 "answer question",
                 "no question is currently pending",
@@ -597,23 +597,23 @@ impl PlanWorkflow {
     }
 
     /// Persist the PRD produced after the interview has enough answers.
-    pub fn record_prd(&mut self, prd: ProductRequirementsDocument) -> SmedResult<()> {
+    pub fn record_prd(&mut self, prd: ProductRequirementsDocument) -> MjolnrResult<()> {
         if prd.plan_id != self.plan_id {
-            return Err(SmedError::plan_invalid_transition(
+            return Err(MjolnrError::plan_invalid_transition(
                 "plan mismatch",
                 "record PRD",
                 "PRD plan_id does not match workflow plan_id",
             ));
         }
         if self.interview_goal.is_none() || self.prd.is_some() {
-            return Err(SmedError::plan_invalid_transition(
+            return Err(MjolnrError::plan_invalid_transition(
                 "PRD state mismatch",
                 "record PRD",
                 "a PRD requires an active interview and may only be recorded once",
             ));
         }
         if !matches!(self.stage, PlanStage::Idle) {
-            return Err(SmedError::plan_invalid_transition(
+            return Err(MjolnrError::plan_invalid_transition(
                 "question pending",
                 "record PRD",
                 "the interview must answer its pending question before producing a PRD",
@@ -624,23 +624,23 @@ impl PlanWorkflow {
     }
 
     /// Attach the completed advisory council review to the generated PRD.
-    pub fn link_council_review(&mut self, link: PlanCouncilLink) -> SmedResult<()> {
+    pub fn link_council_review(&mut self, link: PlanCouncilLink) -> MjolnrResult<()> {
         if link.plan_id != self.plan_id {
-            return Err(SmedError::plan_invalid_transition(
+            return Err(MjolnrError::plan_invalid_transition(
                 "plan mismatch",
                 "link council review",
                 "council link plan_id does not match workflow plan_id",
             ));
         }
         let prd = self.prd.as_ref().ok_or_else(|| {
-            SmedError::plan_invalid_transition(
+            MjolnrError::plan_invalid_transition(
                 "no PRD",
                 "link council review",
                 "a council review cannot link before a PRD exists",
             )
         })?;
         if prd.id != link.prd_id || self.council_link.is_some() {
-            return Err(SmedError::plan_invalid_transition(
+            return Err(MjolnrError::plan_invalid_transition(
                 "council link mismatch",
                 "link council review",
                 "the review must name the current PRD and may only link once",
@@ -651,9 +651,9 @@ impl PlanWorkflow {
     }
 
     /// Propose a new or revised plan.
-    pub fn propose_plan(&mut self, proposal: PlanProposal) -> SmedResult<()> {
+    pub fn propose_plan(&mut self, proposal: PlanProposal) -> MjolnrResult<()> {
         if proposal.plan_id != self.plan_id {
-            return Err(SmedError::plan_invalid_transition(
+            return Err(MjolnrError::plan_invalid_transition(
                 "plan mismatch",
                 "propose plan",
                 "proposal plan_id does not match workflow plan_id",
@@ -664,7 +664,7 @@ impl PlanWorkflow {
             &self.stage,
             PlanStage::Idle | PlanStage::IterateRequested { .. }
         ) {
-            return Err(SmedError::plan_invalid_transition(
+            return Err(MjolnrError::plan_invalid_transition(
                 "stage mismatch",
                 "propose plan",
                 "a proposal requires an idle workflow or an explicit iterate decision",
@@ -673,20 +673,20 @@ impl PlanWorkflow {
 
         if let Some(active) = self.active_revision {
             if proposal.revision_id.value() <= active.value() {
-                return Err(SmedError::plan_stale_revision(
+                return Err(MjolnrError::plan_stale_revision(
                     proposal.revision_id.value(),
                     active.value(),
                 ));
             }
             if proposal.revision_id.value() != active.value() + 1 {
-                return Err(SmedError::plan_invalid_transition(
+                return Err(MjolnrError::plan_invalid_transition(
                     "proposal",
                     "propose plan",
                     "proposal revision jumps sequence numbers",
                 ));
             }
         } else if proposal.revision_id.value() != 1 {
-            return Err(SmedError::plan_stale_revision(
+            return Err(MjolnrError::plan_stale_revision(
                 proposal.revision_id.value(),
                 1,
             ));
@@ -701,9 +701,9 @@ impl PlanWorkflow {
     }
 
     /// Record an advisory review.
-    pub fn review_plan(&mut self, review: PlanReview) -> SmedResult<()> {
+    pub fn review_plan(&mut self, review: PlanReview) -> MjolnrResult<()> {
         if review.plan_id != self.plan_id {
-            return Err(SmedError::plan_invalid_transition(
+            return Err(MjolnrError::plan_invalid_transition(
                 "plan mismatch",
                 "review plan",
                 "review plan_id does not match workflow plan_id",
@@ -711,7 +711,7 @@ impl PlanWorkflow {
         }
 
         let active = self.active_revision.ok_or_else(|| {
-            SmedError::plan_invalid_transition(
+            MjolnrError::plan_invalid_transition(
                 "idle",
                 "review plan",
                 "cannot review a plan before a proposal exists",
@@ -719,7 +719,7 @@ impl PlanWorkflow {
         })?;
 
         if review.revision_id != active {
-            return Err(SmedError::plan_stale_revision(
+            return Err(MjolnrError::plan_stale_revision(
                 review.revision_id.value(),
                 active.value(),
             ));
@@ -730,7 +730,7 @@ impl PlanWorkflow {
                 proposal.clone()
             }
             _ => {
-                return Err(SmedError::plan_invalid_transition(
+                return Err(MjolnrError::plan_invalid_transition(
                     "stage mismatch",
                     "review plan",
                     "can only review a proposed or currently reviewed plan revision",
@@ -754,9 +754,9 @@ impl PlanWorkflow {
     }
 
     /// Record a human approval or rejection decision.
-    pub fn approve_plan(&mut self, approval: PlanApproval) -> SmedResult<()> {
+    pub fn approve_plan(&mut self, approval: PlanApproval) -> MjolnrResult<()> {
         if approval.plan_id != self.plan_id {
-            return Err(SmedError::plan_invalid_transition(
+            return Err(MjolnrError::plan_invalid_transition(
                 "plan mismatch",
                 "approve plan",
                 "approval plan_id does not match workflow plan_id",
@@ -764,7 +764,7 @@ impl PlanWorkflow {
         }
 
         let active = self.active_revision.ok_or_else(|| {
-            SmedError::plan_invalid_transition(
+            MjolnrError::plan_invalid_transition(
                 "idle",
                 "approve plan",
                 "cannot approve a plan before a proposal exists",
@@ -772,7 +772,7 @@ impl PlanWorkflow {
         })?;
 
         if approval.revision_id != active {
-            return Err(SmedError::plan_stale_revision(
+            return Err(MjolnrError::plan_stale_revision(
                 approval.revision_id.value(),
                 active.value(),
             ));
@@ -783,7 +783,7 @@ impl PlanWorkflow {
                 proposal.clone()
             }
             _ => {
-                return Err(SmedError::plan_invalid_transition(
+                return Err(MjolnrError::plan_invalid_transition(
                     "stage mismatch",
                     "approve plan",
                     "can only approve a proposed or reviewed plan revision",
@@ -815,9 +815,9 @@ impl PlanWorkflow {
     }
 
     /// Transition approved plan to handoff state.
-    pub fn handoff_plan(&mut self, handoff: PlanHandoff) -> SmedResult<()> {
+    pub fn handoff_plan(&mut self, handoff: PlanHandoff) -> MjolnrResult<()> {
         if handoff.plan_id != self.plan_id {
-            return Err(SmedError::plan_invalid_transition(
+            return Err(MjolnrError::plan_invalid_transition(
                 "plan mismatch",
                 "handoff plan",
                 "handoff plan_id does not match workflow plan_id",
@@ -825,7 +825,7 @@ impl PlanWorkflow {
         }
 
         let active = self.active_revision.ok_or_else(|| {
-            SmedError::plan_invalid_transition(
+            MjolnrError::plan_invalid_transition(
                 "idle",
                 "handoff plan",
                 "cannot handoff a plan before a proposal exists",
@@ -833,7 +833,7 @@ impl PlanWorkflow {
         })?;
 
         if handoff.revision_id != active {
-            return Err(SmedError::plan_stale_revision(
+            return Err(MjolnrError::plan_stale_revision(
                 handoff.revision_id.value(),
                 active.value(),
             ));
@@ -842,7 +842,7 @@ impl PlanWorkflow {
         let (proposal, _approval) = match &self.stage {
             PlanStage::Approved { proposal, approval } => (proposal.clone(), approval.clone()),
             _ => {
-                return Err(SmedError::plan_invalid_transition(
+                return Err(MjolnrError::plan_invalid_transition(
                     "not approved",
                     "handoff plan",
                     "can only handoff an approved plan revision",
@@ -972,7 +972,7 @@ mod tests {
         let err = workflow.approve_plan(stale_approval).unwrap_err();
         assert!(matches!(
             err,
-            SmedError::PlanStaleRevision {
+            MjolnrError::PlanStaleRevision {
                 attempted: 1,
                 current: 2
             }
@@ -995,7 +995,7 @@ mod tests {
         };
 
         let err = workflow.handoff_plan(handoff).unwrap_err();
-        assert!(matches!(err, SmedError::PlanInvalidTransition { .. }));
+        assert!(matches!(err, MjolnrError::PlanInvalidTransition { .. }));
     }
 
     #[test]
@@ -1020,7 +1020,7 @@ mod tests {
         };
 
         let err = workflow.answer_question(&wrong_answer).unwrap_err();
-        assert!(matches!(err, SmedError::PlanInvalidTransition { .. }));
+        assert!(matches!(err, MjolnrError::PlanInvalidTransition { .. }));
     }
 
     #[test]
@@ -1039,7 +1039,7 @@ mod tests {
         let error = workflow
             .propose_plan(make_proposal(plan_id, 1))
             .expect_err("must refuse");
-        assert!(matches!(error, SmedError::PlanInvalidTransition { .. }));
+        assert!(matches!(error, MjolnrError::PlanInvalidTransition { .. }));
     }
 
     #[test]
@@ -1081,7 +1081,7 @@ mod tests {
         assert_eq!(workflow.proposals.len(), 1);
         assert!(matches!(
             workflow.propose_plan(make_proposal(plan_id, 1)),
-            Err(SmedError::PlanStaleRevision { .. })
+            Err(MjolnrError::PlanStaleRevision { .. })
         ));
         workflow
             .propose_plan(make_proposal(plan_id, 2))
@@ -1108,7 +1108,7 @@ mod tests {
 
         assert!(matches!(
             workflow.propose_plan(make_proposal(plan_id, 2)),
-            Err(SmedError::PlanInvalidTransition { .. })
+            Err(MjolnrError::PlanInvalidTransition { .. })
         ));
         workflow
             .handoff_plan(PlanHandoff {
@@ -1126,7 +1126,7 @@ mod tests {
                 is_multi_select: false,
                 created_at: OffsetDateTime::now_utc(),
             }),
-            Err(SmedError::PlanInvalidTransition { .. })
+            Err(MjolnrError::PlanInvalidTransition { .. })
         ));
     }
 

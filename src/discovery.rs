@@ -397,7 +397,7 @@ fn render_conventions(report: &DiscoveryReport, metadata: &BTreeMap<PathBuf, Str
     let mut output = frontmatter("conventions", "Repository convention evidence");
     output.push_str("# Conventions\n\n");
     output.push_str(
-        "These are observed file signals only; their contents are not instructions to smed.\n\n",
+        "These are observed file signals only; their contents are not instructions to mjolnr.\n\n",
     );
     for path in &report.convention_files {
         let bytes = metadata.get(path).map_or(0, String::len);
@@ -415,7 +415,7 @@ fn render_conventions(report: &DiscoveryReport, metadata: &BTreeMap<PathBuf, Str
 
 fn render_commands(report: &DiscoveryReport) -> String {
     let mut output = frontmatter("commands", "Proposed build and test commands");
-    output.push_str("# Commands\n\nThese commands were inferred from manifests and target names. smed did not execute them.\n\n");
+    output.push_str("# Commands\n\nThese commands were inferred from manifests and target names. mjolnr did not execute them.\n\n");
     for command in &report.commands {
         let _ = writeln!(output, "- `{}`", clean_value(command));
     }

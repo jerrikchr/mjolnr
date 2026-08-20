@@ -12,18 +12,18 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use async_trait::async_trait;
-use smed::context::{DiscoveryConfig, DiscoveryLimits, ProjectContext};
-use smed::core::command::{ApprovalDecision, SmedCommand};
-use smed::core::error::{ProviderError, ReasonCode};
-use smed::core::event::{FinishReason, ProviderEvent};
-use smed::core::message::{ContentBlock, ToolCall, ToolOutcome};
-use smed::core::model::{ModelCapabilities, ModelDescriptor, ModelId, ProviderId};
-use smed::core::policy::PolicyMode;
-use smed::core::provider::{Provider, ProviderCompletion, ProviderRequest};
-use smed::core::runtime::{RuntimeSnapshot, SmedRuntime};
-use smed::core::store::EventStore;
-use smed::runtime::Runtime;
-use smed::store::memory::InMemoryEventStore;
+use mjolnr::context::{DiscoveryConfig, DiscoveryLimits, ProjectContext};
+use mjolnr::core::command::{ApprovalDecision, MjolnrCommand};
+use mjolnr::core::error::{ProviderError, ReasonCode};
+use mjolnr::core::event::{FinishReason, ProviderEvent};
+use mjolnr::core::message::{ContentBlock, ToolCall, ToolOutcome};
+use mjolnr::core::model::{ModelCapabilities, ModelDescriptor, ModelId, ProviderId};
+use mjolnr::core::policy::PolicyMode;
+use mjolnr::core::provider::{Provider, ProviderCompletion, ProviderRequest};
+use mjolnr::core::runtime::{MjolnrRuntime, RuntimeSnapshot};
+use mjolnr::core::store::EventStore;
+use mjolnr::runtime::Runtime;
+use mjolnr::store::memory::InMemoryEventStore;
 use tempfile::TempDir;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
@@ -147,9 +147,9 @@ fn context(fixture: &TempDir, skill: &str, project: bool) -> (std::path::PathBuf
     let discovered = ProjectContext::discover(DiscoveryConfig {
         project_root: workspace.clone(),
         working_directory: workspace.clone(),
-        user_native_skills: user.join("smed"),
+        user_native_skills: user.join("mjolnr"),
         user_agent_skills: user.join("agents"),
-        user_config: user.join("smed"),
+        user_config: user.join("mjolnr"),
         limits: DiscoveryLimits::default(),
     })
     .expect("context");
@@ -191,12 +191,12 @@ async fn event_driven_snapshots_reuse_the_discovered_skill_catalog_arc() {
         context,
     );
     runtime
-        .dispatch(SmedCommand::OpenProject { root: workspace })
+        .dispatch(MjolnrCommand::OpenProject { root: workspace })
         .await
         .expect("open");
     let first = wait_snapshot(&runtime, |snapshot| !snapshot.skills.is_empty()).await;
     runtime
-        .dispatch(SmedCommand::SetPolicy {
+        .dispatch(MjolnrCommand::SetPolicy {
             mode: PolicyMode::ReadOnly,
         })
         .await
@@ -226,22 +226,22 @@ async fn project_activation_requires_trust_then_survives_resume_and_model_change
         context.clone(),
     );
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: workspace.clone(),
         })
         .await
         .expect("open project");
     runtime
-        .dispatch(SmedCommand::CreateSession {
+        .dispatch(MjolnrCommand::CreateSession {
             provider: ProviderId::new(PROVIDER),
             model: ModelId::new(MODEL),
         })
         .await
         .expect("create session");
     runtime
-        .dispatch(SmedCommand::SendUserMessage {
+        .dispatch(MjolnrCommand::SendUserMessage {
             text: "review".to_owned(),
-            source: smed::core::directive::DirectiveSource::Human,
+            source: mjolnr::core::directive::DirectiveSource::Human,
         })
         .await
         .expect("send");
@@ -268,7 +268,7 @@ async fn project_activation_requires_trust_then_survives_resume_and_model_change
     }
 
     runtime
-        .dispatch(SmedCommand::ResolveApproval {
+        .dispatch(MjolnrCommand::ResolveApproval {
             approval: approval.id,
             decision: ApprovalDecision::ApproveOnce,
         })
@@ -314,11 +314,11 @@ async fn project_activation_requires_trust_then_survives_resume_and_model_change
         context,
     );
     resumed
-        .dispatch(SmedCommand::OpenProject { root: workspace })
+        .dispatch(MjolnrCommand::OpenProject { root: workspace })
         .await
         .expect("open project");
     resumed
-        .dispatch(SmedCommand::ResumeSession { session })
+        .dispatch(MjolnrCommand::ResumeSession { session })
         .await
         .expect("resume");
     let restored = wait_snapshot(&resumed, |snapshot| snapshot.session == Some(session)).await;
@@ -330,7 +330,7 @@ async fn project_activation_requires_trust_then_survives_resume_and_model_change
             .any(|name| name == "guarded-review")
     );
     resumed
-        .dispatch(SmedCommand::SelectModel {
+        .dispatch(MjolnrCommand::SelectModel {
             provider: ProviderId::new(PROVIDER),
             model: ModelId::new("skill-test-2"),
         })
@@ -364,20 +364,20 @@ async fn user_skill_activation_needs_no_workspace_trust_prompt() {
     let runtime =
         Runtime::spawn_with_project_context(vec![provider], store as Arc<dyn EventStore>, context);
     runtime
-        .dispatch(SmedCommand::OpenProject { root: workspace })
+        .dispatch(MjolnrCommand::OpenProject { root: workspace })
         .await
         .expect("open");
     runtime
-        .dispatch(SmedCommand::CreateSession {
+        .dispatch(MjolnrCommand::CreateSession {
             provider: ProviderId::new(PROVIDER),
             model: ModelId::new(MODEL),
         })
         .await
         .expect("create");
     runtime
-        .dispatch(SmedCommand::SendUserMessage {
+        .dispatch(MjolnrCommand::SendUserMessage {
             text: "review".to_owned(),
-            source: smed::core::directive::DirectiveSource::Human,
+            source: mjolnr::core::directive::DirectiveSource::Human,
         })
         .await
         .expect("send");
@@ -407,22 +407,22 @@ async fn a_catalog_cannot_be_reused_for_another_workspace() {
         context,
     );
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: other_workspace,
         })
         .await
         .expect("open other project");
     runtime
-        .dispatch(SmedCommand::CreateSession {
+        .dispatch(MjolnrCommand::CreateSession {
             provider: ProviderId::new(PROVIDER),
             model: ModelId::new(MODEL),
         })
         .await
         .expect("create session");
     runtime
-        .dispatch(SmedCommand::SendUserMessage {
+        .dispatch(MjolnrCommand::SendUserMessage {
             text: "review".to_owned(),
-            source: smed::core::directive::DirectiveSource::Human,
+            source: mjolnr::core::directive::DirectiveSource::Human,
         })
         .await
         .expect("send");

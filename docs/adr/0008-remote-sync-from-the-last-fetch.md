@@ -51,14 +51,14 @@ with the moment the ref was written rather than with the moment it was read.
   DTO variant keeps its name for wire compatibility; the *rendering* carries the
   qualifier.
 - The qualifier is not decorative and not optional. A surface showing sync state
-  also shows that the position is as of the last time smed saw the remote.
+  also shows that the position is as of the last time mjolnr saw the remote.
 
   **The qualifier does not depend on a timestamp existing.** Implementation
   measured what git actually provides: `git reflog show @{upstream}` answers
   after a fetch or a push (the entry reads `update by push`), and answers
   *nothing* in a fresh clone, which writes the tracking ref without a reflog
   entry. So `remote_sync_as_of` is `Option`, `None` is an ordinary case, and the
-  honest sentence — "as of the last time smed saw the remote" — is carried by
+  honest sentence — "as of the last time mjolnr saw the remote" — is carried by
   the *variant's meaning* rather than by the timestamp. When a timestamp is
   available it sharpens the statement; it never licenses dropping it.
 
@@ -71,14 +71,14 @@ with the moment the ref was written rather than with the moment it was read.
 
 ## Alternatives rejected
 
-**Keep `Unknown` forever.** Rejected: it discards information smed holds, and a
+**Keep `Unknown` forever.** Rejected: it discards information mjolnr holds, and a
 field that is structurally incapable of a value is worse than an honest one — it
 trains a reader to ignore the row, and eventually someone deletes it.
 
 **Fetch on a refresh trigger to make it current.** Rejected, firmly. A read path
 that reaches the network turns opening a project into an authenticated remote
 call, on a credential the user did not offer for that purpose, at a latency the
-UI cannot bound. If smed ever fetches it will be an explicit, human-initiated,
+UI cannot bound. If mjolnr ever fetches it will be an explicit, human-initiated,
 governed operation with its own approval — not a side effect of rendering a
 panel.
 

@@ -4,7 +4,7 @@
 //!
 //! Deriving serde on the canonical types would be a third of the code and would
 //! make the database format an *accident* of whatever those types currently look
-//! like. Renaming `SmedEvent::ToolProposed::preview` — a refactor with no
+//! like. Renaming `MjolnrEvent::ToolProposed::preview` — a refactor with no
 //! semantic content — would silently stop every stored session from loading, and
 //! nothing in the diff would say so.
 //!
@@ -12,7 +12,7 @@
 //! point: changing the database format requires editing a file whose only job is
 //! the database format, and the round-trip tests fail the moment core and wire
 //! disagree. This is the same split `providers/openai/wire.rs` makes for the
-//! same reason — a wire contract smed does not control is not one it may leak
+//! same reason — a wire contract mjolnr does not control is not one it may leak
 //! into its domain types, and a wire contract it *does* control is not one it
 //! should let a refactor edit by accident.
 //!
@@ -24,7 +24,7 @@
 //!
 //! There is no `TextDelta` variant in [`EventPayload`].  forbids one row
 //! per token, and rather than relying on every call site checking
-//! [`SmedEvent::is_durable`] first, the format simply has nowhere to put one:
+//! [`MjolnrEvent::is_durable`] first, the format simply has nowhere to put one:
 //! [`encode`] returns [`WireError::Ephemeral`]. A rule enforced by a type does
 //! not decay (`AGENTS.md` §2.4).
 
@@ -38,7 +38,7 @@ use uuid::Uuid;
 
 use crate::core::checkpoint::SessionCheckpoint;
 use crate::core::command::ApprovalId;
-use crate::core::event::{RunId, SessionId, SmedEvent};
+use crate::core::event::{MjolnrEvent, RunId, SessionId};
 use crate::core::model::{ModelId, ProviderId};
 use crate::store::wire::checkpoint::{CheckpointWire, HandoffWire, QuotaReserveWire};
 use crate::store::wire::enums::{
@@ -375,7 +375,7 @@ pub(in crate::store) enum EventPayload {
 
 /// The `events.kind` values whose events append a transcript message.
 ///
-/// The SQL spelling of [`SmedEvent::introduces_message`]. Recovery re-anchors
+/// The SQL spelling of [`MjolnrEvent::introduces_message`]. Recovery re-anchors
 /// a checkpoint's transcript by counting these below the checkpoint's extent,
 /// so this list and that predicate must name the same events — a test pins
 /// them together, because a one-variant disagreement would anchor every entry
@@ -465,26 +465,28 @@ impl EventPayload {
     clippy::too_many_lines,
     reason = "one flat event-to-payload mapping; it grows by one arm per durable event and splitting it would hide which events are covered"
 )]
-pub(in crate::store) fn encode(event: SmedEvent) -> Result<EventPayload, WireError> {
+pub(in crate::store) fn encode(event: MjolnrEvent) -> Result<EventPayload, WireError> {
     let payload = match event {
-        ref event @ (SmedEvent::TextDelta { .. }
-        | SmedEvent::ReasoningDelta { .. }
-        | SmedEvent::ToolAssembling { .. }
-        | SmedEvent::QuotaReported { .. }
-        | SmedEvent::SubagentActivity { .. }) => {
+        ref event @ (MjolnrEvent::TextDelta { .. }
+        | MjolnrEvent::ReasoningDelta { .. }
+        | MjolnrEvent::ToolAssembling { .. }
+        | MjolnrEvent::QuotaReported { .. }
+        | MjolnrEvent::SubagentActivity { .. }) => {
             return Err(WireError::Ephemeral {
                 kind: ephemeral_kind(event),
             });
         }
-        event @ (SmedEvent::SessionCreated { .. } | SmedEvent::MessageAppended { .. }) => {
+        event @ (MjolnrEvent::SessionCreated { .. } | MjolnrEvent::MessageAppended { .. }) => {
             encode_session_event(event)?
         }
-        SmedEvent::RunStarted { run, .. } => EventPayload::RunStarted { run: run.as_uuid() },
-        event @ (SmedEvent::UsageReported { .. }
-        | SmedEvent::QuotaBoundaryReached { .. }
-        | SmedEvent::HandoffCreated { .. }) => encode_continuation_event(event)?,
-        SmedEvent::PolicyChanged { mode, .. } => EventPayload::PolicyChanged { mode: mode.into() },
-        SmedEvent::PolicyClamped {
+        MjolnrEvent::RunStarted { run, .. } => EventPayload::RunStarted { run: run.as_uuid() },
+        event @ (MjolnrEvent::UsageReported { .. }
+        | MjolnrEvent::QuotaBoundaryReached { .. }
+        | MjolnrEvent::HandoffCreated { .. }) => encode_continuation_event(event)?,
+        MjolnrEvent::PolicyChanged { mode, .. } => {
+            EventPayload::PolicyChanged { mode: mode.into() }
+        }
+        MjolnrEvent::PolicyClamped {
             from,
             to,
             provider,
@@ -498,35 +500,35 @@ pub(in crate::store) fn encode(event: SmedEvent) -> Result<EventPayload, WireErr
             model: model.to_string(),
             tier: tier.into(),
         },
-        SmedEvent::ExtensionLoaded {
+        MjolnrEvent::ExtensionLoaded {
             name, program, by, ..
         } => EventPayload::ExtensionLoaded {
             name,
             program,
             by: by.into(),
         },
-        event @ (SmedEvent::ToolProposed { .. }
-        | SmedEvent::ApprovalResolved { .. }
-        | SmedEvent::ToolCompleted { .. }
-        | SmedEvent::ToolFailed { .. }) => encode_tool_event(event)?,
-        SmedEvent::BudgetExhausted { run, .. } => {
+        event @ (MjolnrEvent::ToolProposed { .. }
+        | MjolnrEvent::ApprovalResolved { .. }
+        | MjolnrEvent::ToolCompleted { .. }
+        | MjolnrEvent::ToolFailed { .. }) => encode_tool_event(event)?,
+        MjolnrEvent::BudgetExhausted { run, .. } => {
             EventPayload::BudgetExhausted { run: run.as_uuid() }
         }
-        SmedEvent::RunFinished { run, reason, .. } => EventPayload::RunFinished {
+        MjolnrEvent::RunFinished { run, reason, .. } => EventPayload::RunFinished {
             run: run.as_uuid(),
             reason: reason.into(),
         },
-        SmedEvent::RunFailed {
+        MjolnrEvent::RunFailed {
             run, code, detail, ..
         } => EventPayload::RunFailed {
             run: run.as_uuid(),
             code: ReasonCodeWire(code),
             detail,
         },
-        event @ (SmedEvent::ModelChanged { .. } | SmedEvent::ModelChangeRefused { .. }) => {
+        event @ (MjolnrEvent::ModelChanged { .. } | MjolnrEvent::ModelChangeRefused { .. }) => {
             encode_model_event(event)?
         }
-        SmedEvent::FileSaved {
+        MjolnrEvent::FileSaved {
             path,
             observed_digest,
             new_digest,
@@ -538,7 +540,7 @@ pub(in crate::store) fn encode(event: SmedEvent) -> Result<EventPayload, WireErr
             new_digest,
             size_bytes,
         },
-        SmedEvent::SpawnEnvelopeArmed {
+        MjolnrEvent::SpawnEnvelopeArmed {
             ceiling,
             max_children,
             max_per_call,
@@ -552,7 +554,7 @@ pub(in crate::store) fn encode(event: SmedEvent) -> Result<EventPayload, WireErr
             max_provider_turns,
             expires_after_turns,
         },
-        SmedEvent::SpawnEnvelopeDrawn {
+        MjolnrEvent::SpawnEnvelopeDrawn {
             run,
             children,
             provider_turns,
@@ -564,58 +566,58 @@ pub(in crate::store) fn encode(event: SmedEvent) -> Result<EventPayload, WireErr
             provider_turns,
             children_remaining,
         },
-        SmedEvent::SpawnEnvelopeCleared { reason, .. } => EventPayload::SpawnEnvelopeCleared {
+        MjolnrEvent::SpawnEnvelopeCleared { reason, .. } => EventPayload::SpawnEnvelopeCleared {
             reason: reason.into(),
         },
-        event @ (SmedEvent::SubagentSpawned { .. }
-        | SmedEvent::SubagentResultLate { .. }
-        | SmedEvent::ReadSetCollision { .. }) => encode_subagent_event(event)?,
-        SmedEvent::RecoveryRequired { work, .. } => EventPayload::RecoveryRequired {
+        event @ (MjolnrEvent::SubagentSpawned { .. }
+        | MjolnrEvent::SubagentResultLate { .. }
+        | MjolnrEvent::ReadSetCollision { .. }) => encode_subagent_event(event)?,
+        MjolnrEvent::RecoveryRequired { work, .. } => EventPayload::RecoveryRequired {
             work: (*work).into(),
         },
-        SmedEvent::RecoveryResolved { decision, .. } => EventPayload::RecoveryResolved {
+        MjolnrEvent::RecoveryResolved { decision, .. } => EventPayload::RecoveryResolved {
             decision: decision.into(),
         },
-        SmedEvent::SessionEnded { .. } => EventPayload::SessionEnded,
-        event @ (SmedEvent::TriggerFired { .. }
-        | SmedEvent::TriggerSettled { .. }
-        | SmedEvent::TriggerSkipped { .. }
-        | SmedEvent::TriggerQueued { .. }
-        | SmedEvent::TriggerReplaced { .. }
-        | SmedEvent::TriggerDisabled { .. }
-        | SmedEvent::TriggerRearmed { .. }) => encode_trigger_event(event)?,
-        event @ (SmedEvent::RouteSelected { .. }
-        | SmedEvent::RouteAdvanced { .. }
-        | SmedEvent::RouteExhausted { .. }
-        | SmedEvent::BreakerStateChanged { .. }) => encode_routing_event(event)?,
-        SmedEvent::PlanInterviewStarted { plan_id, goal, .. } => {
+        MjolnrEvent::SessionEnded { .. } => EventPayload::SessionEnded,
+        event @ (MjolnrEvent::TriggerFired { .. }
+        | MjolnrEvent::TriggerSettled { .. }
+        | MjolnrEvent::TriggerSkipped { .. }
+        | MjolnrEvent::TriggerQueued { .. }
+        | MjolnrEvent::TriggerReplaced { .. }
+        | MjolnrEvent::TriggerDisabled { .. }
+        | MjolnrEvent::TriggerRearmed { .. }) => encode_trigger_event(event)?,
+        event @ (MjolnrEvent::RouteSelected { .. }
+        | MjolnrEvent::RouteAdvanced { .. }
+        | MjolnrEvent::RouteExhausted { .. }
+        | MjolnrEvent::BreakerStateChanged { .. }) => encode_routing_event(event)?,
+        MjolnrEvent::PlanInterviewStarted { plan_id, goal, .. } => {
             EventPayload::PlanInterviewStarted { plan_id, goal }
         }
-        SmedEvent::PlanQuestionAsked {
+        MjolnrEvent::PlanQuestionAsked {
             plan_id, question, ..
         } => EventPayload::PlanQuestionAsked { plan_id, question },
-        SmedEvent::PlanQuestionAnswered {
+        MjolnrEvent::PlanQuestionAnswered {
             plan_id, answer, ..
         } => EventPayload::PlanQuestionAnswered { plan_id, answer },
-        SmedEvent::PlanPrdProposed { prd, .. } => EventPayload::PlanPrdProposed { prd },
-        SmedEvent::PlanProposed { proposal, .. } => EventPayload::PlanProposed { proposal },
-        SmedEvent::PlanReviewed { review, .. } => EventPayload::PlanReviewed { review },
-        SmedEvent::PlanApproved { approval, .. } => EventPayload::PlanApproved { approval },
-        SmedEvent::PlanHandoffCreated { handoff, .. } => {
+        MjolnrEvent::PlanPrdProposed { prd, .. } => EventPayload::PlanPrdProposed { prd },
+        MjolnrEvent::PlanProposed { proposal, .. } => EventPayload::PlanProposed { proposal },
+        MjolnrEvent::PlanReviewed { review, .. } => EventPayload::PlanReviewed { review },
+        MjolnrEvent::PlanApproved { approval, .. } => EventPayload::PlanApproved { approval },
+        MjolnrEvent::PlanHandoffCreated { handoff, .. } => {
             EventPayload::PlanHandoffCreated { handoff }
         }
-        SmedEvent::CouncilReviewed { review, .. } => {
+        MjolnrEvent::CouncilReviewed { review, .. } => {
             EventPayload::CouncilReviewed { review: *review }
         }
-        SmedEvent::CouncilFindingDispositionRecorded { disposition, .. } => {
+        MjolnrEvent::CouncilFindingDispositionRecorded { disposition, .. } => {
             EventPayload::CouncilFindingDispositionRecorded { disposition }
         }
-        SmedEvent::CouncilAmendmentProposed { amendment, .. } => {
+        MjolnrEvent::CouncilAmendmentProposed { amendment, .. } => {
             EventPayload::CouncilAmendmentProposed {
                 amendment: *amendment,
             }
         }
-        SmedEvent::ReviewNoteRecorded {
+        MjolnrEvent::ReviewNoteRecorded {
             thread,
             anchor,
             comment,
@@ -625,14 +627,14 @@ pub(in crate::store) fn encode(event: SmedEvent) -> Result<EventPayload, WireErr
             anchor,
             comment,
         },
-        SmedEvent::ReviewCommentAdded {
+        MjolnrEvent::ReviewCommentAdded {
             thread, comment, ..
         } => EventPayload::ReviewCommentAdded { thread, comment },
-        SmedEvent::ReviewRequestSent { threads, run, .. } => EventPayload::ReviewRequestSent {
+        MjolnrEvent::ReviewRequestSent { threads, run, .. } => EventPayload::ReviewRequestSent {
             threads,
             run: run.as_uuid(),
         },
-        SmedEvent::ReviewRequestAnswered {
+        MjolnrEvent::ReviewRequestAnswered {
             threads,
             response_message,
             ..
@@ -640,14 +642,14 @@ pub(in crate::store) fn encode(event: SmedEvent) -> Result<EventPayload, WireErr
             threads,
             response_message,
         },
-        SmedEvent::DecisionTicketOpened { ticket, .. } => {
+        MjolnrEvent::DecisionTicketOpened { ticket, .. } => {
             EventPayload::DecisionTicketOpened { ticket }
         }
-        SmedEvent::DecisionTicketResolved { resolution, .. } => {
+        MjolnrEvent::DecisionTicketResolved { resolution, .. } => {
             EventPayload::DecisionTicketResolved { resolution }
         }
-        SmedEvent::ImportedItemFetched { item, .. } => EventPayload::ImportedItemFetched { item },
-        SmedEvent::ImportedItemRefreshed {
+        MjolnrEvent::ImportedItemFetched { item, .. } => EventPayload::ImportedItemFetched { item },
+        MjolnrEvent::ImportedItemRefreshed {
             expected_revision,
             item,
             ..
@@ -655,8 +657,8 @@ pub(in crate::store) fn encode(event: SmedEvent) -> Result<EventPayload, WireErr
             expected_revision,
             item,
         },
-        SmedEvent::ImportedActRecorded { act, .. } => EventPayload::ImportedActRecorded { act },
-        SmedEvent::ImportedCommentRecorded {
+        MjolnrEvent::ImportedActRecorded { act, .. } => EventPayload::ImportedActRecorded { act },
+        MjolnrEvent::ImportedCommentRecorded {
             item_id,
             comment_id,
             body,
@@ -670,9 +672,9 @@ pub(in crate::store) fn encode(event: SmedEvent) -> Result<EventPayload, WireErr
     Ok(payload)
 }
 
-fn encode_routing_event(event: SmedEvent) -> Result<EventPayload, WireError> {
+fn encode_routing_event(event: MjolnrEvent) -> Result<EventPayload, WireError> {
     match event {
-        SmedEvent::RouteSelected {
+        MjolnrEvent::RouteSelected {
             child,
             route,
             position,
@@ -688,7 +690,7 @@ fn encode_routing_event(event: SmedEvent) -> Result<EventPayload, WireError> {
             model: model.as_str().to_owned(),
             reason: reason.into(),
         }),
-        SmedEvent::RouteAdvanced {
+        MjolnrEvent::RouteAdvanced {
             run,
             route,
             from_position,
@@ -706,7 +708,7 @@ fn encode_routing_event(event: SmedEvent) -> Result<EventPayload, WireError> {
             model: model.as_str().to_owned(),
             condition: condition.into(),
         }),
-        SmedEvent::RouteExhausted {
+        MjolnrEvent::RouteExhausted {
             run,
             route,
             condition,
@@ -716,7 +718,7 @@ fn encode_routing_event(event: SmedEvent) -> Result<EventPayload, WireError> {
             route,
             condition: condition.into(),
         }),
-        SmedEvent::BreakerStateChanged {
+        MjolnrEvent::BreakerStateChanged {
             provider, from, to, ..
         } => Ok(EventPayload::BreakerStateChanged {
             provider: provider.as_str().to_owned(),
@@ -729,9 +731,9 @@ fn encode_routing_event(event: SmedEvent) -> Result<EventPayload, WireError> {
     }
 }
 
-fn encode_trigger_event(event: SmedEvent) -> Result<EventPayload, WireError> {
+fn encode_trigger_event(event: MjolnrEvent) -> Result<EventPayload, WireError> {
     match event {
-        SmedEvent::TriggerFired {
+        MjolnrEvent::TriggerFired {
             trigger,
             child,
             source,
@@ -741,7 +743,7 @@ fn encode_trigger_event(event: SmedEvent) -> Result<EventPayload, WireError> {
             child: child.as_uuid(),
             source: source.into(),
         }),
-        SmedEvent::TriggerSettled {
+        MjolnrEvent::TriggerSettled {
             trigger,
             child,
             outcome,
@@ -753,7 +755,7 @@ fn encode_trigger_event(event: SmedEvent) -> Result<EventPayload, WireError> {
             outcome: outcome.into(),
             reason_code: reason_code.map(ReasonCodeWire),
         }),
-        SmedEvent::TriggerSkipped {
+        MjolnrEvent::TriggerSkipped {
             trigger,
             overlap,
             detail,
@@ -763,8 +765,8 @@ fn encode_trigger_event(event: SmedEvent) -> Result<EventPayload, WireError> {
             overlap: overlap.into(),
             detail,
         }),
-        SmedEvent::TriggerQueued { trigger, .. } => Ok(EventPayload::TriggerQueued { trigger }),
-        SmedEvent::TriggerReplaced {
+        MjolnrEvent::TriggerQueued { trigger, .. } => Ok(EventPayload::TriggerQueued { trigger }),
+        MjolnrEvent::TriggerReplaced {
             trigger,
             replaced_child,
             ..
@@ -772,7 +774,7 @@ fn encode_trigger_event(event: SmedEvent) -> Result<EventPayload, WireError> {
             trigger,
             replaced_child: replaced_child.as_uuid(),
         }),
-        SmedEvent::TriggerDisabled {
+        MjolnrEvent::TriggerDisabled {
             trigger,
             code,
             consecutive_failures,
@@ -782,16 +784,16 @@ fn encode_trigger_event(event: SmedEvent) -> Result<EventPayload, WireError> {
             code: ReasonCodeWire(code),
             consecutive_failures,
         }),
-        SmedEvent::TriggerRearmed { trigger, .. } => Ok(EventPayload::TriggerRearmed { trigger }),
+        MjolnrEvent::TriggerRearmed { trigger, .. } => Ok(EventPayload::TriggerRearmed { trigger }),
         _ => Err(WireError::Decode {
             detail: "event is not trigger state".to_owned(),
         }),
     }
 }
 
-fn encode_tool_event(event: SmedEvent) -> Result<EventPayload, WireError> {
+fn encode_tool_event(event: MjolnrEvent) -> Result<EventPayload, WireError> {
     match event {
-        SmedEvent::ToolProposed {
+        MjolnrEvent::ToolProposed {
             run,
             approval,
             call,
@@ -805,7 +807,7 @@ fn encode_tool_event(event: SmedEvent) -> Result<EventPayload, WireError> {
             tier: tier.into(),
             preview,
         }),
-        SmedEvent::ApprovalResolved {
+        MjolnrEvent::ApprovalResolved {
             run,
             approval,
             decision,
@@ -815,7 +817,7 @@ fn encode_tool_event(event: SmedEvent) -> Result<EventPayload, WireError> {
             approval: approval.as_uuid(),
             decision: decision.into(),
         }),
-        SmedEvent::ToolCompleted {
+        MjolnrEvent::ToolCompleted {
             run,
             call_id,
             name,
@@ -827,7 +829,7 @@ fn encode_tool_event(event: SmedEvent) -> Result<EventPayload, WireError> {
             name,
             result: result.into(),
         }),
-        SmedEvent::ToolFailed {
+        MjolnrEvent::ToolFailed {
             run,
             call_id,
             name,
@@ -847,15 +849,15 @@ fn encode_tool_event(event: SmedEvent) -> Result<EventPayload, WireError> {
     }
 }
 
-fn encode_session_event(event: SmedEvent) -> Result<EventPayload, WireError> {
+fn encode_session_event(event: MjolnrEvent) -> Result<EventPayload, WireError> {
     match event {
-        SmedEvent::SessionCreated {
+        MjolnrEvent::SessionCreated {
             provider, model, ..
         } => Ok(EventPayload::SessionCreated {
             provider: provider.as_str().to_owned(),
             model: model.as_str().to_owned(),
         }),
-        SmedEvent::MessageAppended { message, .. } => Ok(EventPayload::MessageAppended {
+        MjolnrEvent::MessageAppended { message, .. } => Ok(EventPayload::MessageAppended {
             message: (*message).into(),
         }),
         _ => Err(WireError::Decode {
@@ -864,9 +866,9 @@ fn encode_session_event(event: SmedEvent) -> Result<EventPayload, WireError> {
     }
 }
 
-fn encode_subagent_event(event: SmedEvent) -> Result<EventPayload, WireError> {
+fn encode_subagent_event(event: MjolnrEvent) -> Result<EventPayload, WireError> {
     match event {
-        SmedEvent::SubagentSpawned {
+        MjolnrEvent::SubagentSpawned {
             run,
             child,
             directive,
@@ -882,13 +884,13 @@ fn encode_subagent_event(event: SmedEvent) -> Result<EventPayload, WireError> {
             branch,
             worktree,
         }),
-        SmedEvent::SubagentResultLate { child, detail, .. } => {
+        MjolnrEvent::SubagentResultLate { child, detail, .. } => {
             Ok(EventPayload::SubagentResultLate {
                 child: child.as_uuid(),
                 detail,
             })
         }
-        SmedEvent::ReadSetCollision {
+        MjolnrEvent::ReadSetCollision {
             reader,
             writer,
             path,
@@ -904,19 +906,19 @@ fn encode_subagent_event(event: SmedEvent) -> Result<EventPayload, WireError> {
     }
 }
 
-fn encode_continuation_event(event: SmedEvent) -> Result<EventPayload, WireError> {
+fn encode_continuation_event(event: MjolnrEvent) -> Result<EventPayload, WireError> {
     match event {
-        SmedEvent::UsageReported { run, usage, .. } => Ok(EventPayload::UsageReported {
+        MjolnrEvent::UsageReported { run, usage, .. } => Ok(EventPayload::UsageReported {
             run: run.as_uuid(),
             usage: usage.into(),
         }),
-        SmedEvent::QuotaBoundaryReached { run, reserve, .. } => {
+        MjolnrEvent::QuotaBoundaryReached { run, reserve, .. } => {
             Ok(EventPayload::QuotaBoundaryReached {
                 run: run.as_uuid(),
                 reserve: reserve.into(),
             })
         }
-        SmedEvent::HandoffCreated { handoff, .. } => Ok(EventPayload::HandoffCreated {
+        MjolnrEvent::HandoffCreated { handoff, .. } => Ok(EventPayload::HandoffCreated {
             handoff: (*handoff).into(),
         }),
         _ => Err(WireError::Decode {
@@ -925,26 +927,26 @@ fn encode_continuation_event(event: SmedEvent) -> Result<EventPayload, WireError
     }
 }
 
-fn ephemeral_kind(event: &SmedEvent) -> &'static str {
+fn ephemeral_kind(event: &MjolnrEvent) -> &'static str {
     match event {
-        SmedEvent::TextDelta { .. } => "text_delta",
-        SmedEvent::ReasoningDelta { .. } => "reasoning_delta",
-        SmedEvent::ToolAssembling { .. } => "tool_assembling",
-        SmedEvent::QuotaReported { .. } => "quota_reported",
-        SmedEvent::SubagentActivity { .. } => "subagent_activity",
+        MjolnrEvent::TextDelta { .. } => "text_delta",
+        MjolnrEvent::ReasoningDelta { .. } => "reasoning_delta",
+        MjolnrEvent::ToolAssembling { .. } => "tool_assembling",
+        MjolnrEvent::QuotaReported { .. } => "quota_reported",
+        MjolnrEvent::SubagentActivity { .. } => "subagent_activity",
         _ => "ephemeral",
     }
 }
 
-fn encode_model_event(event: SmedEvent) -> Result<EventPayload, WireError> {
+fn encode_model_event(event: MjolnrEvent) -> Result<EventPayload, WireError> {
     match event {
-        SmedEvent::ModelChanged {
+        MjolnrEvent::ModelChanged {
             provider, model, ..
         } => Ok(EventPayload::ModelChanged {
             provider: provider.as_str().to_owned(),
             model: model.as_str().to_owned(),
         }),
-        SmedEvent::ModelChangeRefused {
+        MjolnrEvent::ModelChangeRefused {
             provider,
             model,
             code,
@@ -963,7 +965,7 @@ fn encode_model_event(event: SmedEvent) -> Result<EventPayload, WireError> {
 }
 
 /// Rebuild a durable event from its persisted payload and its session column.
-pub(in crate::store) fn decode(session: SessionId, payload: EventPayload) -> SmedEvent {
+pub(in crate::store) fn decode(session: SessionId, payload: EventPayload) -> MjolnrEvent {
     // Split only to stay under the function-length limit; the two halves are one
     // flat mapping. Tool payloads are the larger group, so they move out.
     match payload {
@@ -980,7 +982,7 @@ pub(in crate::store) fn decode(session: SessionId, payload: EventPayload) -> Sme
 }
 
 /// Route selection, advance, exhaustion, and breaker payloads.
-fn decode_routing(session: SessionId, payload: EventPayload) -> SmedEvent {
+fn decode_routing(session: SessionId, payload: EventPayload) -> MjolnrEvent {
     match payload {
         EventPayload::RouteSelected {
             child,
@@ -989,7 +991,7 @@ fn decode_routing(session: SessionId, payload: EventPayload) -> SmedEvent {
             provider,
             model,
             reason,
-        } => SmedEvent::RouteSelected {
+        } => MjolnrEvent::RouteSelected {
             session,
             child: child.map(SessionId::from_uuid),
             route,
@@ -1006,7 +1008,7 @@ fn decode_routing(session: SessionId, payload: EventPayload) -> SmedEvent {
             provider,
             model,
             condition,
-        } => SmedEvent::RouteAdvanced {
+        } => MjolnrEvent::RouteAdvanced {
             session,
             run: RunId::from_uuid(run),
             route,
@@ -1020,14 +1022,14 @@ fn decode_routing(session: SessionId, payload: EventPayload) -> SmedEvent {
             run,
             route,
             condition,
-        } => SmedEvent::RouteExhausted {
+        } => MjolnrEvent::RouteExhausted {
             session,
             run: RunId::from_uuid(run),
             route,
             condition: condition.into(),
         },
         EventPayload::BreakerStateChanged { provider, from, to } => {
-            SmedEvent::BreakerStateChanged {
+            MjolnrEvent::BreakerStateChanged {
                 session,
                 provider: ProviderId::new(provider),
                 from: from.into(),
@@ -1044,36 +1046,36 @@ fn decode_routing(session: SessionId, payload: EventPayload) -> SmedEvent {
     clippy::too_many_lines,
     reason = "the inverse of `encode`'s flat mapping, and kept flat for the same reason"
 )]
-fn decode_lifecycle(session: SessionId, payload: EventPayload) -> SmedEvent {
+fn decode_lifecycle(session: SessionId, payload: EventPayload) -> MjolnrEvent {
     match payload {
-        EventPayload::SessionCreated { provider, model } => SmedEvent::SessionCreated {
+        EventPayload::SessionCreated { provider, model } => MjolnrEvent::SessionCreated {
             session,
             provider: ProviderId::new(provider),
             model: ModelId::new(model),
         },
-        EventPayload::MessageAppended { message } => SmedEvent::MessageAppended {
+        EventPayload::MessageAppended { message } => MjolnrEvent::MessageAppended {
             session,
             message: Box::new(message.into()),
         },
-        EventPayload::RunStarted { run } => SmedEvent::RunStarted {
+        EventPayload::RunStarted { run } => MjolnrEvent::RunStarted {
             session,
             run: RunId::from_uuid(run),
         },
-        EventPayload::UsageReported { run, usage } => SmedEvent::UsageReported {
+        EventPayload::UsageReported { run, usage } => MjolnrEvent::UsageReported {
             session,
             run: RunId::from_uuid(run),
             usage: usage.into(),
         },
-        EventPayload::QuotaBoundaryReached { run, reserve } => SmedEvent::QuotaBoundaryReached {
+        EventPayload::QuotaBoundaryReached { run, reserve } => MjolnrEvent::QuotaBoundaryReached {
             session,
             run: RunId::from_uuid(run),
             reserve: reserve.into(),
         },
-        EventPayload::HandoffCreated { handoff } => SmedEvent::HandoffCreated {
+        EventPayload::HandoffCreated { handoff } => MjolnrEvent::HandoffCreated {
             session,
             handoff: Box::new(handoff.into()),
         },
-        EventPayload::PolicyChanged { mode } => SmedEvent::PolicyChanged {
+        EventPayload::PolicyChanged { mode } => MjolnrEvent::PolicyChanged {
             session,
             mode: mode.into(),
         },
@@ -1083,7 +1085,7 @@ fn decode_lifecycle(session: SessionId, payload: EventPayload) -> SmedEvent {
             provider,
             model,
             tier,
-        } => SmedEvent::PolicyClamped {
+        } => MjolnrEvent::PolicyClamped {
             session,
             from: from.into(),
             to: to.into(),
@@ -1091,28 +1093,28 @@ fn decode_lifecycle(session: SessionId, payload: EventPayload) -> SmedEvent {
             model: crate::core::model::ModelId::new(model),
             tier: tier.into(),
         },
-        EventPayload::ExtensionLoaded { name, program, by } => SmedEvent::ExtensionLoaded {
+        EventPayload::ExtensionLoaded { name, program, by } => MjolnrEvent::ExtensionLoaded {
             session,
             name,
             program,
             by: by.into(),
         },
-        EventPayload::BudgetExhausted { run } => SmedEvent::BudgetExhausted {
+        EventPayload::BudgetExhausted { run } => MjolnrEvent::BudgetExhausted {
             session,
             run: RunId::from_uuid(run),
         },
-        EventPayload::RunFinished { run, reason } => SmedEvent::RunFinished {
+        EventPayload::RunFinished { run, reason } => MjolnrEvent::RunFinished {
             session,
             run: RunId::from_uuid(run),
             reason: reason.into(),
         },
-        EventPayload::RunFailed { run, code, detail } => SmedEvent::RunFailed {
+        EventPayload::RunFailed { run, code, detail } => MjolnrEvent::RunFailed {
             session,
             run: RunId::from_uuid(run),
             code: code.0,
             detail,
         },
-        EventPayload::ModelChanged { provider, model } => SmedEvent::ModelChanged {
+        EventPayload::ModelChanged { provider, model } => MjolnrEvent::ModelChanged {
             session,
             provider: ProviderId::new(provider),
             model: ModelId::new(model),
@@ -1122,7 +1124,7 @@ fn decode_lifecycle(session: SessionId, payload: EventPayload) -> SmedEvent {
             model,
             code,
             detail,
-        } => SmedEvent::ModelChangeRefused {
+        } => MjolnrEvent::ModelChangeRefused {
             session,
             provider: ProviderId::new(provider),
             model: ModelId::new(model),
@@ -1134,7 +1136,7 @@ fn decode_lifecycle(session: SessionId, payload: EventPayload) -> SmedEvent {
             observed_digest,
             new_digest,
             size_bytes,
-        } => SmedEvent::FileSaved {
+        } => MjolnrEvent::FileSaved {
             session,
             path,
             observed_digest,
@@ -1147,15 +1149,15 @@ fn decode_lifecycle(session: SessionId, payload: EventPayload) -> SmedEvent {
         payload @ (EventPayload::SubagentSpawned { .. }
         | EventPayload::SubagentResultLate { .. }
         | EventPayload::ReadSetCollision { .. }) => decode_subagent(session, payload),
-        EventPayload::RecoveryRequired { work } => SmedEvent::RecoveryRequired {
+        EventPayload::RecoveryRequired { work } => MjolnrEvent::RecoveryRequired {
             session,
             work: Box::new(work.into()),
         },
-        EventPayload::RecoveryResolved { decision } => SmedEvent::RecoveryResolved {
+        EventPayload::RecoveryResolved { decision } => MjolnrEvent::RecoveryResolved {
             session,
             decision: decision.into(),
         },
-        EventPayload::SessionEnded => SmedEvent::SessionEnded { session },
+        EventPayload::SessionEnded => MjolnrEvent::SessionEnded { session },
         payload @ (EventPayload::TriggerFired { .. }
         | EventPayload::TriggerSettled { .. }
         | EventPayload::TriggerSkipped { .. }
@@ -1172,40 +1174,42 @@ fn decode_lifecycle(session: SessionId, payload: EventPayload) -> SmedEvent {
         | EventPayload::RouteAdvanced { .. }
         | EventPayload::RouteExhausted { .. }
         | EventPayload::BreakerStateChanged { .. }) => decode_routing(session, payload),
-        EventPayload::PlanInterviewStarted { plan_id, goal } => SmedEvent::PlanInterviewStarted {
+        EventPayload::PlanInterviewStarted { plan_id, goal } => MjolnrEvent::PlanInterviewStarted {
             session,
             plan_id,
             goal,
         },
-        EventPayload::PlanQuestionAsked { plan_id, question } => SmedEvent::PlanQuestionAsked {
+        EventPayload::PlanQuestionAsked { plan_id, question } => MjolnrEvent::PlanQuestionAsked {
             session,
             plan_id,
             question,
         },
-        EventPayload::PlanQuestionAnswered { plan_id, answer } => SmedEvent::PlanQuestionAnswered {
-            session,
-            plan_id,
-            answer,
-        },
-        EventPayload::PlanPrdProposed { prd } => SmedEvent::PlanPrdProposed { session, prd },
-        EventPayload::PlanProposed { proposal } => SmedEvent::PlanProposed { session, proposal },
-        EventPayload::PlanReviewed { review } => SmedEvent::PlanReviewed { session, review },
-        EventPayload::PlanApproved { approval } => SmedEvent::PlanApproved { session, approval },
-        EventPayload::PlanHandoffCreated { handoff } => {
-            SmedEvent::PlanHandoffCreated { session, handoff }
+        EventPayload::PlanQuestionAnswered { plan_id, answer } => {
+            MjolnrEvent::PlanQuestionAnswered {
+                session,
+                plan_id,
+                answer,
+            }
         }
-        EventPayload::CouncilReviewed { review } => SmedEvent::CouncilReviewed {
+        EventPayload::PlanPrdProposed { prd } => MjolnrEvent::PlanPrdProposed { session, prd },
+        EventPayload::PlanProposed { proposal } => MjolnrEvent::PlanProposed { session, proposal },
+        EventPayload::PlanReviewed { review } => MjolnrEvent::PlanReviewed { session, review },
+        EventPayload::PlanApproved { approval } => MjolnrEvent::PlanApproved { session, approval },
+        EventPayload::PlanHandoffCreated { handoff } => {
+            MjolnrEvent::PlanHandoffCreated { session, handoff }
+        }
+        EventPayload::CouncilReviewed { review } => MjolnrEvent::CouncilReviewed {
             session,
             review: Box::new(review),
         },
         EventPayload::CouncilFindingDispositionRecorded { disposition } => {
-            SmedEvent::CouncilFindingDispositionRecorded {
+            MjolnrEvent::CouncilFindingDispositionRecorded {
                 session,
                 disposition,
             }
         }
         EventPayload::CouncilAmendmentProposed { amendment } => {
-            SmedEvent::CouncilAmendmentProposed {
+            MjolnrEvent::CouncilAmendmentProposed {
                 session,
                 amendment: Box::new(amendment),
             }
@@ -1214,18 +1218,18 @@ fn decode_lifecycle(session: SessionId, payload: EventPayload) -> SmedEvent {
             thread,
             anchor,
             comment,
-        } => SmedEvent::ReviewNoteRecorded {
+        } => MjolnrEvent::ReviewNoteRecorded {
             session,
             thread,
             anchor,
             comment,
         },
-        EventPayload::ReviewCommentAdded { thread, comment } => SmedEvent::ReviewCommentAdded {
+        EventPayload::ReviewCommentAdded { thread, comment } => MjolnrEvent::ReviewCommentAdded {
             session,
             thread,
             comment,
         },
-        EventPayload::ReviewRequestSent { threads, run } => SmedEvent::ReviewRequestSent {
+        EventPayload::ReviewRequestSent { threads, run } => MjolnrEvent::ReviewRequestSent {
             session,
             threads,
             run: RunId::from_uuid(run),
@@ -1233,37 +1237,39 @@ fn decode_lifecycle(session: SessionId, payload: EventPayload) -> SmedEvent {
         EventPayload::ReviewRequestAnswered {
             threads,
             response_message,
-        } => SmedEvent::ReviewRequestAnswered {
+        } => MjolnrEvent::ReviewRequestAnswered {
             session,
             threads,
             response_message,
         },
         EventPayload::DecisionTicketOpened { ticket } => {
-            SmedEvent::DecisionTicketOpened { session, ticket }
+            MjolnrEvent::DecisionTicketOpened { session, ticket }
         }
-        EventPayload::DecisionTicketResolved { resolution } => SmedEvent::DecisionTicketResolved {
-            session,
-            resolution,
-        },
+        EventPayload::DecisionTicketResolved { resolution } => {
+            MjolnrEvent::DecisionTicketResolved {
+                session,
+                resolution,
+            }
+        }
         EventPayload::ImportedItemFetched { item } => {
-            SmedEvent::ImportedItemFetched { session, item }
+            MjolnrEvent::ImportedItemFetched { session, item }
         }
         EventPayload::ImportedItemRefreshed {
             expected_revision,
             item,
-        } => SmedEvent::ImportedItemRefreshed {
+        } => MjolnrEvent::ImportedItemRefreshed {
             session,
             expected_revision,
             item,
         },
         EventPayload::ImportedActRecorded { act } => {
-            SmedEvent::ImportedActRecorded { session, act }
+            MjolnrEvent::ImportedActRecorded { session, act }
         }
         EventPayload::ImportedCommentRecorded {
             item_id,
             comment_id,
             body,
-        } => SmedEvent::ImportedCommentRecorded {
+        } => MjolnrEvent::ImportedCommentRecorded {
             session,
             item_id,
             comment_id,
@@ -1278,7 +1284,7 @@ fn decode_lifecycle(session: SessionId, payload: EventPayload) -> SmedEvent {
 /// Split out for the same reason `decode_subagent` is: `decode_lifecycle` is a
 /// flat mapping and stays readable only while no one family of events grows a
 /// long arm inside it.
-fn decode_envelope(session: SessionId, payload: EventPayload) -> SmedEvent {
+fn decode_envelope(session: SessionId, payload: EventPayload) -> MjolnrEvent {
     match payload {
         EventPayload::SpawnEnvelopeArmed {
             ceiling,
@@ -1286,7 +1292,7 @@ fn decode_envelope(session: SessionId, payload: EventPayload) -> SmedEvent {
             max_per_call,
             max_provider_turns,
             expires_after_turns,
-        } => SmedEvent::SpawnEnvelopeArmed {
+        } => MjolnrEvent::SpawnEnvelopeArmed {
             session,
             ceiling: ceiling.into(),
             max_children,
@@ -1299,14 +1305,14 @@ fn decode_envelope(session: SessionId, payload: EventPayload) -> SmedEvent {
             children,
             provider_turns,
             children_remaining,
-        } => SmedEvent::SpawnEnvelopeDrawn {
+        } => MjolnrEvent::SpawnEnvelopeDrawn {
             session,
             run: RunId::from_uuid(run),
             children,
             provider_turns,
             children_remaining,
         },
-        EventPayload::SpawnEnvelopeCleared { reason } => SmedEvent::SpawnEnvelopeCleared {
+        EventPayload::SpawnEnvelopeCleared { reason } => MjolnrEvent::SpawnEnvelopeCleared {
             session,
             reason: reason.into(),
         },
@@ -1314,7 +1320,7 @@ fn decode_envelope(session: SessionId, payload: EventPayload) -> SmedEvent {
     }
 }
 
-fn decode_subagent(session: SessionId, payload: EventPayload) -> SmedEvent {
+fn decode_subagent(session: SessionId, payload: EventPayload) -> MjolnrEvent {
     match payload {
         EventPayload::SubagentSpawned {
             run,
@@ -1323,7 +1329,7 @@ fn decode_subagent(session: SessionId, payload: EventPayload) -> SmedEvent {
             policy,
             branch,
             worktree,
-        } => SmedEvent::SubagentSpawned {
+        } => MjolnrEvent::SubagentSpawned {
             session,
             run: RunId::from_uuid(run),
             child: SessionId::from_uuid(child),
@@ -1332,7 +1338,7 @@ fn decode_subagent(session: SessionId, payload: EventPayload) -> SmedEvent {
             branch,
             worktree,
         },
-        EventPayload::SubagentResultLate { child, detail } => SmedEvent::SubagentResultLate {
+        EventPayload::SubagentResultLate { child, detail } => MjolnrEvent::SubagentResultLate {
             session,
             child: SessionId::from_uuid(child),
             detail,
@@ -1341,7 +1347,7 @@ fn decode_subagent(session: SessionId, payload: EventPayload) -> SmedEvent {
             reader,
             writer,
             path,
-        } => SmedEvent::ReadSetCollision {
+        } => MjolnrEvent::ReadSetCollision {
             session,
             reader: SessionId::from_uuid(reader),
             writer: SessionId::from_uuid(writer),
@@ -1353,13 +1359,13 @@ fn decode_subagent(session: SessionId, payload: EventPayload) -> SmedEvent {
 }
 
 /// Trigger lifecycle payloads.
-fn decode_trigger(session: SessionId, payload: EventPayload) -> SmedEvent {
+fn decode_trigger(session: SessionId, payload: EventPayload) -> MjolnrEvent {
     match payload {
         EventPayload::TriggerFired {
             trigger,
             child,
             source,
-        } => SmedEvent::TriggerFired {
+        } => MjolnrEvent::TriggerFired {
             session,
             trigger,
             child: SessionId::from_uuid(child),
@@ -1370,7 +1376,7 @@ fn decode_trigger(session: SessionId, payload: EventPayload) -> SmedEvent {
             child,
             outcome,
             reason_code,
-        } => SmedEvent::TriggerSettled {
+        } => MjolnrEvent::TriggerSettled {
             session,
             trigger,
             child: SessionId::from_uuid(child),
@@ -1381,17 +1387,17 @@ fn decode_trigger(session: SessionId, payload: EventPayload) -> SmedEvent {
             trigger,
             overlap,
             detail,
-        } => SmedEvent::TriggerSkipped {
+        } => MjolnrEvent::TriggerSkipped {
             session,
             trigger,
             overlap: overlap.into(),
             detail,
         },
-        EventPayload::TriggerQueued { trigger } => SmedEvent::TriggerQueued { session, trigger },
+        EventPayload::TriggerQueued { trigger } => MjolnrEvent::TriggerQueued { session, trigger },
         EventPayload::TriggerReplaced {
             trigger,
             replaced_child,
-        } => SmedEvent::TriggerReplaced {
+        } => MjolnrEvent::TriggerReplaced {
             session,
             trigger,
             replaced_child: SessionId::from_uuid(replaced_child),
@@ -1400,13 +1406,15 @@ fn decode_trigger(session: SessionId, payload: EventPayload) -> SmedEvent {
             trigger,
             code,
             consecutive_failures,
-        } => SmedEvent::TriggerDisabled {
+        } => MjolnrEvent::TriggerDisabled {
             session,
             trigger,
             code: code.0,
             consecutive_failures,
         },
-        EventPayload::TriggerRearmed { trigger } => SmedEvent::TriggerRearmed { session, trigger },
+        EventPayload::TriggerRearmed { trigger } => {
+            MjolnrEvent::TriggerRearmed { session, trigger }
+        }
         // `decode_lifecycle` only calls this for a trigger-shaped payload;
         // this mirrors `decode_tool`'s own catch-all for the same reason.
         other => decode_lifecycle(session, other),
@@ -1414,7 +1422,7 @@ fn decode_trigger(session: SessionId, payload: EventPayload) -> SmedEvent {
 }
 
 /// Tool proposal, approval, and outcome payloads.
-fn decode_tool(session: SessionId, payload: EventPayload) -> SmedEvent {
+fn decode_tool(session: SessionId, payload: EventPayload) -> MjolnrEvent {
     match payload {
         EventPayload::ToolProposed {
             run,
@@ -1422,7 +1430,7 @@ fn decode_tool(session: SessionId, payload: EventPayload) -> SmedEvent {
             call,
             tier,
             preview,
-        } => SmedEvent::ToolProposed {
+        } => MjolnrEvent::ToolProposed {
             session,
             run: RunId::from_uuid(run),
             approval: approval.map(ApprovalId::from_uuid),
@@ -1434,7 +1442,7 @@ fn decode_tool(session: SessionId, payload: EventPayload) -> SmedEvent {
             run,
             approval,
             decision,
-        } => SmedEvent::ApprovalResolved {
+        } => MjolnrEvent::ApprovalResolved {
             session,
             run: RunId::from_uuid(run),
             approval: ApprovalId::from_uuid(approval),
@@ -1445,7 +1453,7 @@ fn decode_tool(session: SessionId, payload: EventPayload) -> SmedEvent {
             call_id,
             name,
             result,
-        } => SmedEvent::ToolCompleted {
+        } => MjolnrEvent::ToolCompleted {
             session,
             run: RunId::from_uuid(run),
             call_id,
@@ -1458,7 +1466,7 @@ fn decode_tool(session: SessionId, payload: EventPayload) -> SmedEvent {
             name,
             code,
             detail,
-        } => SmedEvent::ToolFailed {
+        } => MjolnrEvent::ToolFailed {
             session,
             run: RunId::from_uuid(run),
             call_id,
@@ -1507,7 +1515,7 @@ pub(in crate::store) fn decode_checkpoint(
     Ok(wire.into())
 }
 
-/// Refuse a payload written by a newer smed.
+/// Refuse a payload written by a newer mjolnr.
 ///
 /// Fail closed (`AGENTS.md` §1.2): a build that reads a newer payload
 /// best-effort will drop the fields it does not understand on the next write.

@@ -7,12 +7,12 @@ use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::mpsc;
 
 use crate::core::client::ClientUpdate;
-use crate::core::runtime::SmedRuntime;
+use crate::core::runtime::MjolnrRuntime;
 
 use super::convert::{event_to_client, snapshot_to_client};
 
 pub(super) async fn pump_updates(
-    runtime: Arc<dyn SmedRuntime>,
+    runtime: Arc<dyn MjolnrRuntime>,
     updates: mpsc::Sender<ClientUpdate>,
     sequence: Arc<AtomicU64>,
 ) {

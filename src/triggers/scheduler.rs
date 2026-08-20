@@ -19,15 +19,15 @@ use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
 use crate::context::ProjectContext;
-use crate::core::command::SmedCommand;
+use crate::core::command::MjolnrCommand;
 use crate::core::error::ReasonCode;
-use crate::core::event::{SessionId, SmedEvent};
+use crate::core::event::{MjolnrEvent, SessionId};
 use crate::core::mcp::McpServerSummary;
 use crate::core::model::{ModelId, ProviderId};
 use crate::core::policy::PolicyMode;
 use crate::core::provider::Provider;
 use crate::core::routing::RouteTable;
-use crate::core::runtime::SmedRuntime;
+use crate::core::runtime::MjolnrRuntime;
 use crate::core::store::{EventStore, StoreError};
 use crate::core::trigger::TriggerOutcome;
 use crate::headless::HeadlessOutcome;
@@ -307,7 +307,7 @@ async fn handle_occurrence(
         OverlapDecision::Skip => {
             let _ = deps
                 .store
-                .append(SmedEvent::TriggerSkipped {
+                .append(MjolnrEvent::TriggerSkipped {
                     session: control_session,
                     trigger: definition.name.clone(),
                     overlap: definition.overlap,
@@ -319,7 +319,7 @@ async fn handle_occurrence(
             *queued = true;
             let _ = deps
                 .store
-                .append(SmedEvent::TriggerQueued {
+                .append(MjolnrEvent::TriggerQueued {
                     session: control_session,
                     trigger: definition.name.clone(),
                 })
@@ -350,7 +350,7 @@ async fn start_firing(
 
     let _ = deps
         .store
-        .append(SmedEvent::TriggerFired {
+        .append(MjolnrEvent::TriggerFired {
             session: control_session,
             trigger: definition.name.clone(),
             child,
@@ -432,12 +432,12 @@ async fn fire(
 
     let setup = async {
         runtime
-            .dispatch(SmedCommand::OpenProject {
+            .dispatch(MjolnrCommand::OpenProject {
                 root: deps.workspace_root.clone(),
             })
             .await?;
         runtime
-            .dispatch(SmedCommand::CreateSession {
+            .dispatch(MjolnrCommand::CreateSession {
                 provider: provider.clone(),
                 model: model.clone(),
             })
@@ -450,7 +450,7 @@ async fn fire(
         // firing on the trigger's fixed provider/model exactly as before.
         if definition.route.is_some() || definition.role.is_some() {
             runtime
-                .dispatch(SmedCommand::AttachRoute {
+                .dispatch(MjolnrCommand::AttachRoute {
                     route: definition.route.clone(),
                     role: definition.role.clone(),
                     task_class: "default".to_owned(),
@@ -458,7 +458,7 @@ async fn fire(
                 .await?;
         }
         runtime
-            .dispatch(SmedCommand::SetPolicy {
+            .dispatch(MjolnrCommand::SetPolicy {
                 mode: definition.policy_ceiling,
             })
             .await
@@ -478,7 +478,7 @@ async fn fire(
     let run = tokio::select! {
         report = crate::headless::run(&runtime, directive) => report,
         () = cancel.cancelled() => {
-            let _ = runtime.dispatch(SmedCommand::CancelRun).await;
+            let _ = runtime.dispatch(MjolnrCommand::CancelRun).await;
             let _ = runtime.close().await;
             return (TriggerOutcome::Refused, Some(ReasonCode::Cancelled));
         }
@@ -539,7 +539,7 @@ async fn record_settlement(
 ) {
     let _ = deps
         .store
-        .append(SmedEvent::TriggerSettled {
+        .append(MjolnrEvent::TriggerSettled {
             session: control_session,
             trigger: definition.name.clone(),
             child: settlement.child,
@@ -558,7 +558,7 @@ async fn record_settlement(
     if state.consecutive_failures >= definition.max_consecutive_failures {
         let _ = deps
             .store
-            .append(SmedEvent::TriggerDisabled {
+            .append(MjolnrEvent::TriggerDisabled {
                 session: control_session,
                 trigger: definition.name.clone(),
                 code: ReasonCode::TriggerDisabled,

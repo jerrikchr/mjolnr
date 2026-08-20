@@ -18,7 +18,7 @@ talks directly to model provider APIs (OpenAI, Anthropic, Gemini, OpenRouter,
 Ollama). External agent runtimes may join the workspace through explicit
 compatibility boundaries, but their work keeps its external provenance until a
 mjolnr-owned adapter proves stronger guarantees. The central promise is
-**governed execution**: the model proposes, smed's deterministic code disposes.
+**governed execution**: the model proposes, mjolnr's deterministic code disposes.
 Code that weakens a guard is not a shortcut — it is a defect in the thing being
 sold.
 
@@ -26,10 +26,10 @@ sold.
 
 These override convenience, elegance, and velocity. In a conflict, they win.
 
-1. **The model proposes; code disposes.** Every side effect passes a deterministic gate smed owns. No guard may be conditioned on model output claiming it is safe.
+1. **The model proposes; code disposes.** Every side effect passes a deterministic gate mjolnr owns. No guard may be conditioned on model output claiming it is safe.
 2. **Fail closed.** Unknown tool tier → `Execute`. Unknown path → rejected. Missing capability → refuse before the request. Ambiguity resolves toward refusal, never toward action.
 3. **Never lie about state.** Reported success requires evidence. `verified` requires a successful post-mutation command. If a thing was not checked, say it was not checked — in the UI, in reports, in the README.
-4. **Uncertain side effects are never retried automatically.** If smed cannot prove a write or command did not happen, it asks a human. Losing work beats duplicating it.
+4. **Uncertain side effects are never retried automatically.** If mjolnr cannot prove a write or command did not happen, it asks a human. Losing work beats duplicating it.
 5. **Secrets never leave their boundary.** Not into logs, argv, SQLite, `Debug` output, panics, fixtures, child environments, or the screen.
 
 ## 2. Architecture — how we avoid spaghetti
@@ -81,7 +81,7 @@ Apply this test whenever a module grows. Failing it is the earliest signal of ro
 
 - **`unsafe` is forbidden** — `unsafe_code = "forbid"`. No exceptions in this codebase.
 - **Secret types implement `Debug` manually and print `<redacted>`.** Never `#[derive(Debug)]` on anything holding a credential; a derived `Debug` plus one `tracing` call is a leak. Zeroize on drop.
-- **Credentials come from smed's owner-only credential files or the environment only.** No other file location, ever, including "just for development". This covers every secret class without exception: provider API keys, provider OAuth tokens, and MCP server bearer/OAuth tokens, local or remote. The OS keyring was deliberately abandoned — see the `src/store/secrets.rs` header for what it cost and what the trade gives up.
+- **Credentials come from mjolnr's owner-only credential files or the environment only.** No other file location, ever, including "just for development". This covers every secret class without exception: provider API keys, provider OAuth tokens, and MCP server bearer/OAuth tokens, local or remote. The OS keyring was deliberately abandoned — see the `src/store/secrets.rs` header for what it cost and what the trade gives up.
 - **Never pass a secret as a CLI argument** — argv is world-readable and lands in shell history.
 - **Scrub the child environment** before `run_command`. Provider keys must not be inheritable.
 - **Recheck path containment immediately before every filesystem side effect**, not only at validation time. The gap between check and use is the vulnerability.
@@ -199,8 +199,8 @@ These began as per-phase anti-patterns in the implementation plans. Each was res
 3. **Surfaces select; they do not act.** Onboarding, `/config`, the model and theme pickers, the fleet rail, and any guided surface added later may authenticate, scaffold declared files, and change selections. None of them may take a repo action, and none may reach a side effect that skips the gate the ordinary path would apply.
 4. **Nothing in flight is widened.** No scheduled run, routing advance, subagent, council, extension, or wrap-up directive may widen policy, budget, approval tier, or credential scope — not for its own convenience, not to make automation smoother. Children inherit less, never more.
 5. **The record is append-only; everything else is a projection.** Compaction, handoff, summarization, and fleet views derive from the durable transcript and never rewrite it in place. If a projection is insufficient, improve what is recorded — do not call a model to paper over a thin record.
-6. **A directive is only as trusted as its source.** Text that reaches smed from outside the session — a webhook body, an issue, a comment, anything a third party wrote — is *data about what someone wants*, never authority from the owner. It arrives framed as data, escaped so it cannot close smed's own framing, and it cannot run unattended: full-auto is capped for it exactly as `carried_forward` caps it across a resume, and for the same reason. smed does not attempt to detect a hostile directive and must not claim to; what it refuses is to confuse what someone asked for with what the owner authorised. Until triggers, every directive came from the person at the keyboard and this rule had nothing to govern — that is why it is newer than the rest.
-7. **User-revertible state lives in diffable files.** Config, routes, personas, `SOUL.md`, skills, and extensions are files under `.smed/` a human can read, diff, and revert. No hidden global mutable config blob, no settings store shadowing those files, no prose in SQLite. This is the safety case for admitting self-evolution at all.
+6. **A directive is only as trusted as its source.** Text that reaches mjolnr from outside the session — a webhook body, an issue, a comment, anything a third party wrote — is *data about what someone wants*, never authority from the owner. It arrives framed as data, escaped so it cannot close mjolnr's own framing, and it cannot run unattended: full-auto is capped for it exactly as `carried_forward` caps it across a resume, and for the same reason. mjolnr does not attempt to detect a hostile directive and must not claim to; what it refuses is to confuse what someone asked for with what the owner authorised. Until triggers, every directive came from the person at the keyboard and this rule had nothing to govern — that is why it is newer than the rest.
+7. **User-revertible state lives in diffable files.** Config, routes, personas, `SOUL.md`, skills, and extensions are files under `.mjolnr/` a human can read, diff, and revert. No hidden global mutable config blob, no settings store shadowing those files, no prose in SQLite. This is the safety case for admitting self-evolution at all.
 
 Visual and interaction prohibitions are **not** here — they live in [`docs/tui-design.md`](./docs/tui-design.md), which is their contract. A border rule and a credential rule do not belong in the same list; flattening them teaches contributors that neither is serious.
 

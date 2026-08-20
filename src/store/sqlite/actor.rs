@@ -30,7 +30,7 @@ use tokio::sync::{mpsc, oneshot};
 use tokio_rusqlite::Connection;
 
 use crate::core::checkpoint::SessionCheckpoint;
-use crate::core::event::{SessionId, SmedEvent, StoredEvent};
+use crate::core::event::{MjolnrEvent, SessionId, StoredEvent};
 use crate::core::store::{
     DiagnosticsReport, IntegrityReport, ProjectId, SessionLease, SessionSummary, StoreError,
     StoredCheckpoint,
@@ -66,11 +66,11 @@ pub(super) enum Request {
         reply: Reply<Vec<SessionSummary>>,
     },
     Append {
-        event: Box<SmedEvent>,
+        event: Box<MjolnrEvent>,
         reply: Reply<StoredEvent>,
     },
     AppendAfter {
-        event: Box<SmedEvent>,
+        event: Box<MjolnrEvent>,
         parent: Option<u64>,
         reply: Reply<StoredEvent>,
     },

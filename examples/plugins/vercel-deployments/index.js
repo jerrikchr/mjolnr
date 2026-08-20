@@ -39,7 +39,7 @@ async function vercelFetch(path) {
     headers: {
       Authorization: `Bearer ${TOKEN}`,
       Accept: "application/json",
-      "User-Agent": "smed",
+      "User-Agent": "mjolnr",
     },
   });
   if (!res.ok) {

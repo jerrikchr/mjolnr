@@ -212,7 +212,7 @@ impl PersonaCatalog {
 
     /// Name-and-body pairs for change detection across a `/reload`
     /// . The body is included so an *in-place* edit — the shape
-    /// self-evolution takes when smed refines a persona it already wrote — is
+    /// self-evolution takes when mjolnr refines a persona it already wrote — is
     /// detected, not just an add or remove.
     pub(super) fn digest(&self) -> Vec<(String, String)> {
         self.personas

@@ -2,7 +2,7 @@
 //! .
 //!
 //! `MAX_CHILDREN = 4` is not an oversight — it is the last link in the chain
-//! that holds up smed's central claim:
+//! that holds up mjolnr's central claim:
 //!
 //! > every spawn is approved individually → the preview must be reviewable →
 //! > the preview must be short → the children must be few
@@ -15,7 +15,7 @@
 //!
 //! An envelope is that primitive: a human approves a *shape* once, and the
 //! runtime enforces it per spawn with every draw recorded against it. It is a
-//! generalisation of machinery smed already has — `a` (approve this exact
+//! generalisation of machinery mjolnr already has — `a` (approve this exact
 //! command for the session) is the same idea at N=1, and shares the same three
 //! properties: bounded, session-scoped, and never durable.
 

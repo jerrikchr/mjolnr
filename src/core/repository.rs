@@ -40,7 +40,7 @@ pub enum RepositoryView {
 /// **There is no `fresh` flag and no `is_current` method, deliberately.**
 /// Nothing watches the filesystem — refreshes happen on the explicit triggers
 /// in [`RefreshTrigger`] — so between two triggers a user can commit in a
-/// terminal and this projection will not know. smed can honestly say what git
+/// terminal and this projection will not know. mjolnr can honestly say what git
 /// said and when it asked; it cannot say the answer is still true, and a field
 /// asserting that it is would be the exact false claim AGENTS.md §1.3 forbids.
 ///
@@ -128,7 +128,7 @@ pub struct UpstreamPosition {
     /// When the remote-tracking ref last moved, if git recorded it.
     ///
     /// "Last fetch" is the usual cause but not the only one — git's reflog
-    /// records `update by push` too. The honest phrasing is "when smed last
+    /// records `update by push` too. The honest phrasing is "when mjolnr last
     /// saw the remote", which is what this is.
     pub ref_updated_at: Option<String>,
 }
@@ -144,7 +144,7 @@ pub struct UpstreamPosition {
 pub enum RefreshTrigger {
     /// A project root was opened.
     ProjectOpened,
-    /// One of smed's own repository commands completed.
+    /// One of mjolnr's own repository commands completed.
     RepositoryCommand,
     /// A governed tool finished a write to the working tree.
     ToolWrite,
@@ -195,7 +195,7 @@ mod tests {
     fn an_unavailable_repository_is_not_an_empty_projection() {
         // The distinction this asserts is the whole reason `RepositoryView` is
         // an enum: an empty projection renders as a clean repository, which is
-        // a positive claim about a repository smed could not read at all.
+        // a positive claim about a repository mjolnr could not read at all.
         let view = RepositoryView::Unavailable {
             code: ReasonCode::WorkspaceCapabilityUnavailable,
             detail: "not a git repository".to_owned(),

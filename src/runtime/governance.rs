@@ -4,7 +4,7 @@
 //! what a tier means. Neither of them applies anything — this is where a tier
 //! becomes a clamp, at the same doors every other ceiling is enforced at.
 
-use crate::core::event::SmedEvent;
+use crate::core::event::MjolnrEvent;
 use crate::core::governance::GovernanceTable;
 use crate::core::policy::PolicyMode;
 
@@ -18,7 +18,7 @@ impl Actor {
     /// read at two low-frequency doors, against a cached value that could go
     /// stale mid-session and lie. Here the lie is worse than a stale branch
     /// name — an owner who tightens `governance.yaml` because a model is
-    /// misbehaving would not get the tightening until restart, and smed
+    /// misbehaving would not get the tightening until restart, and mjolnr
     /// would go on running at authority the file no longer grants.
     fn governance_table(&self) -> GovernanceTable {
         self.state
@@ -61,7 +61,7 @@ impl Actor {
         }
 
         if let Err(error) = self
-            .persist(SmedEvent::PolicyClamped {
+            .persist(MjolnrEvent::PolicyClamped {
                 session,
                 from,
                 to,

@@ -1,6 +1,6 @@
 //! `mjolnr plugin` — third-party plugin scaffolding (Phase 6, ADR-0016).
 //!
-//! Generates a fail-closed `smed-plugin.yaml` manifest under
+//! Generates a fail-closed `mjolnr-plugin.yaml` manifest under
 //! `.mjolnr/plugins/<name>.yaml` plus an optional language starter that speaks
 //! JSON-RPC 2.0 over stdio. Reuses `super::init::plan_writes` / `print_preview`
 //! / `confirm` / `write_all` so the usual never-overwrites guarantee holds.

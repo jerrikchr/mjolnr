@@ -12,18 +12,18 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use smed::core::client::{ClientCommand, ClientMessage, ClientSnapshot};
-use smed::core::command::SmedCommand;
-use smed::core::directive::DirectiveSource;
-use smed::core::message::Role;
-use smed::core::model::{ModelId, ProviderId};
-use smed::core::provider::Provider;
-use smed::core::runtime::{RuntimeSnapshot, SmedRuntime};
-use smed::core::store::EventStore;
-use smed::providers::fake::{FakeProvider, FakeScript};
-use smed::runtime::Runtime;
-use smed::runtime::client_bridge::ClientBridge;
-use smed::store::sqlite::SqliteEventStore;
+use mjolnr::core::client::{ClientCommand, ClientMessage, ClientSnapshot};
+use mjolnr::core::command::MjolnrCommand;
+use mjolnr::core::directive::DirectiveSource;
+use mjolnr::core::message::Role;
+use mjolnr::core::model::{ModelId, ProviderId};
+use mjolnr::core::provider::Provider;
+use mjolnr::core::runtime::{MjolnrRuntime, RuntimeSnapshot};
+use mjolnr::core::store::EventStore;
+use mjolnr::providers::fake::{FakeProvider, FakeScript};
+use mjolnr::runtime::Runtime;
+use mjolnr::runtime::client_bridge::ClientBridge;
+use mjolnr::store::sqlite::SqliteEventStore;
 use tempfile::TempDir;
 
 struct Fixture {
@@ -35,7 +35,7 @@ struct Fixture {
 impl Fixture {
     fn new() -> Self {
         let directory = TempDir::new().expect("temp dir");
-        let database = directory.path().join("smed.sqlite3");
+        let database = directory.path().join("mjolnr.sqlite3");
         let workspace = directory.path().join("workspace");
         std::fs::create_dir_all(&workspace).expect("workspace");
         let workspace = workspace.canonicalize().expect("canonical workspace");
@@ -86,7 +86,7 @@ async fn settle_bridge(
 async fn say(runtime: &Runtime, text: &str) -> RuntimeSnapshot {
     let before = runtime.snapshot().messages.len();
     runtime
-        .dispatch(SmedCommand::SendUserMessage {
+        .dispatch(MjolnrCommand::SendUserMessage {
             text: text.to_owned(),
             source: DirectiveSource::Human,
         })
@@ -118,17 +118,17 @@ async fn rollback_to_checkpoint_rewinds_transcript_safely() {
         vec![provider],
         Arc::clone(&store) as Arc<dyn EventStore>,
     ));
-    let bridge = ClientBridge::start(Arc::clone(&runtime) as Arc<dyn SmedRuntime>);
+    let bridge = ClientBridge::start(Arc::clone(&runtime) as Arc<dyn MjolnrRuntime>);
 
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: fixture.workspace.clone(),
         })
         .await
         .expect("open project");
 
     runtime
-        .dispatch(SmedCommand::CreateSession {
+        .dispatch(MjolnrCommand::CreateSession {
             provider: ProviderId::new(FakeProvider::ID),
             model: ModelId::new(FakeProvider::MODEL),
         })
@@ -183,17 +183,17 @@ async fn rollback_fails_closed_on_mismatched_expected_head() {
         vec![provider],
         Arc::clone(&store) as Arc<dyn EventStore>,
     ));
-    let bridge = ClientBridge::start(Arc::clone(&runtime) as Arc<dyn SmedRuntime>);
+    let bridge = ClientBridge::start(Arc::clone(&runtime) as Arc<dyn MjolnrRuntime>);
 
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: fixture.workspace.clone(),
         })
         .await
         .expect("open project");
 
     runtime
-        .dispatch(SmedCommand::CreateSession {
+        .dispatch(MjolnrCommand::CreateSession {
             provider: ProviderId::new(FakeProvider::ID),
             model: ModelId::new(FakeProvider::MODEL),
         })
@@ -221,17 +221,17 @@ async fn rollback_is_refused_while_run_is_active() {
         vec![provider],
         Arc::clone(&store) as Arc<dyn EventStore>,
     ));
-    let bridge = ClientBridge::start(Arc::clone(&runtime) as Arc<dyn SmedRuntime>);
+    let bridge = ClientBridge::start(Arc::clone(&runtime) as Arc<dyn MjolnrRuntime>);
 
     runtime
-        .dispatch(SmedCommand::OpenProject {
+        .dispatch(MjolnrCommand::OpenProject {
             root: fixture.workspace.clone(),
         })
         .await
         .expect("open project");
 
     runtime
-        .dispatch(SmedCommand::CreateSession {
+        .dispatch(MjolnrCommand::CreateSession {
             provider: ProviderId::new(FakeProvider::ID),
             model: ModelId::new(FakeProvider::MODEL),
         })
@@ -242,7 +242,7 @@ async fn rollback_is_refused_while_run_is_active() {
 
     // Start a holding turn
     runtime
-        .dispatch(SmedCommand::SendUserMessage {
+        .dispatch(MjolnrCommand::SendUserMessage {
             text: "worker-hold:".to_owned(),
             source: DirectiveSource::Human,
         })
@@ -264,5 +264,5 @@ async fn rollback_is_refused_while_run_is_active() {
     assert!(runtime.snapshot().run_active);
 
     // Clean up run
-    let _ = runtime.dispatch(SmedCommand::CancelRun).await;
+    let _ = runtime.dispatch(MjolnrCommand::CancelRun).await;
 }

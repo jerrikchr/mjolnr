@@ -11,21 +11,21 @@
 
 use std::sync::Arc;
 
-use ratatui::Terminal;
-use ratatui::backend::TestBackend;
-use smed::core::command::ApprovalId;
-use smed::core::context::{ContextDiagnostic, SkillScope, SkillSummary};
-use smed::core::error::ReasonCode;
-use smed::core::event::{FinishReason, RunId, SessionId, SmedEvent};
-use smed::core::message::{CanonicalMessage, ContentBlock, ToolCall, ToolEffect, ToolResult};
-use smed::core::model::{
+use mjolnr::core::command::ApprovalId;
+use mjolnr::core::context::{ContextDiagnostic, SkillScope, SkillSummary};
+use mjolnr::core::error::ReasonCode;
+use mjolnr::core::event::{FinishReason, MjolnrEvent, RunId, SessionId};
+use mjolnr::core::message::{CanonicalMessage, ContentBlock, ToolCall, ToolEffect, ToolResult};
+use mjolnr::core::model::{
     ModelCapabilities, ModelDescriptor, ModelId, ProviderId, QuotaSnapshot, QuotaWindow,
 };
-use smed::core::policy::PendingApproval;
-use smed::core::runtime::RuntimeSnapshot;
-use smed::core::tool::ToolTier;
-use smed::tui::layout;
-use smed::tui::reducer::{Overlay, ViewState};
+use mjolnr::core::policy::PendingApproval;
+use mjolnr::core::runtime::RuntimeSnapshot;
+use mjolnr::core::tool::ToolTier;
+use mjolnr::tui::layout;
+use mjolnr::tui::reducer::{Overlay, ViewState};
+use ratatui::Terminal;
+use ratatui::backend::TestBackend;
 
 /// Render at a given size and return the frame as text.
 fn render_at(width: u16, height: u16, view: &ViewState) -> String {
@@ -50,11 +50,11 @@ fn render_at(width: u16, height: u16, view: &ViewState) -> String {
 /// Build a view whose transcript is anchored the way a real one is: one
 /// durable event per message, so `/tree` sees selectable branch points.
 fn view_with_messages(messages: Vec<CanonicalMessage>) -> ViewState {
-    let messages: Vec<smed::core::message::TranscriptEntry> = messages
+    let messages: Vec<mjolnr::core::message::TranscriptEntry> = messages
         .into_iter()
         .enumerate()
         .map(|(index, message)| {
-            smed::core::message::TranscriptEntry::anchored(index as u64, message)
+            mjolnr::core::message::TranscriptEntry::anchored(index as u64, message)
         })
         .collect();
     let mut view = ViewState::default();
@@ -68,15 +68,15 @@ fn view_with_messages(messages: Vec<CanonicalMessage>) -> ViewState {
         tree: Arc::new(Vec::new()),
         left_branch: None,
         run_active: false,
-        usage: smed::core::model::Usage {
+        usage: mjolnr::core::model::Usage {
             input_tokens: 12,
             output_tokens: 34,
         },
         workspace_root: Some(std::path::PathBuf::from("/tmp/demo-project")),
-        policy: smed::core::policy::PolicyMode::Ask,
+        policy: mjolnr::core::policy::PolicyMode::Ask,
         pending_approval: None,
-        budget: smed::core::runtime::BudgetStatus::default(),
-        recovery: smed::core::recovery::RecoveryState::Clean,
+        budget: mjolnr::core::runtime::BudgetStatus::default(),
+        recovery: mjolnr::core::recovery::RecoveryState::Clean,
         store_failure: None,
         skills: Arc::new(Vec::new()),
         prompts: Arc::new(Vec::new()),
@@ -90,7 +90,7 @@ fn view_with_messages(messages: Vec<CanonicalMessage>) -> ViewState {
         context_diagnostics: Arc::new(Vec::new()),
         workspace_trusted: false,
         handoff: None,
-        quota_reserve: smed::core::continuation::QuotaReserveStatus::default(),
+        quota_reserve: mjolnr::core::continuation::QuotaReserveStatus::default(),
         quota: None,
         resume_advice: None,
         mcp_servers: Arc::new(Vec::new()),
@@ -105,8 +105,8 @@ fn view_with_messages(messages: Vec<CanonicalMessage>) -> ViewState {
         souls: Arc::new(Vec::new()),
         sessions: Arc::new(Vec::new()),
         plan: None,
-        repository: smed::core::repository::RepositoryView::NoProject,
-        changes: smed::core::change_capture::ChangeView::NoProject,
+        repository: mjolnr::core::repository::RepositoryView::NoProject,
+        changes: mjolnr::core::change_capture::ChangeView::NoProject,
         read_evidence: Arc::new(Vec::new()),
         review_threads: Arc::new(Vec::new()),
         memory: Arc::default(),
@@ -114,7 +114,7 @@ fn view_with_messages(messages: Vec<CanonicalMessage>) -> ViewState {
         fleet: Arc::default(),
         preview: Arc::default(),
         external_agents: Vec::new(),
-        external_agent_capability: smed::core::client::external_agent::ExternalAgentCapability {
+        external_agent_capability: mjolnr::core::client::external_agent::ExternalAgentCapability {
             available: false,
             reason: None,
         },
@@ -145,7 +145,7 @@ fn empty_timeline_shows_only_the_mjolnr_identity() {
     assert!(
         !frame.contains("MODEL PROPOSES // CODE DISPOSES")
             && !frame.contains("LOCAL-FIRST CODING AGENT")
-            && !frame.contains("WELCOME TO SMED")
+            && !frame.contains("WELCOME TO MJOLNR")
             && !frame.contains("START WITH A DIRECTIVE"),
         "the identity should stand alone; controls already live beside the composer: {frame}"
     );
@@ -186,7 +186,7 @@ fn an_idle_screen_spends_no_rows_on_blank_chrome() {
 #[test]
 fn the_telemetry_row_does_not_reprint_the_wordmark() {
     let mut view = view_with_messages(vec![]);
-    view.snapshot.messages = Arc::new(vec![smed::core::message::TranscriptEntry::anchored(
+    view.snapshot.messages = Arc::new(vec![mjolnr::core::message::TranscriptEntry::anchored(
         0,
         CanonicalMessage::user("hello"),
     )]);
@@ -212,7 +212,7 @@ fn a_tall_empty_workspace_uses_the_quick_launcher() {
         frame.contains("mjolnr") || frame.contains("MJOLNR"),
         "quick launcher missing:\n{frame}"
     );
-    for preset in smed::tui::launcher::PRESETS {
+    for preset in mjolnr::tui::launcher::PRESETS {
         assert!(
             frame.contains(preset.name),
             "preset {} missing:\n{frame}",
@@ -266,7 +266,7 @@ fn the_launcher_never_names_a_model_the_session_is_not_configured_for() {
 #[test]
 fn the_launcher_shows_the_policy_the_runtime_is_actually_enforcing() {
     let mut view = view_with_messages(vec![]);
-    view.snapshot.policy = smed::core::policy::PolicyMode::ReadOnly;
+    view.snapshot.policy = mjolnr::core::policy::PolicyMode::ReadOnly;
 
     let frame = render_at(160, 40, &view);
     assert!(frame.contains("IN EFFECT"), "frame:\n{frame}");
@@ -286,10 +286,10 @@ fn the_launcher_shows_the_policy_the_runtime_is_actually_enforcing() {
 /// `policy` (`AGENTS.md` §2.1); an integration test sees both.
 #[test]
 fn launcher_preset_copy_matches_the_policy_decision_table() {
-    use smed::core::policy::PolicyMode;
-    use smed::policy::{PolicyDecision, decide};
+    use mjolnr::core::policy::PolicyMode;
+    use mjolnr::policy::{PolicyDecision, decide};
 
-    for preset in smed::tui::launcher::PRESETS {
+    for preset in mjolnr::tui::launcher::PRESETS {
         // Every preset's copy opens by promising free reads.
         assert_eq!(
             decide(preset.mode, ToolTier::Read, false),
@@ -327,7 +327,7 @@ fn launcher_preset_copy_matches_the_policy_decision_table() {
 
 #[test]
 fn the_empty_dashboard_summarises_provider_readiness_without_listing_names() {
-    use smed::core::runtime::{ProviderConnection, ProviderConnectionState};
+    use mjolnr::core::runtime::{ProviderConnection, ProviderConnectionState};
 
     let connection = |provider: &str, state| ProviderConnection {
         provider: ProviderId::new(provider),
@@ -408,7 +408,7 @@ fn skills_overlay_distinguishes_available_active_and_invalid_entries() {
 #[test]
 fn model_switch_notice_discloses_the_provider_private_state_boundary() {
     let mut view = view_with_messages(vec![]);
-    view.apply(&SmedEvent::ModelChanged {
+    view.apply(&MjolnrEvent::ModelChanged {
         session: SessionId::new(),
         provider: ProviderId::new("anthropic"),
         model: ModelId::new("claude-sonnet-5"),
@@ -453,7 +453,7 @@ fn a_pasted_image_shows_a_caption_and_never_the_bare_path() {
     // protocol — every frame test, and any plain TTY — that is a caption plus
     // the reason, never a raw `file://` line masquerading as prose.
     let view = view_with_messages(vec![CanonicalMessage::user(
-        "look at this ![pasted_image](file:///tmp/demo-project/.smed/assets/paste_1.png)",
+        "look at this ![pasted_image](file:///tmp/demo-project/.mjolnr/assets/paste_1.png)",
     )]);
 
     let frame = render_at(80, 24, &view);
@@ -544,11 +544,11 @@ fn a_tool_result_renders_its_stable_outcome() {
 
 #[test]
 fn an_armed_envelope_states_what_it_authorises_before_confirming() {
-    use smed::core::envelope::SpawnEnvelope;
+    use mjolnr::core::envelope::SpawnEnvelope;
 
     let mut view = view_with_messages(vec![]);
     view.envelope_armed = Some(Box::new(SpawnEnvelope {
-        ceiling: smed::core::policy::PolicyMode::ReadOnly,
+        ceiling: mjolnr::core::policy::PolicyMode::ReadOnly,
         max_children: 32,
         max_per_call: 8,
         max_provider_turns: 120,
@@ -579,11 +579,11 @@ fn an_armed_envelope_states_what_it_authorises_before_confirming() {
 
 #[test]
 fn a_live_envelope_shows_what_remains_in_the_header() {
-    use smed::core::envelope::{ActiveEnvelope, SpawnEnvelope};
+    use mjolnr::core::envelope::{ActiveEnvelope, SpawnEnvelope};
 
     let mut view = view_with_messages(vec![]);
     let mut active = ActiveEnvelope::new(SpawnEnvelope {
-        ceiling: smed::core::policy::PolicyMode::ReadOnly,
+        ceiling: mjolnr::core::policy::PolicyMode::ReadOnly,
         max_children: 32,
         max_per_call: 8,
         max_provider_turns: 120,
@@ -686,8 +686,8 @@ fn streaming_text_is_visible_before_the_run_finishes() {
     let session = SessionId::new();
     let run = RunId::new();
 
-    view.apply(&SmedEvent::RunStarted { session, run });
-    view.apply(&SmedEvent::TextDelta {
+    view.apply(&MjolnrEvent::RunStarted { session, run });
+    view.apply(&MjolnrEvent::TextDelta {
         session,
         run,
         text: "partial answer".to_owned(),
@@ -707,7 +707,7 @@ fn a_finished_run_never_labels_incomplete_as_done() {
     let run = RunId::new();
 
     let mut done = view_with_messages(vec![]);
-    done.apply(&SmedEvent::RunFinished {
+    done.apply(&MjolnrEvent::RunFinished {
         session,
         run,
         reason: FinishReason::Stop,
@@ -715,7 +715,7 @@ fn a_finished_run_never_labels_incomplete_as_done() {
     assert!(render_at(80, 20, &done).contains("done"));
 
     let mut incomplete = view_with_messages(vec![]);
-    incomplete.apply(&SmedEvent::RunFinished {
+    incomplete.apply(&MjolnrEvent::RunFinished {
         session,
         run,
         reason: FinishReason::Incomplete,
@@ -730,10 +730,10 @@ fn a_finished_run_never_labels_incomplete_as_done() {
 #[test]
 fn a_failure_shows_its_stable_reason_code() {
     let mut view = view_with_messages(vec![]);
-    view.apply(&SmedEvent::RunFailed {
+    view.apply(&MjolnrEvent::RunFailed {
         session: SessionId::new(),
         run: RunId::new(),
-        code: smed::core::error::ReasonCode::ProviderRateLimit,
+        code: mjolnr::core::error::ReasonCode::ProviderRateLimit,
         detail: "slow down".to_owned(),
     });
 
@@ -750,10 +750,10 @@ fn a_failure_shows_its_stable_reason_code() {
 #[test]
 fn subscription_quota_shows_its_typed_code_and_reset() {
     let mut view = view_with_messages(vec![]);
-    view.apply(&SmedEvent::RunFailed {
+    view.apply(&MjolnrEvent::RunFailed {
         session: SessionId::new(),
         run: RunId::new(),
-        code: smed::core::error::ReasonCode::ProviderPlanQuota,
+        code: mjolnr::core::error::ReasonCode::ProviderPlanQuota,
         detail: "subscription plan quota exhausted; reset at Some(1700000000)".to_owned(),
     });
 
@@ -801,10 +801,10 @@ fn usage_overlay_reports_received_windows_and_never_invents_absent_data() {
 #[test]
 fn configured_quota_is_labelled_as_an_estimate() {
     let mut view = view_with_messages(vec![]);
-    view.snapshot.quota_reserve = smed::core::continuation::QuotaReserveStatus {
-        basis: smed::core::continuation::QuotaReserveBasis::ConfiguredTokens { limit: 100_000 },
+    view.snapshot.quota_reserve = mjolnr::core::continuation::QuotaReserveStatus {
+        basis: mjolnr::core::continuation::QuotaReserveBasis::ConfiguredTokens { limit: 100_000 },
         used_fraction: Some(0.81),
-        ..smed::core::continuation::QuotaReserveStatus::default()
+        ..mjolnr::core::continuation::QuotaReserveStatus::default()
     };
     view.overlay = Overlay::Usage;
     let frame = render_at(100, 24, &view);
@@ -818,12 +818,12 @@ fn configured_quota_is_labelled_as_an_estimate() {
 #[test]
 fn resume_advisor_has_no_enter_default_and_labels_its_estimate() {
     let mut view = view_with_messages(vec![]);
-    view.snapshot.resume_advice = Some(smed::core::continuation::ResumeAdvice {
-        warning: smed::core::continuation::ResumeWarning::QuotaStopped {
+    view.snapshot.resume_advice = Some(mjolnr::core::continuation::ResumeAdvice {
+        warning: mjolnr::core::continuation::ResumeWarning::QuotaStopped {
             resets_at: Some(time::OffsetDateTime::now_utc() + time::Duration::hours(1)),
         },
         estimated_full_resume_tokens: 88_000,
-        handoff: Some(smed::core::continuation::HandoffId::new()),
+        handoff: Some(mjolnr::core::continuation::HandoffId::new()),
     });
     let frame = render_at(110, 24, &view);
     assert!(frame.contains("RESUME ADVISOR"), "frame:\n{frame}");
@@ -835,7 +835,7 @@ fn resume_advisor_has_no_enter_default_and_labels_its_estimate() {
 #[test]
 fn full_auto_and_its_confirmation_are_visually_unmistakable() {
     let mut active = view_with_messages(vec![]);
-    active.snapshot.policy = smed::core::policy::PolicyMode::FullAuto;
+    active.snapshot.policy = mjolnr::core::policy::PolicyMode::FullAuto;
     active.auto_allowed_side_effects = 3;
     let frame = render_at(140, 24, &active);
     assert!(frame.contains("POLICY full-auto"), "frame:\n{frame}");
@@ -855,8 +855,8 @@ fn live_reasoning_is_sanitized_collapses_and_is_never_present_in_snapshot_histor
     let mut view = view_with_messages(vec![]);
     let session = SessionId::new();
     let run = RunId::new();
-    view.apply(&SmedEvent::RunStarted { session, run });
-    view.apply(&SmedEvent::ReasoningDelta {
+    view.apply(&MjolnrEvent::RunStarted { session, run });
+    view.apply(&MjolnrEvent::ReasoningDelta {
         session,
         run,
         text: "inspect\x1b[2J files".to_owned(),
@@ -865,7 +865,7 @@ fn live_reasoning_is_sanitized_collapses_and_is_never_present_in_snapshot_histor
     assert!(frame.to_lowercase().contains("thinking"), "frame:\n{frame}");
     assert!(!frame.contains('\x1b'), "escape survived:\n{frame}");
 
-    view.apply(&SmedEvent::TextDelta {
+    view.apply(&MjolnrEvent::TextDelta {
         session,
         run,
         text: "answer".to_owned(),
@@ -885,8 +885,8 @@ fn activity_and_failures_name_the_in_flight_intent_at_all_supported_widths() {
         let mut view = view_with_messages(vec![]);
         let session = SessionId::new();
         let run = RunId::new();
-        view.apply(&SmedEvent::RunStarted { session, run });
-        view.apply(&SmedEvent::ToolAssembling {
+        view.apply(&MjolnrEvent::RunStarted { session, run });
+        view.apply(&MjolnrEvent::ToolAssembling {
             session,
             run,
             name: "list_dir".to_owned(),
@@ -898,7 +898,7 @@ fn activity_and_failures_name_the_in_flight_intent_at_all_supported_widths() {
         );
         assert!(live.contains("turn"), "width {width}:\n{live}");
 
-        view.apply(&SmedEvent::RunFailed {
+        view.apply(&MjolnrEvent::RunFailed {
             session,
             run,
             code: ReasonCode::ProviderProtocol,
@@ -967,12 +967,12 @@ fn narrow_and_wide_terminals_both_render_without_panicking() {
 }
 
 /// A view halted by interrupted work.
-fn view_recovering(kind: smed::core::recovery::InterruptedKind) -> ViewState {
+fn view_recovering(kind: mjolnr::core::recovery::InterruptedKind) -> ViewState {
     let mut view = view_with_messages(vec![CanonicalMessage::user("write the file")]);
     let snapshot = RuntimeSnapshot {
-        recovery: smed::core::recovery::RecoveryState::Required(
-            smed::core::recovery::InterruptedWork {
-                run: smed::core::event::RunId::new(),
+        recovery: mjolnr::core::recovery::RecoveryState::Required(
+            mjolnr::core::recovery::InterruptedWork {
+                run: mjolnr::core::event::RunId::new(),
                 kind,
             },
         ),
@@ -982,16 +982,16 @@ fn view_recovering(kind: smed::core::recovery::InterruptedKind) -> ViewState {
     view
 }
 
-fn uncertain_kind() -> smed::core::recovery::InterruptedKind {
-    smed::core::recovery::InterruptedKind::EffectUncertain {
-        authority: smed::core::recovery::Authority::Policy,
-        call: smed::core::message::ToolCall {
+fn uncertain_kind() -> mjolnr::core::recovery::InterruptedKind {
+    mjolnr::core::recovery::InterruptedKind::EffectUncertain {
+        authority: mjolnr::core::recovery::Authority::Policy,
+        call: mjolnr::core::message::ToolCall {
             id: "call_1".to_owned(),
             name: "write_file".to_owned(),
             arguments: serde_json::json!({ "path": "a.txt" }),
             provider_signature: None,
         },
-        tier: smed::core::tool::ToolTier::Write,
+        tier: mjolnr::core::tool::ToolTier::Write,
         preview: "+ written".to_owned(),
     }
 }
@@ -1041,21 +1041,23 @@ fn an_uncertain_effect_is_never_described_as_done_or_failed() {
 #[test]
 fn a_provably_safe_interruption_says_so_rather_than_alarming_the_user() {
     // The other side of honesty: an unapproved proposal provably did not run, and
-    // saying "smed cannot tell" there would train users to ignore the warning
+    // saying "mjolnr cannot tell" there would train users to ignore the warning
     // that matters.
     let frame = render_at(
         90,
         26,
-        &view_recovering(smed::core::recovery::InterruptedKind::ProposalUnapproved {
-            call: smed::core::message::ToolCall {
-                id: "call_1".to_owned(),
-                name: "write_file".to_owned(),
-                arguments: serde_json::json!({}),
-                provider_signature: None,
+        &view_recovering(
+            mjolnr::core::recovery::InterruptedKind::ProposalUnapproved {
+                call: mjolnr::core::message::ToolCall {
+                    id: "call_1".to_owned(),
+                    name: "write_file".to_owned(),
+                    arguments: serde_json::json!({}),
+                    provider_signature: None,
+                },
+                tier: mjolnr::core::tool::ToolTier::Write,
+                preview: String::new(),
             },
-            tier: smed::core::tool::ToolTier::Write,
-            preview: String::new(),
-        }),
+        ),
     );
 
     assert!(frame.contains("PROPOSAL_UNAPPROVED"));
@@ -1145,7 +1147,7 @@ fn the_command_menu_yields_to_a_waiting_approval() {
 
 #[test]
 fn auth_overlay_reports_provider_state_without_offering_a_key_field() {
-    use smed::core::runtime::{ProviderConnection, ProviderConnectionState};
+    use mjolnr::core::runtime::{ProviderConnection, ProviderConnectionState};
 
     let mut view = view_with_messages(vec![]);
     view.snapshot.providers = Arc::new(vec![ProviderConnection {
@@ -1165,7 +1167,7 @@ fn auth_overlay_reports_provider_state_without_offering_a_key_field() {
 
 #[test]
 fn model_overlay_lists_connected_catalogs_not_disconnected_providers() {
-    use smed::core::runtime::{ModelChoice, ProviderConnection, ProviderConnectionState};
+    use mjolnr::core::runtime::{ModelChoice, ProviderConnection, ProviderConnectionState};
 
     let mut view = view_with_messages(vec![]);
     view.snapshot.providers = Arc::new(vec![
@@ -1202,7 +1204,7 @@ fn model_overlay_lists_connected_catalogs_not_disconnected_providers() {
 
 #[test]
 fn plan_checklist_renders_at_different_terminal_sizes() {
-    use smed::tui::reducer::PlanStep;
+    use mjolnr::tui::reducer::PlanStep;
 
     let mut view = view_with_messages(vec![]);
     view.plan_steps = vec![
@@ -1251,7 +1253,7 @@ fn plan_checklist_renders_at_different_terminal_sizes() {
 
 #[test]
 fn plan_checklist_renders_inline_markdown_instead_of_its_delimiters() {
-    use smed::tui::reducer::PlanStep;
+    use mjolnr::tui::reducer::PlanStep;
 
     let mut view = view_with_messages(vec![]);
     view.plan_steps = vec![PlanStep {
@@ -1271,7 +1273,7 @@ fn plan_checklist_renders_inline_markdown_instead_of_its_delimiters() {
 #[test]
 fn session_tree_overlay_renders_properly() {
     let mut view = view_with_messages(vec![]);
-    view.overlay = smed::tui::reducer::Overlay::Tree;
+    view.overlay = mjolnr::tui::reducer::Overlay::Tree;
 
     let frame = render_at(120, 25, &view);
     assert!(frame.contains("SESSION TREE"), "frame:\n{frame}");
@@ -1340,8 +1342,8 @@ fn no_color_literals_outside_theme_module() {
 
 #[test]
 fn prose_with_numbered_list_does_not_trigger_proposed_plan_rail() {
-    use smed::core::message::{CanonicalMessage, ContentBlock};
-    use smed::core::model::{ModelId, ProviderId};
+    use mjolnr::core::message::{CanonicalMessage, ContentBlock};
+    use mjolnr::core::model::{ModelId, ProviderId};
 
     let msg = CanonicalMessage::assistant(
         vec![ContentBlock::Text {
@@ -1369,27 +1371,27 @@ fn prose_with_numbered_list_does_not_trigger_proposed_plan_rail() {
 #[test]
 fn workspace_types_read_only_projections_derive_from_view_state() {
     let mut view = view_with_messages(vec![]);
-    let session = smed::core::event::SessionId::new();
+    let session = mjolnr::core::event::SessionId::new();
     view.snapshot.session = Some(session);
-    view.snapshot.pending_approval = Some(smed::core::policy::PendingApproval {
+    view.snapshot.pending_approval = Some(mjolnr::core::policy::PendingApproval {
         id: ApprovalId::new(),
         tool_name: "write_file".to_string(),
         preview: "Write src/main.rs".to_string(),
-        tier: smed::core::tool::ToolTier::Write,
+        tier: mjolnr::core::tool::ToolTier::Write,
     });
 
     let work_items = view.project_work_items();
     assert_eq!(work_items.len(), 1);
     assert_eq!(
         work_items[0].lifecycle,
-        smed::tui::workspace_types::WorkItemLifecycle::NeedsDecision
+        mjolnr::tui::workspace_types::WorkItemLifecycle::NeedsDecision
     );
 
     let attention_items = view.project_attention_items();
     assert_eq!(attention_items.len(), 1);
     assert_eq!(
         attention_items[0].priority,
-        smed::tui::workspace_types::AttentionPriority::ApprovalRequired
+        mjolnr::tui::workspace_types::AttentionPriority::ApprovalRequired
     );
     assert_eq!(attention_items[0].reason_code, "TOOL_APPROVAL_REQUIRED");
 }
@@ -1401,27 +1403,33 @@ fn workspace_shell_renders_responsive_layouts_at_wide_medium_narrow_viewports() 
     let wide_frame = render_at(160, 40, &view);
     assert!(!wide_frame.is_empty(), "Wide frame renders cleanly");
 
-    let wide_layout = smed::tui::shell::compute_shell_layout_with_context(
+    let wide_layout = mjolnr::tui::shell::compute_shell_layout_with_context(
         ratatui::layout::Rect::new(0, 0, 160, 40),
         false,
         true,
     );
-    assert_eq!(wide_layout.tier, smed::tui::shell::TerminalWidthTier::Wide);
+    assert_eq!(
+        wide_layout.tier,
+        mjolnr::tui::shell::TerminalWidthTier::Wide
+    );
     assert!(wide_layout.left_rail.is_some());
 
-    let med_layout = smed::tui::shell::compute_shell_layout_with_context(
+    let med_layout = mjolnr::tui::shell::compute_shell_layout_with_context(
         ratatui::layout::Rect::new(0, 0, 100, 30),
         false,
         true,
     );
-    assert_eq!(med_layout.tier, smed::tui::shell::TerminalWidthTier::Medium);
+    assert_eq!(
+        med_layout.tier,
+        mjolnr::tui::shell::TerminalWidthTier::Medium
+    );
     assert!(med_layout.left_rail.is_some());
 
     let narrow_layout =
-        smed::tui::shell::compute_shell_layout(ratatui::layout::Rect::new(0, 0, 70, 20));
+        mjolnr::tui::shell::compute_shell_layout(ratatui::layout::Rect::new(0, 0, 70, 20));
     assert_eq!(
         narrow_layout.tier,
-        smed::tui::shell::TerminalWidthTier::Narrow
+        mjolnr::tui::shell::TerminalWidthTier::Narrow
     );
     assert!(narrow_layout.left_rail.is_none());
 }
@@ -1432,8 +1440,8 @@ fn jump_palette_modal_overlay_renders_on_ctrl_j_active() {
     view.jump_state.active = true;
     view.jump_state.query = "config".to_string();
 
-    let items = smed::tui::jump_palette::build_jump_items(&view);
-    let filtered = smed::tui::jump_palette::filter_jump_items(&items, &view.jump_state.query);
+    let items = mjolnr::tui::jump_palette::build_jump_items(&view);
+    let filtered = mjolnr::tui::jump_palette::filter_jump_items(&items, &view.jump_state.query);
     assert!(!items.is_empty(), "Jump items index should be non-empty");
     assert!(
         !filtered.is_empty(),
@@ -1443,10 +1451,10 @@ fn jump_palette_modal_overlay_renders_on_ctrl_j_active() {
 
 #[test]
 fn viewport_scroll_engine_pins_and_unpins_history() {
-    let mut state = smed::tui::viewport::ViewportState::new();
+    let mut state = mjolnr::tui::viewport::ViewportState::new();
     assert_eq!(
         state.intent,
-        smed::tui::viewport::ViewportIntent::FollowOutput
+        mjolnr::tui::viewport::ViewportIntent::FollowOutput
     );
     assert!(!state.is_pinned());
 
@@ -1458,14 +1466,14 @@ fn viewport_scroll_engine_pins_and_unpins_history() {
     state.end();
     assert_eq!(
         state.intent,
-        smed::tui::viewport::ViewportIntent::FollowOutput
+        mjolnr::tui::viewport::ViewportIntent::FollowOutput
     );
     assert!(!state.is_pinned());
 }
 
 #[test]
 fn attention_queue_priority_sorting_and_navigation() {
-    let mut queue = smed::tui::workspace_types::AttentionQueue::new();
+    let mut queue = mjolnr::tui::workspace_types::AttentionQueue::new();
     assert_eq!(queue.selected_index, 0);
 
     queue.move_cursor_down(3);
@@ -1483,7 +1491,7 @@ fn attention_queue_priority_sorting_and_navigation() {
 
 #[test]
 fn workspace_surface_tab_cycling() {
-    use smed::tui::workspace_types::WorkspaceSurface;
+    use mjolnr::tui::workspace_types::WorkspaceSurface;
     let surface = WorkspaceSurface::Work;
     assert_eq!(surface.next(), WorkspaceSurface::Conversation);
     assert_eq!(surface.next().next(), WorkspaceSurface::Plan);
@@ -1493,7 +1501,7 @@ fn workspace_surface_tab_cycling() {
 #[test]
 fn structured_plan_surface_renders_step_list_and_details() {
     let mut view = view_with_messages(vec![]);
-    view.active_surface = smed::tui::workspace_types::WorkspaceSurface::Plan;
+    view.active_surface = mjolnr::tui::workspace_types::WorkspaceSurface::Plan;
 
     let frame = render_at(120, 30, &view);
     assert!(!frame.is_empty(), "Plan surface renders without crashing");
@@ -1502,7 +1510,7 @@ fn structured_plan_surface_renders_step_list_and_details() {
 #[test]
 fn changes_unified_diff_surface_renders_file_tree_and_diffs() {
     let mut view = view_with_messages(vec![]);
-    view.active_surface = smed::tui::workspace_types::WorkspaceSurface::Changes;
+    view.active_surface = mjolnr::tui::workspace_types::WorkspaceSurface::Changes;
 
     let frame = render_at(120, 30, &view);
     assert!(
@@ -1514,7 +1522,7 @@ fn changes_unified_diff_surface_renders_file_tree_and_diffs() {
 #[test]
 fn verification_evidence_surface_renders_telemetry_and_log_cards() {
     let mut view = view_with_messages(vec![]);
-    view.active_surface = smed::tui::workspace_types::WorkspaceSurface::Verify;
+    view.active_surface = mjolnr::tui::workspace_types::WorkspaceSurface::Verify;
 
     let frame = render_at(120, 30, &view);
     assert!(!frame.is_empty(), "Verify surface renders without crashing");
@@ -1527,7 +1535,7 @@ fn quick_launcher_dashboard_renders() {
         .expect("Terminal test backend creation should succeed");
     terminal
         .draw(|frame| {
-            smed::tui::launcher::render_quick_launcher(frame, frame.area(), &view, view.launcher);
+            mjolnr::tui::launcher::render_quick_launcher(frame, frame.area(), &view, view.launcher);
         })
         .expect("Draw quick launcher frame should succeed");
     assert!(!terminal.backend().buffer().content().is_empty());

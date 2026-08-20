@@ -492,7 +492,7 @@ impl Repository {
     }
 
     /// Create a branch. Never checks it out, and never moves an existing one:
-    /// `git branch` without `--force` refuses, which is the behaviour smed
+    /// `git branch` without `--force` refuses, which is the behaviour mjolnr
     /// wants (no silent branch reassignment).
     pub fn create_branch(&self, name: &str, base_revision: &str) -> Result<(), RepositoryError> {
         let output = git::run(
@@ -556,7 +556,7 @@ impl Repository {
         if self.current_branch()?.is_none() {
             return Err(RepositoryError::DetachedHead);
         }
-        // A merge into a dirty tree can overwrite uncommitted work, and smed
+        // A merge into a dirty tree can overwrite uncommitted work, and mjolnr
         // never stashes on the human's behalf (Phase D5 acceptance: no
         // automatic stash, reset, or clean).
         let (index, worktree) = self.projections()?;
@@ -636,7 +636,7 @@ impl Repository {
         if self.upstream_target().is_none() || self.upstream_ref_revision().is_none() {
             return Err(RepositoryError::NoUpstream { branch });
         }
-        // A merge into a dirty tree can overwrite uncommitted work, and smed
+        // A merge into a dirty tree can overwrite uncommitted work, and mjolnr
         // never stashes on the human's behalf (Phase D5 acceptance: no
         // automatic stash, reset, or clean).
         let (index, worktree) = self.projections()?;
@@ -664,7 +664,7 @@ impl Repository {
         )?;
         // A conflicted merge leaves the tree mid-merge. Same rule as the
         // child-branch path: the state is knowable and is reported as a typed
-        // conflict — smed never resolves it on the human's behalf.
+        // conflict — mjolnr never resolves it on the human's behalf.
         if !output.success
             && self.merge_in_progress()
             && let Some(conflict) = self.unmerged_conflict()?
@@ -702,7 +702,7 @@ impl Repository {
 
     /// Clone into a new absolute destination. The destination is never
     /// removed on failure: a partial clone is an uncertain effect for a human
-    /// to inspect, not something smed may guess how to clean up.
+    /// to inspect, not something mjolnr may guess how to clean up.
     pub fn clone_project(
         source: &str,
         destination: impl Into<PathBuf>,
@@ -1194,7 +1194,7 @@ mod tests {
 
     #[test]
     fn a_missing_directory_is_refused_by_the_constructor() {
-        let error = Repository::open("/smed-does-not-exist-9f3a2b").expect_err("must refuse");
+        let error = Repository::open("/mjolnr-does-not-exist-9f3a2b").expect_err("must refuse");
         assert!(matches!(error, RepositoryError::InvalidRoot { .. }));
     }
 

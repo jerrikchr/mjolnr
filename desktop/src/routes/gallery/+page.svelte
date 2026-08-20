@@ -26,7 +26,7 @@
     <header class="flex items-start justify-between gap-4">
       <div class="flex flex-col gap-2">
         <Badge variant="secondary">Nova · Obsidian Cyan · HugeIcons · Inter/JetBrains Mono</Badge>
-        <h1 class="text-2xl font-semibold">smed component gallery</h1>
+        <h1 class="text-2xl font-semibold">mjolnr component gallery</h1>
         <p class="max-w-2xl text-sm text-muted-foreground">
           This route uses the same generated shadcn-svelte components as the desktop workspace. It is a visual smoke surface, not a second design system.
         </p>

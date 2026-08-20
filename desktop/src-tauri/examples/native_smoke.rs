@@ -24,8 +24,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use smed::core::client::{ClientCommand, ClientSnapshot, ClientUpdate};
-use smed_desktop_lib::init_bridge;
+use mjolnr::core::client::{ClientCommand, ClientSnapshot, ClientUpdate};
+use mjolnr_desktop_lib::init_bridge;
 use tokio::sync::mpsc;
 
 /// Swallow `tokio-rusqlite` 0.7.0's documented Drop-time spurious
@@ -77,12 +77,12 @@ async fn drain_until(
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {
     install_smoke_panic_hook();
-    let db_path = std::env::var("SMED_SMOKE_DB")
+    let db_path = std::env::var("MJOLNR_SMOKE_DB")
         .map(PathBuf::from)
         .unwrap_or_else(|_| {
             std::env::current_dir()
                 .unwrap_or_else(|_| PathBuf::from("."))
-                .join(".smed/smed-desktop-smoke.db")
+                .join(".mjolnr/mjolnr-desktop-smoke.db")
         });
     if let Some(parent) = db_path.parent() {
         std::fs::create_dir_all(parent).expect("create parent");

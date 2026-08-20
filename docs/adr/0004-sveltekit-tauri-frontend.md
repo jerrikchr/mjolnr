@@ -6,7 +6,7 @@
 
 ## Context
 
-smed is adding a Tauri rich workspace over its Rust runtime. The client must
+mjolnr is adding a Tauri rich workspace over its Rust runtime. The client must
 render streaming activity, changing work state, approvals, recovery, plans,
 changes, evidence, onboarding, settings, and a reusable design system.
 
@@ -19,7 +19,7 @@ SolidJS was then considered for its fine-grained reactivity. Svelte 5's
 reactivity primitives also compile reactive dependencies into targeted update
 effects. Synthetic DOM
 benchmarks therefore do not justify choosing the smaller Solid ecosystem for
-smed. Accessibility, component ergonomics, tooling, and team maintainability
+mjolnr. Accessibility, component ergonomics, tooling, and team maintainability
 are part of performance too.
 
 ## Decision
@@ -42,8 +42,8 @@ presentation state. They do not identify authoritative runtime state or grant
 authority.
 
 Use **shadcn-svelte** as the source-owned starting point for accessible
-primitives. Bring in only components smed needs. shadcn-svelte is not smed's
-design system: selected source is adapted to smed's semantic tokens,
+primitives. Bring in only components mjolnr needs. shadcn-svelte is not mjolnr's
+design system: selected source is adapted to mjolnr's semantic tokens,
 interaction rules, and component API, then maintained in the repository.
 Underlying Bits UI and Tailwind dependencies require the same justification,
 licence record, and update discipline as any other dependency.
@@ -67,7 +67,7 @@ behind a client-local adapter. Raw Konva remains one candidate.
 ### React
 
 Rejected as the default. Its ecosystem and hiring familiarity are strong, but
-smed does not need React to use Tauri or Konva. Choosing it for a deferred
+mjolnr does not need React to use Tauri or Konva. Choosing it for a deferred
 binding would be speculative coupling.
 
 ### SolidJS
@@ -80,14 +80,14 @@ tooling, accessibility warnings, component ecosystem, and maintainability.
 ### Svelte without SvelteKit
 
 Credible fallback and slightly smaller in conceptual scope. Rejected because
-smed already has several durable client destinations and needs routing,
+mjolnr already has several durable client destinations and needs routing,
 layouts, error boundaries, and an internal design-system gallery. Adding those
 piecemeal would recreate a subset of SvelteKit.
 
 ### Vanilla TypeScript
 
 Rejected for the product frontend. It may minimize framework overhead in a
-small benchmark, but smed already needs reactive state, component composition,
+small benchmark, but mjolnr already needs reactive state, component composition,
 lifecycle, accessible overlay primitives, and a maintained design system.
 Owning those mechanisms would cost more complexity than the framework removes.
 
@@ -95,7 +95,7 @@ Owning those mechanisms would cost more complexity than the framework removes.
 
 Rejected for now. Keeping frontend rendering in Rust would reduce language
 count but would narrow the desktop UI and accessibility ecosystem and add
-Wasm/webview boundary complexity without strengthening smed's Rust authority.
+Wasm/webview boundary complexity without strengthening mjolnr's Rust authority.
 
 ## Consequences
 
@@ -112,7 +112,7 @@ Wasm/webview boundary complexity without strengthening smed's Rust authority.
 - React-specific libraries and patterns do not enter the frontend by default.
 - SvelteKit browser history and routes remain client navigation only. Runtime
   IDs and snapshots remain the source of truth.
-- Copied component source must retain required notices and receive smed-owned
+- Copied component source must retain required notices and receive mjolnr-owned
   tests; upstream appearance is not inherited as product direction.
 
 ## References

@@ -35,4 +35,4 @@ views:
   - id: deployments
     title: Vercel Deployments
     view_type: table
-source_url: https://github.com/jerrikchr/smed/tree/main/examples/plugins/vercel-deployments
+source_url: https://github.com/jerrikchr/mjolnr/tree/main/examples/plugins/vercel-deployments

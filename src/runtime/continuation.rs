@@ -8,7 +8,7 @@ use crate::core::continuation::{
     CommandFact, HandoffCheckpoint, HandoffId, QuotaReservePhase, ResumeChoice,
 };
 use crate::core::error::ReasonCode;
-use crate::core::event::{RunId, SmedEvent};
+use crate::core::event::{MjolnrEvent, RunId};
 use crate::core::message::ToolEffect;
 use crate::core::routing::RouteAdvanceCondition;
 use crate::runtime::routing::RouteAttemptOutcome;
@@ -75,7 +75,7 @@ impl Actor {
         }
 
         let run = RunId::new();
-        if let Err(error) = self.persist(SmedEvent::RunStarted { session, run }).await {
+        if let Err(error) = self.persist(MjolnrEvent::RunStarted { session, run }).await {
             self.note_store_failure(&error);
             return;
         }
@@ -135,10 +135,10 @@ impl Actor {
         let mut proposals = BTreeMap::new();
         for stored in &events {
             match &stored.event {
-                SmedEvent::ToolProposed { call, preview, .. } => {
+                MjolnrEvent::ToolProposed { call, preview, .. } => {
                     proposals.insert(call.id.clone(), preview.clone());
                 }
-                SmedEvent::ToolCompleted {
+                MjolnrEvent::ToolCompleted {
                     call_id,
                     name,
                     result,
@@ -163,7 +163,7 @@ impl Actor {
                     | ToolEffect::Completion { .. }
                     | ToolEffect::SkillActivated { .. } => {}
                 },
-                SmedEvent::ToolFailed { call_id, code, .. } => {
+                MjolnrEvent::ToolFailed { call_id, code, .. } => {
                     if let Some(command) = proposals.get(call_id) {
                         commands.push(CommandFact {
                             command: command.clone(),
@@ -197,7 +197,7 @@ impl Actor {
             budget: self.state.budget,
             activated_skills: self.state.activated_skills.iter().cloned().collect(),
         };
-        self.persist(SmedEvent::HandoffCreated {
+        self.persist(MjolnrEvent::HandoffCreated {
             session,
             handoff: Box::new(handoff.clone()),
         })
@@ -224,7 +224,7 @@ impl Actor {
             return;
         };
         if let Err(error) = self
-            .persist(SmedEvent::ModelChanged {
+            .persist(MjolnrEvent::ModelChanged {
                 session,
                 provider: target.0.clone(),
                 model: target.1.clone(),
@@ -292,7 +292,7 @@ impl Actor {
         };
         let seed = crate::core::message::CanonicalMessage::system(handoff.compact_seed());
         let stored = match self
-            .persist(SmedEvent::MessageAppended {
+            .persist(MjolnrEvent::MessageAppended {
                 session,
                 message: Box::new(seed.clone()),
             })
@@ -306,7 +306,7 @@ impl Actor {
         };
         self.state.push_message(Some(stored.sequence), seed);
         if let Err(error) = self
-            .persist(SmedEvent::HandoffCreated {
+            .persist(MjolnrEvent::HandoffCreated {
                 session,
                 handoff: Box::new(handoff.clone()),
             })
@@ -382,7 +382,7 @@ impl Actor {
         };
         let mut reserve = self.state.quota_reserve.clone();
         reserve.phase = QuotaReservePhase::Stopped;
-        self.persist(SmedEvent::QuotaBoundaryReached {
+        self.persist(MjolnrEvent::QuotaBoundaryReached {
             session,
             run,
             reserve: reserve.clone(),

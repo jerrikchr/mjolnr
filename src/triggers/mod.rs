@@ -1,6 +1,6 @@
 //! Triggers and scheduled runs.
 //!
-//! smed fires headless runs from cron-style schedules and local webhook
+//! mjolnr fires headless runs from cron-style schedules and local webhook
 //! triggers, defined in diffable per-project files, with the same budgets,
 //! policy ceilings, and evidence as interactive work. This module is the
 //! scheduler *process* — `main.rs` wires `mjolnr triggers run` to
