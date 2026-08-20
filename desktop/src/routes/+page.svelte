@@ -108,6 +108,7 @@
   let governanceTab = $state('council');
   let providerAuthOpen = $state(false);
   let gitAccordionOpen = $state(false);
+  let sidebarOpen = $state(true);
   let showProjectAdvanced = $state(false);
   let explorerOpen = $state(false);
   let terminalOpen = $state(false);
@@ -691,6 +692,11 @@
       paletteOpen = true;
       return;
     }
+    if (!event.shiftKey && key === 'b') {
+      event.preventDefault();
+      sidebarOpen = !sidebarOpen;
+      return;
+    }
     if (!event.shiftKey && key === 'i') {
       event.preventDefault();
       splitPreset = splitPreset === 'inspector' ? 'none' : 'inspector';
@@ -737,7 +743,7 @@
 
 <svelte:window onkeydown={handleGlobalKeydown} />
 
-<div class="flex h-screen w-screen overflow-hidden bg-background">
+<Sidebar.Provider class="h-screen w-screen overflow-hidden flex bg-background">
   <!-- Far Left 48px Global Activity Dock -->
   <ActivityDock
     bind:activeSurface
@@ -749,8 +755,8 @@
     }}
   />
 
-  <Sidebar.Provider>
-    <Sidebar.Root collapsible="icon" class="border-r border-sidebar-border/40">
+  {#if sidebarOpen}
+    <Sidebar.Root collapsible="none" class="w-60 h-full border-r border-sidebar-border/40 shrink-0 bg-sidebar select-none">
       <!-- Header with Projects & Chats, Search, and New Chat Icon Button -->
       <Sidebar.Header class="p-2.5 px-3 flex flex-row items-center justify-between border-b border-sidebar-border/40">
         <div class="flex items-center gap-2">
@@ -1035,10 +1041,19 @@
       </Sidebar.Footer>
       <Sidebar.Rail />
     </Sidebar.Root>
+  {/if}
 
-  <Sidebar.Inset class="min-w-0 overflow-hidden">
+  <Sidebar.Inset class="flex min-w-0 flex-1 flex-col h-full overflow-hidden bg-background">
     <header class="flex h-12 shrink-0 items-center gap-2 border-b bg-sidebar px-3" style="height:var(--header-h);">
-      <Sidebar.Trigger title="Toggle sidebar (⌘B)" />
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        aria-label="Toggle sidebar (⌘B)"
+        onclick={() => (sidebarOpen = !sidebarOpen)}
+        title="Toggle sidebar (⌘B)"
+      >
+        <HugeiconsIcon icon={PanelRightOpenIcon} strokeWidth={2} class="size-4" />
+      </Button>
 
       <!-- Active Surface / Editor Tabs (LM Studio style) -->
       <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
@@ -1719,7 +1734,6 @@
     </footer>
   </Sidebar.Inset>
 </Sidebar.Provider>
-</div>
 
 <GovernanceModal
   bind:open={governanceOpen}
