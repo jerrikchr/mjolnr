@@ -147,6 +147,7 @@ pub(super) fn command_to_mjolnr(
         | ClientCommand::ExternalAgentImport { .. } => {
             return map_external_agent_command(command).map(Some);
         }
+        ClientCommand::RefreshCredentials => MjolnrCommand::RefreshCredentials,
         _ => return Ok(None),
     };
     Ok(Some(mapped))

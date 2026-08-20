@@ -16,10 +16,11 @@ use mjolnr::core::client::terminal::{
     ClientTerminalInput, ClientTerminalLayout, ClientTerminalResize, ClientTerminalScroll,
     ClientTerminalSearch, ClientTerminalSnapshot,
 };
+use mjolnr::core::model::ProviderId;
 use mjolnr::core::provider::Provider;
 use mjolnr::core::routing::RouteTable;
 use mjolnr::core::runtime::MjolnrRuntime;
-use mjolnr::core::secrets::SecretStore;
+use mjolnr::core::secrets::{Credential, Secret, SecretStore};
 use mjolnr::core::store::EventStore;
 use mjolnr::providers::anthropic::AnthropicProvider;
 use mjolnr::providers::openai::OpenAiProvider;
@@ -402,6 +403,91 @@ fn editor_preferences_save(
     save_editor_preferences(&root, &preferences)
 }
 
+/// Log in to LM Studio: persist endpoint and optionally store an API token,
+/// then trigger a provider catalog refresh so the new connection shows up.
+///
+/// An empty token clears any stored token (keyless mode). The address is
+/// normalized; pass `"default"` to keep the current address.
+#[tauri::command]
+async fn auth_lm_studio_login(
+    address: String,
+    token: String,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    let workspace = std::env::current_dir()
+        .map_err(|error| format!("could not resolve project: {error}"))?;
+
+    let endpoint = if address == "default" {
+        mjolnr::providers::openai_compat::configured_lm_studio_base_url(&workspace)?
+    } else {
+        mjolnr::providers::openai_compat::persist_lm_studio_base_url(&workspace, &address)?
+    };
+
+    let secrets = OsSecretStore::new();
+    let provider = ProviderId::new("lm-studio");
+    if token.trim().is_empty() {
+        let _ = secrets.delete(&provider);
+    } else {
+        secrets
+            .store(&provider, Credential::ApiKey(Secret::new(token)))
+            .map_err(|error| format!("could not store token: {error}"))?;
+    }
+
+    state
+        .bridge
+        .dispatch(ClientCommand::RefreshCredentials)
+        .await
+        .map_err(|error| format!("credential refresh failed: {error}"))?;
+
+    Ok(endpoint)
+}
+
+/// Store an API key for a provider, then trigger a provider catalog refresh.
+#[tauri::command]
+async fn auth_api_key_login(
+    provider: String,
+    key: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    if key.trim().is_empty() {
+        return Err("no key entered".to_owned());
+    }
+    let secrets = OsSecretStore::new();
+    let id = ProviderId::new(&provider);
+    secrets
+        .store(&id, Credential::ApiKey(Secret::new(key)))
+        .map_err(|error| format!("could not store credential: {error}"))?;
+
+    state
+        .bridge
+        .dispatch(ClientCommand::RefreshCredentials)
+        .await
+        .map_err(|error| format!("credential refresh failed: {error}"))?;
+
+    Ok(())
+}
+
+/// Remove a stored credential for a provider, then trigger a catalog refresh.
+#[tauri::command]
+async fn auth_logout(
+    provider: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let secrets = OsSecretStore::new();
+    let id = ProviderId::new(&provider);
+    secrets
+        .delete(&id)
+        .map_err(|error| format!("could not remove credential: {error}"))?;
+
+    state
+        .bridge
+        .dispatch(ClientCommand::RefreshCredentials)
+        .await
+        .map_err(|error| format!("credential refresh failed: {error}"))?;
+
+    Ok(())
+}
+
 /// One bounded, deterministic code-graph projection for the E7 surface.
 #[tauri::command]
 async fn query_graph(
@@ -782,6 +868,9 @@ pub fn run() {
             open_file,
             editor_preferences_load,
             editor_preferences_save,
+            auth_lm_studio_login,
+            auth_api_key_login,
+            auth_logout,
             query_graph,
             query_board,
             query_repository_history,
@@ -1006,6 +1095,16 @@ mod tests {
                     "this dummy runtime has no board projection",
                 ))
             }
+            async fn query_repository_history(
+                &self,
+                _limit: u32,
+            ) -> Result<mjolnr::core::repository::RepositoryHistory, mjolnr::core::error::MjolnrError>
+            {
+                Err(mjolnr::core::error::MjolnrError::workspace_refused(
+                    mjolnr::core::error::ReasonCode::WorkspaceCapabilityUnavailable,
+                    "this dummy runtime has no repository history",
+                ))
+            }
             async fn read_workspace_files(
                 &self,
                 _request: mjolnr::core::workspace_files::WorkspaceFileRequest,
@@ -1093,6 +1192,16 @@ mod tests {
                 Err(mjolnr::core::error::MjolnrError::workspace_refused(
                     mjolnr::core::error::ReasonCode::WorkspaceCapabilityUnavailable,
                     "this dummy runtime has no board projection",
+                ))
+            }
+            async fn query_repository_history(
+                &self,
+                _limit: u32,
+            ) -> Result<mjolnr::core::repository::RepositoryHistory, mjolnr::core::error::MjolnrError>
+            {
+                Err(mjolnr::core::error::MjolnrError::workspace_refused(
+                    mjolnr::core::error::ReasonCode::WorkspaceCapabilityUnavailable,
+                    "this dummy runtime has no repository history",
                 ))
             }
             async fn read_workspace_files(

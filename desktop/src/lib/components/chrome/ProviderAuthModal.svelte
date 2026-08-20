@@ -1,19 +1,17 @@
 <!--
   ProviderAuthModal: Connect Provider surface — Orca-inspired.
-  Searchable, grouped provider cards with LM Studio and the full
-  openai-compat catalog. No hardcoded 5-provider list.
+  Searchable, grouped provider cards with inline auth forms.
 -->
 <script lang="ts">
-  import { goto } from '$app/navigation';
   import { HugeiconsIcon } from '@hugeicons/svelte';
   import {
     SparklesIcon,
     RefreshIcon,
-    ArrowRight01Icon,
     CheckmarkCircle02Icon,
     Key01Icon,
-    CpuIcon,
-    Search01Icon
+    Search01Icon,
+    ArrowRight02Icon,
+    PlugSocketIcon
   } from '@hugeicons/core-free-icons';
   import { clientStore } from '$lib/runtime/client.svelte';
   import * as Dialog from '$lib/components/ui/dialog';
@@ -31,6 +29,11 @@
   let snap = $derived(clientStore.snapshot);
   let refreshing = $state(false);
   let query = $state('');
+  let connectingProvider = $state<string | null>(null);
+  let connectingError = $state<string | null>(null);
+  let lmStudioAddress = $state('http://localhost:1234');
+  let lmStudioToken = $state('');
+  let apiKeyInput = $state('');
 
   type Card = {
     provider: string;
@@ -47,46 +50,6 @@
       case 'needsReauth': return 'needsAuth';
       case 'unavailable': return 'unavailable';
       default: return 'disconnected';
-    }
-  }
-
-  function envVarFor(provider: string): string {
-    if (provider === 'lm-studio') return 'LM_API_TOKEN · MJOLNR_LM_STUDIO_BASE_URL / .mjolnr/providers/lm-studio.url';
-    if (provider === 'ollama') return 'OLLAMA_HOST (optional)';
-    const name = provider.toUpperCase().replace(/-/g, '_');
-    return `${name}_API_KEY`;
-  }
-
-  function descriptionFor(provider: string): string {
-    switch (provider) {
-      case 'anthropic': return 'Claude — subscription or API key';
-      case 'openai-codex': return 'Codex — subscription login';
-      case 'openai': return 'OpenAI API — GPT-4o, o3-mini, o1';
-      case 'gemini': return 'Google Gemini — Gemini 2.5 Pro, Flash';
-      case 'gemini-cli': return 'Gemini CLI — uses your local Gemini login';
-      case 'antigravity': return 'Antigravity — uses your local Antigravity login';
-      case 'openrouter': return 'OpenRouter — universal aggregator';
-      case 'ollama': return 'Ollama — local server on localhost:11434';
-      case 'lm-studio': return 'LM Studio — local server on localhost:1234 · models that support tools';
-      case 'nvidia': return 'NVIDIA NIM';
-      case 'xai': return 'xAI — Grok';
-      case 'vercel-gateway': return 'Vercel AI Gateway';
-      case 'cloudflare-gateway': return 'Cloudflare AI Gateway (needs base URL)';
-      case 'deepseek': return 'DeepSeek';
-      case 'mistral': return 'Mistral AI';
-      case 'groq': return 'Groq';
-      case 'together': return 'Together AI';
-      case 'fireworks': return 'Fireworks AI';
-      case 'perplexity': return 'Perplexity AI';
-      case 'moonshot': return 'Moonshot / Kimi';
-      case 'zhipu': return 'Zhipu / GLM';
-      case 'qwen': return 'Qwen / DashScope';
-      case 'huggingface': return 'Hugging Face';
-      case 'tokenrouter': return 'TokenRouter';
-      case 'vllm': return 'vLLM — local server on localhost:8000';
-      case 'opencode-zen': return 'OpenCode Zen';
-      case 'opencode-go': return 'OpenCode Go';
-      default: return 'OpenAI-compatible endpoint';
     }
   }
 
@@ -128,7 +91,7 @@
       const needle = query.trim().toLowerCase();
       if (!needle) return cards;
       return cards.filter((card) =>
-        `${card.provider} ${card.state} ${card.detail ?? ''} ${descriptionFor(card.provider)} ${envVarFor(card.provider)}`
+        `${card.provider} ${card.state} ${card.detail ?? ''}`
           .toLowerCase()
           .includes(needle)
       );
@@ -168,33 +131,66 @@
     }
   }
 
-  function openGuidedSetup() {
-    open = false;
-    goto('/onboarding');
+  function startConnect(provider: string) {
+    connectingError = null;
+    connectingProvider = provider;
+    if (provider === 'lm-studio') {
+      lmStudioAddress = 'http://localhost:1234';
+      lmStudioToken = '';
+    } else {
+      apiKeyInput = '';
+    }
+  }
+
+  function cancelConnect() {
+    connectingProvider = null;
+    connectingError = null;
+  }
+
+  async function doLmStudioConnect() {
+    connectingError = null;
+    const result = await clientStore.authLmStudioLogin(lmStudioAddress, lmStudioToken);
+    if ('endpoint' in result) {
+      connectingProvider = null;
+      await handleRefresh();
+    } else {
+      connectingError = result.error;
+    }
+  }
+
+  async function doApiKeyConnect(provider: string) {
+    connectingError = null;
+    const result = await clientStore.authApiKeyLogin(provider, apiKeyInput);
+    if (result === true) {
+      connectingProvider = null;
+      await handleRefresh();
+    } else {
+      connectingError = result.error;
+    }
+  }
+
+  async function doLogout(provider: string) {
+    await clientStore.authLogout(provider);
+    await handleRefresh();
   }
 </script>
 
 <Dialog.Root bind:open>
-  <Dialog.Content class="max-w-3xl max-h-[86vh] overflow-hidden bg-card border-border/80 shadow-2xl p-0 gap-0 flex flex-col">
-    <Dialog.Header class="px-6 pt-6 pb-3 border-b border-border/50 shrink-0">
+  <Dialog.Content class="w-[min(96vw,980px)] max-w-[980px] sm:max-w-[980px] max-h-[88vh] overflow-hidden bg-card border-border/80 shadow-2xl p-0 gap-0 flex flex-col">
+      <Dialog.Header class="px-6 pt-5 pb-3 border-b border-border/50 shrink-0">
       <div class="flex items-center justify-between gap-3">
         <Dialog.Title class="flex items-center gap-2.5 text-lg font-bold text-foreground">
           <HugeiconsIcon icon={SparklesIcon} strokeWidth={2} class="size-5 text-primary" />
           <span>Connect Provider</span>
         </Dialog.Title>
-        <div class="flex items-center gap-2 shrink-0">
-          <Badge variant={connectedTotal > 0 ? 'default' : 'secondary'} class="font-mono text-xs">
-            {connectedTotal} connected · {cards.length} available
-          </Badge>
-        </div>
+        <Badge variant={connectedTotal > 0 ? 'default' : 'secondary'} class="font-mono text-xs shrink-0">
+          {connectedTotal} connected · {cards.length} available
+        </Badge>
       </div>
-      <Dialog.Description class="text-xs text-muted-foreground mt-1">
-        Providers come from the runtime registry. Credentials resolve from environment first, then stored file. Local servers (LM Studio, Ollama, vLLM) are workspace config under <code class="font-mono text-[11px]">.mjolnr/providers/lm-studio.url</code>.
-      </Dialog.Description>
       <div class="relative mt-3">
         <HugeiconsIcon icon={Search01Icon} strokeWidth={2} class="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
         <Input
-          placeholder="Filter providers… (e.g. lm-studio, local, ollama)"
+          placeholder="Filter providers · e.g. lm-studio, local, openai"
           class="h-8 pl-8 text-sm"
           bind:value={query}
         />
@@ -239,26 +235,35 @@
                         />
                         <div class="min-w-0">
                           <h4 class="truncate text-sm font-semibold text-foreground">{provider.provider}</h4>
-                          <p class="text-xs leading-relaxed text-muted-foreground">{descriptionFor(provider.provider)}</p>
                           {#if provider.detail}
                             <p class="mt-1 truncate text-[11px] text-muted-foreground">{provider.detail}</p>
                           {/if}
                         </div>
                       </div>
-                      <div class="shrink-0 flex flex-col items-end gap-1">
+                      <div class="shrink-0 flex flex-col items-end gap-1.5">
                         {#if provider.kind === 'connected'}
                           <Badge variant="outline" class="gap-1 border-gov-verified-border bg-gov-verified-bg text-gov-verified text-[11px]">
                             <HugeiconsIcon icon={CheckmarkCircle02Icon} strokeWidth={2} class="size-3" />
                             Connected{count ? ` · ${count} model${count === 1 ? '' : 's'}` : ''}
                           </Badge>
+                          <button type="button" class="text-[10px] text-muted-foreground hover:text-destructive transition-colors" onclick={() => doLogout(provider.provider)}>
+                            Disconnect
+                          </button>
                         {:else if provider.kind === 'connecting'}
                           <Badge variant="secondary" class="text-[11px]">Discovering…</Badge>
                         {:else if provider.kind === 'needsAuth'}
                           <Badge variant="destructive" class="text-[11px]">Needs Reauth</Badge>
+                          <Button variant="outline" size="sm" class="h-6 text-[10px] gap-1 px-2" onclick={() => startConnect(provider.provider)}>
+                            <HugeiconsIcon icon={PlugSocketIcon} strokeWidth={2} class="size-3" />
+                            Reconnect
+                          </Button>
                         {:else if provider.kind === 'unavailable'}
                           <Badge variant="destructive" class="text-[11px]">Unavailable</Badge>
                         {:else}
-                          <Badge variant="secondary" class="text-[11px] text-muted-foreground">Not Connected</Badge>
+                          <Button variant="outline" size="sm" class="h-6 text-[10px] gap-1 px-2" onclick={() => startConnect(provider.provider)}>
+                            <HugeiconsIcon icon={PlugSocketIcon} strokeWidth={2} class="size-3" />
+                            Connect
+                          </Button>
                         {/if}
                       </div>
                     </div>
@@ -274,10 +279,42 @@
                       </div>
                     {/if}
 
+                    <!-- Inline auth form -->
+                    {#if connectingProvider === provider.provider}
+                      <div class="rounded-lg border border-primary/30 bg-muted/20 px-3 py-3 space-y-2.5">
+                        {#if provider.provider === 'lm-studio'}
+                          <p class="text-[11px] font-medium text-foreground">LM Studio Server</p>
+                          <div class="space-y-2">
+                            <Input placeholder="Server address" class="h-7 text-xs" bind:value={lmStudioAddress} />
+                            <Input placeholder="API token (optional — blank = keyless)" class="h-7 text-xs" bind:value={lmStudioToken} />
+                          </div>
+                        {:else}
+                          <p class="text-[11px] font-medium text-foreground">API Key</p>
+                          <Input placeholder="Paste your API key" class="h-7 text-xs" bind:value={apiKeyInput} />
+                        {/if}
+                        {#if connectingError}
+                          <p class="text-[11px] text-destructive">{connectingError}</p>
+                        {/if}
+                        <div class="flex items-center gap-2 justify-end">
+                          <Button variant="ghost" size="sm" class="h-6 text-[10px]" onclick={cancelConnect}>
+                            Cancel
+                          </Button>
+                          <Button
+                            size="sm"
+                            class="h-6 text-[10px] gap-1"
+                            onclick={provider.provider === 'lm-studio' ? doLmStudioConnect : () => doApiKeyConnect(provider.provider)}
+                          >
+                            <HugeiconsIcon icon={ArrowRight02Icon} strokeWidth={2} class="size-3" />
+                            {provider.provider === 'lm-studio' ? 'Connect LM Studio' : 'Save Key'}
+                          </Button>
+                        </div>
+                      </div>
+                    {/if}
+
                     <div class="flex flex-wrap items-center justify-between gap-2 border-t border-border/40 pt-2 text-xs">
                       <div class="flex min-w-0 items-center gap-1.5 font-mono text-[11px] text-muted-foreground">
                         <HugeiconsIcon icon={Key01Icon} class="size-3 shrink-0 text-muted-foreground" />
-                        <span class="truncate">Env: <code class="rounded border border-border/60 bg-background/80 px-1.5 py-0.5 text-foreground">{envVarFor(provider.provider)}</code></span>
+                        <span class="truncate">Env: <code class="rounded border border-border/60 bg-background/80 px-1.5 py-0.5 text-foreground">{provider.provider === 'lm-studio' ? 'LM_API_TOKEN' : `${provider.provider.toUpperCase().replace(/-/g, '_')}_API_KEY`}</code></span>
                       </div>
                       {#if docsUrlFor(provider.provider)}
                         <a
@@ -291,13 +328,6 @@
                       {/if}
                     </div>
 
-                    {#if provider.provider === 'lm-studio'}
-                      <div class="rounded-lg border border-border/60 bg-muted/30 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
-                        <span class="font-medium text-foreground">LM Studio</span> — run LM Studio's Local Server, load a model that supports tool use, then
-                        <code class="font-mono text-foreground">mjolnr auth login lm-studio</code> or set
-                        <code class="font-mono text-foreground">MJOLNR_LM_STUDIO_BASE_URL</code>. Blank token is keyless (default).
-                      </div>
-                    {/if}
                   </div>
                 {/each}
               </div>
@@ -306,32 +336,17 @@
         </div>
       {/if}
 
-      <div class="mt-5 rounded-lg border border-border/60 bg-background/50 p-3 text-xs text-muted-foreground flex gap-2">
-        <HugeiconsIcon icon={CpuIcon} class="size-3.5 text-primary mt-0.5 shrink-0" />
-        <div class="space-y-1 leading-relaxed">
-          <p class="font-medium text-foreground">How to authenticate</p>
-          <p class="text-[11px]">
-            Export API keys in your shell profile (<code class="font-mono text-foreground">export ANTHROPIC_API_KEY=...</code>) or launch mjolnr where keys are active. For local models the endpoint lives in the project: <code class="font-mono text-foreground">.mjolnr/providers/lm-studio.url</code>. CLI fallback: <code class="font-mono text-foreground">mjolnr auth login &lt;provider&gt;</code>.
-          </p>
-          <p class="text-[11px]">
-            Subscription providers (Anthropic Claude, Codex, Gemini CLI, Antigravity) use OAuth: <code class="font-mono text-foreground">mjolnr auth login anthropic</code> etc.
-          </p>
-        </div>
+      <div class="px-3 py-1.5 text-[11px] text-muted-foreground border-t border-border/30 bg-muted/20 -mx-4 sm:-mx-6 -mb-4 mt-4 flex items-center justify-between">
+        <span>Env first → stored file · Local servers: <code class="font-mono">.mjolnr/providers/lm-studio.url</code></span>
       </div>
     </div>
 
-    <Dialog.Footer class="flex flex-wrap items-center justify-between gap-3 border-t border-border/50 px-6 py-3 shrink-0">
-      <Button variant="ghost" size="sm" class="text-xs text-muted-foreground hover:text-foreground" onclick={openGuidedSetup}>
-        <span>Open full guided setup</span>
-        <HugeiconsIcon icon={ArrowRight01Icon} strokeWidth={2} class="size-3.5 ml-1" />
+    <Dialog.Footer class="flex flex-wrap items-center justify-end gap-2 border-t border-border/50 px-6 py-3 shrink-0">
+      <Button variant="outline" size="sm" class="gap-1.5 text-xs font-semibold" disabled={refreshing} onclick={handleRefresh}>
+        <HugeiconsIcon icon={RefreshIcon} strokeWidth={2} class={refreshing ? 'size-3.5 animate-spin' : 'size-3.5'} />
+        <span>{refreshing ? 'Checking…' : 'Check & Refresh'}</span>
       </Button>
-      <div class="flex items-center gap-2">
-        <Button variant="outline" size="sm" class="gap-1.5 text-xs font-semibold" disabled={refreshing} onclick={handleRefresh}>
-          <HugeiconsIcon icon={RefreshIcon} strokeWidth={2} class={refreshing ? 'size-3.5 animate-spin' : 'size-3.5'} />
-          <span>{refreshing ? 'Checking…' : 'Check & Refresh'}</span>
-        </Button>
-        <Button size="sm" class="text-xs font-semibold" onclick={() => (open = false)}>Done</Button>
-      </div>
+      <Button size="sm" class="text-xs font-semibold" onclick={() => (open = false)}>Done</Button>
     </Dialog.Footer>
   </Dialog.Content>
 </Dialog.Root>

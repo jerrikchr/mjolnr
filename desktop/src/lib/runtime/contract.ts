@@ -645,6 +645,7 @@ export type ClientCommand =
   | { type: 'handoffPlan'; planId: string; revision: number; note: string }
   | { type: 'endSession' }
   | { type: 'requestSnapshot' }
+  | { type: 'refreshCredentials' }
   | { type: 'createWorktree'; name: string; baseRevision: string }
   | { type: 'forkWork'; name: string; baseRevision: string }
   // policyCeiling is optional: omitted means "inherit the parent's policy

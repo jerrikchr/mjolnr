@@ -221,6 +221,7 @@ pub enum ClientCommand {
     },
     EndSession,
     RequestSnapshot,
+    RefreshCredentials,
     #[serde(rename_all = "camelCase")]
     CreateWorktree {
         name: String,

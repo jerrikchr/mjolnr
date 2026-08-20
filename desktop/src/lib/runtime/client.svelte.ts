@@ -521,6 +521,62 @@ export class MjolnrClient {
   async endSession() {
     return this.dispatch({ type: 'endSession' });
   }
+
+  /** Authenticate LM Studio: save endpoint + optional token, then refresh. */
+  async authLmStudioLogin(address: string, token: string): Promise<{ endpoint: string } | { error: string }> {
+    if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const endpoint = await invoke<string>('auth_lm_studio_login', { address, token });
+        await this.dispatch({ type: 'requestSnapshot' });
+        return { endpoint };
+      } catch (err: unknown) {
+        const refusal = describeRefusal(err);
+        this.lastError = refusal.message;
+        return { error: refusal.message };
+      }
+    }
+    const msg = 'Tauri IPC unavailable (browser mode)';
+    this.lastError = msg;
+    return { error: msg };
+  }
+
+  /** Store an API key for a provider, then refresh. */
+  async authApiKeyLogin(provider: string, key: string): Promise<true | { error: string }> {
+    if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('auth_api_key_login', { provider, key });
+        await this.dispatch({ type: 'requestSnapshot' });
+        return true;
+      } catch (err: unknown) {
+        const refusal = describeRefusal(err);
+        this.lastError = refusal.message;
+        return { error: refusal.message };
+      }
+    }
+    const msg = 'Tauri IPC unavailable (browser mode)';
+    this.lastError = msg;
+    return { error: msg };
+  }
+
+  /** Remove a stored credential for a provider, then refresh. */
+  async authLogout(provider: string): Promise<boolean> {
+    if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('auth_logout', { provider });
+        await this.dispatch({ type: 'requestSnapshot' });
+        return true;
+      } catch (err: unknown) {
+        const refusal = describeRefusal(err);
+        this.lastError = refusal.message;
+        return false;
+      }
+    }
+    this.lastError = 'Tauri IPC unavailable (browser mode)';
+    return false;
+  }
 }
 
 export const clientStore = new MjolnrClient();
