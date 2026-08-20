@@ -57,7 +57,7 @@
 </script>
 
 <aside
-  class="flex flex-col items-center justify-between w-12 shrink-0 border-r border-sidebar-border/60 bg-[#090a0d] dark:bg-[#07080a] py-2.5 z-20 select-none shadow-[1px_0_0_rgba(0,0,0,0.2)]"
+  class="flex flex-col items-center justify-between w-12 shrink-0 border-r border-sidebar-border/50 bg-[#f4f5f8] dark:bg-[#101216] py-2.5 z-20 select-none"
   aria-label="Activity Dock"
 >
   <!-- Top: Logo & Surfaces -->
