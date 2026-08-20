@@ -36,6 +36,7 @@
   import ActivityBars from '$lib/components/chrome/ActivityBars.svelte';
   import ActivityDock from '$lib/components/chrome/ActivityDock.svelte';
   import AppEmblem from '$lib/components/chrome/AppEmblem.svelte';
+  import AuroraBackground from '$lib/components/chrome/AuroraBackground.svelte';
   import GovernanceModal from '$lib/components/chrome/GovernanceModal.svelte';
   import ProviderAuthModal from '$lib/components/chrome/ProviderAuthModal.svelte';
   import StatusOrb from '$lib/components/chrome/StatusOrb.svelte';
@@ -1181,8 +1182,9 @@
       >
         <div class="flex min-h-0 min-w-0 flex-1">
           <Tabs.Root bind:value={activeSurface} class="flex min-h-0 min-w-0 flex-1 flex-col gap-0">
-      <Tabs.Content value="Conversation" class="min-h-0 flex-1 overflow-hidden" data-testid="conversation-surface">
-        <section class="flex size-full min-h-0 flex-col">
+      <Tabs.Content value="Conversation" class="relative min-h-0 flex-1 overflow-hidden" data-testid="conversation-surface">
+        <AuroraBackground />
+        <section class="relative z-10 flex size-full min-h-0 flex-col">
           <div class="flex items-center justify-between border-b px-5 py-3">
             <div class="flex min-w-0 flex-col gap-0.5">
               <h1 class="truncate text-base font-semibold">
