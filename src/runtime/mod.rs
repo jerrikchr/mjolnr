@@ -712,6 +712,8 @@ impl Actor {
             MjolnrCommand::ResolveRecovery { decision } => self.resolve_recovery(decision).await,
             MjolnrCommand::CancelRun => self.cancel_run().await,
             MjolnrCommand::EndSession => self.end_session().await,
+            MjolnrCommand::ReleaseSession => self.release_session().await,
+            MjolnrCommand::ReclaimSession { session } => self.reclaim_session(session).await,
             MjolnrCommand::ResumeSession { session } => self.resume_session(session).await,
             MjolnrCommand::ResumeCompact {
                 session,

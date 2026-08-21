@@ -644,6 +644,8 @@ export type ClientCommand =
   | { type: 'approvePlan'; planId: string; revision: number; decision: ClientReviewVerdict; note?: string }
   | { type: 'handoffPlan'; planId: string; revision: number; note: string }
   | { type: 'endSession' }
+  | { type: 'releaseSession' }
+  | { type: 'reclaimSession'; session: string }
   | { type: 'requestSnapshot' }
   | { type: 'refreshCredentials' }
   | { type: 'createWorktree'; name: string; baseRevision: string }

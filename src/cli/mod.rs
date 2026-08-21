@@ -50,6 +50,19 @@ pub struct Cli {
     #[arg(long, global = true, value_name = "PATH")]
     pub data_dir: Option<PathBuf>,
 
+    /// Use this database file directly, instead of a file named inside a data
+    /// directory.
+    ///
+    /// `--data-dir` names a *directory* and appends mjolnr's own filename, so it
+    /// cannot open a store that is named anything else — which the desktop app's
+    /// `mjolnr-desktop.db` is. That left `mjolnr sessions release <id>`, the
+    /// documented and only way to reclaim a lease a crashed process left behind
+    /// (`docs/persistence.md` §5), unable to reach a desktop user's store at all.
+    /// A recovery path that cannot reach the thing it recovers is not a recovery
+    /// path.
+    #[arg(long, global = true, value_name = "FILE", conflicts_with = "data_dir")]
+    pub database: Option<PathBuf>,
+
     /// Resume an existing session instead of starting a new one.
     #[arg(long, value_name = "SESSION_ID")]
     pub resume: Option<String>,
@@ -81,6 +94,19 @@ impl Cli {
     /// # Errors
     /// When no platform data directory resolves, or it cannot be created.
     pub fn database_path(&self) -> Result<PathBuf, paths::PathError> {
+        if let Some(file) = &self.database {
+            // Only the parent is created. Creating the file itself here would
+            // hand SQLite an empty file to "open", turning a mistyped path into
+            // a brand-new empty store rather than an error — the difference
+            // between "your sessions are gone" and "that path is wrong".
+            if let Some(parent) = file.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+                std::fs::create_dir_all(parent).map_err(|error| paths::PathError::NotCreatable {
+                    path: parent.to_path_buf(),
+                    detail: error.to_string(),
+                })?;
+            }
+            return Ok(file.clone());
+        }
         match &self.data_dir {
             Some(directory) => paths::database_path_in(directory),
             None => paths::default_database_path(),

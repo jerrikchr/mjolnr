@@ -220,6 +220,15 @@ pub enum ClientCommand {
         note: String,
     },
     EndSession,
+    /// Leave the open session without ending it, freeing the one seat the
+    /// runtime allows so another session can be created or resumed.
+    ReleaseSession,
+    /// Break the write lease a crashed process left behind, so the session can
+    /// be resumed again.
+    #[serde(rename_all = "camelCase")]
+    ReclaimSession {
+        session: String,
+    },
     RequestSnapshot,
     RefreshCredentials,
     #[serde(rename_all = "camelCase")]

@@ -522,6 +522,27 @@ export class MjolnrClient {
     return this.dispatch({ type: 'endSession' });
   }
 
+  /**
+   * Leave the open session without ending it.
+   *
+   * The runtime allows one open session at a time. `endSession` is terminal —
+   * an ended session can never be resumed — so switching sessions goes through
+   * here, which only drops the lease.
+   */
+  async releaseSession() {
+    return this.dispatch({ type: 'releaseSession' });
+  }
+
+  /**
+   * Break the write lease a crashed mjolnr left on a session.
+   *
+   * The runtime never does this on its own — it cannot prove the holder is
+   * gone — so this carries a human's assertion that it is.
+   */
+  async reclaimSession(session: string) {
+    return this.dispatch({ type: 'reclaimSession', session });
+  }
+
   /** Authenticate LM Studio: save endpoint + optional token, then refresh. */
   async authLmStudioLogin(address: string, token: string): Promise<{ endpoint: string } | { error: string }> {
     if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {

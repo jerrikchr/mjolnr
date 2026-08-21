@@ -69,7 +69,7 @@ impl Actor {
         if self.state.session.is_some() {
             return Err(MjolnrError::workspace_refused(
                 ReasonCode::WorkspaceRootLocked,
-                "a session is already open on this workspace root; end the session before \
+                "a session is already open on this workspace root; leave the session before \
                  opening a different one",
             ));
         }
@@ -565,7 +565,7 @@ impl Actor {
     ) {
         if self.state.session.is_some() || self.lease.is_some() {
             self.note_store_failure(&StoreError::Unavailable {
-                detail: "end the open session before creating another one".to_owned(),
+                detail: "leave the open session before creating another one".to_owned(),
             });
             return;
         }
@@ -685,7 +685,7 @@ impl Actor {
     pub(super) async fn resume_session(&mut self, session: SessionId) {
         if self.run.is_some() || self.state.session.is_some() || self.lease.is_some() {
             self.note_store_failure(&StoreError::Unavailable {
-                detail: "end the open session before resuming another one".to_owned(),
+                detail: "leave the open session before resuming another one".to_owned(),
             });
             return;
         }
@@ -993,6 +993,93 @@ impl Actor {
 
         self.recovery = RecoveryState::Clean;
         self.state.reset_keeping_project();
+        self.refresh_session_list().await;
+    }
+
+    /// Let go of the open session without ending it.
+    ///
+    /// The non-destructive counterpart to [`end_session`](Self::end_session).
+    /// Ending appends `SessionEnded` and moves the store row to
+    /// [`SessionStatus::Ended`], which [`resume_session`](Self::resume_session)
+    /// then refuses forever — so ending was the wrong tool for "I want to work
+    /// on something else for a while", which was the only thing the one-session
+    /// rule left a human able to say. This releases the lease and clears live
+    /// state; the row stays `Active` and the session resumes later.
+    ///
+    /// A checkpoint is written first, for the same reason `shutdown` writes
+    /// one: the lease is what stops a second process interleaving into this
+    /// transcript, so what is in memory has to be durable *before* the lease is
+    /// gone, not after.
+    pub(super) async fn release_session(&mut self) {
+        // Same guard as `end_session`. Letting go mid-run would leave an
+        // in-flight effect with nobody holding the lease that proves whose it
+        // was, which is the uncertainty `AGENTS.md` §1.4 refuses to create.
+        if self.run.is_some() {
+            self.note_store_failure(&StoreError::Unavailable {
+                detail: "cancel the active run before leaving this session".to_owned(),
+            });
+            return;
+        }
+
+        if self.state.session.is_none() {
+            return;
+        }
+
+        // Unsettled state cannot be folded into a checkpoint (`checkpoint`
+        // refuses it), and releasing anyway would drop the lease on a session
+        // whose recovery evidence is still open — the next resume would read a
+        // checkpoint that disagrees with the event tail. Refuse instead, and
+        // say which step is missing.
+        if self.recovery.is_required() {
+            self.note_store_failure(&StoreError::Unavailable {
+                detail: "resolve the pending recovery decision before leaving this session"
+                    .to_owned(),
+            });
+            return;
+        }
+
+        if let Err(error) = self.checkpoint(SessionStatus::Active).await {
+            self.note_store_failure(&error);
+            return;
+        }
+        if let Err(error) = self.release_lease().await {
+            self.note_store_failure(&error);
+            return;
+        }
+
+        self.recovery = RecoveryState::Clean;
+        self.state.reset_keeping_project();
+        self.refresh_session_list().await;
+    }
+
+    /// Break the write lease a crashed process left on a session.
+    ///
+    /// mjolnr does not steal leases on its own: it cannot tell "open in another
+    /// window" from "crashed an hour ago", and guessing wrong interleaves two
+    /// writers into one transcript (`docs/persistence.md` §5). A human saying
+    /// so is the missing evidence, and this is where they say it — the same
+    /// authority `mjolnr sessions release <id>` carries, reachable from a
+    /// client that has no terminal.
+    ///
+    /// Refused while this process holds a session of its own: the lease worth
+    /// breaking belongs to somebody else, and "reclaim" must never become a
+    /// second, quieter way to drop our own.
+    pub(super) async fn reclaim_session(&mut self, session: SessionId) {
+        if self.run.is_some() || self.state.session.is_some() {
+            self.note_store_failure(&StoreError::Unavailable {
+                detail: "leave the open session before reclaiming another one".to_owned(),
+            });
+            return;
+        }
+        if let Err(error) = self.store.break_lease(session).await {
+            self.note_store_failure(&error);
+            return;
+        }
+        // The failure that sent the user here named the lease that is now gone.
+        // Leaving it on screen would keep reporting a condition that no longer
+        // holds, which is the same lie as never having reported it
+        // (`AGENTS.md` §1.3).
+        self.state.store_failure = None;
         self.refresh_session_list().await;
     }
 

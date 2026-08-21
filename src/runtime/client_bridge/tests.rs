@@ -473,6 +473,10 @@ fn the_command_allowlist_maps_one_for_one() {
         ),
         (ClientCommand::EndSession, MjolnrCommand::EndSession),
         (
+            ClientCommand::ReleaseSession,
+            MjolnrCommand::ReleaseSession,
+        ),
+        (
             ClientCommand::CreateWorktree {
                 name: "branch1".to_owned(),
                 base_revision: "main".to_owned(),
@@ -1977,6 +1981,313 @@ async fn async_integration_8_store_backed_session_list_and_resume_over_bridge() 
 
     assert_eq!(snap.session, Some(created_id));
     bridge.close().await.expect("clean shutdown");
+}
+
+/// Releasing a session frees the one seat without spending the session.
+///
+/// The seat rule (`create_session` / `resume_session` / `open_project` all
+/// refuse while a session is open) used to have exactly one exit, `EndSession`,
+/// and ending is terminal — `resume_session` refuses a session whose status is
+/// `Ended`. Switching sessions therefore cost the session being left. This
+/// pins the two apart: after a release the seat is free *and* the session it
+/// left is still resumable, twice over.
+#[tokio::test]
+async fn releasing_a_session_frees_the_seat_and_leaves_it_resumable() {
+    use crate::core::store::EventStore;
+    use crate::runtime::Runtime;
+    use crate::store::sqlite::SqliteEventStore;
+    use tempfile::TempDir;
+
+    let dir = TempDir::new().expect("tempdir");
+    let workspace = dir.path().canonicalize().expect("canonicalize");
+    let store_sqlite = SqliteEventStore::open(&dir.path().join("test.db"))
+        .await
+        .expect("open sqlite");
+    let store: Arc<dyn EventStore> = Arc::new(store_sqlite);
+    let runtime = Runtime::spawn(Vec::new(), store);
+    let bridge = ClientBridge::start(Arc::new(runtime));
+    let mut rx = bridge
+        .take_updates()
+        .expect("update receiver must be available");
+
+    bridge
+        .dispatch(ClientCommand::OpenProject {
+            root: workspace.to_string_lossy().into_owned(),
+        })
+        .await
+        .expect("open project");
+    bridge
+        .dispatch(ClientCommand::CreateSession {
+            provider: "anthropic".to_owned(),
+            model: "claude-3-5-sonnet".to_owned(),
+        })
+        .await
+        .expect("create session");
+
+    let snap = drain_until_snapshot(
+        &mut rx,
+        |s| s.session.is_some() && !s.sessions.is_empty(),
+        Duration::from_secs(5),
+    )
+    .await;
+    let first = snap.session.clone().expect("session id");
+
+    bridge
+        .dispatch(ClientCommand::ReleaseSession)
+        .await
+        .expect("release session");
+
+    let snap =
+        drain_until_snapshot(&mut rx, |s| s.session.is_none(), Duration::from_secs(5)).await;
+    assert!(
+        snap.store_failure.is_none(),
+        "a clean release is not a durability failure: {:?}",
+        snap.store_failure
+    );
+    assert!(
+        snap.sessions.iter().any(|s| s.id == first),
+        "the released session stays in the list rather than disappearing"
+    );
+
+    // The seat is genuinely free: a second session can take it.
+    bridge
+        .dispatch(ClientCommand::CreateSession {
+            provider: "anthropic".to_owned(),
+            model: "claude-3-5-sonnet".to_owned(),
+        })
+        .await
+        .expect("create second session");
+    let snap = drain_until_snapshot(
+        &mut rx,
+        |s| s.session.is_some() && s.session != Some(first.clone()),
+        Duration::from_secs(5),
+    )
+    .await;
+    let second = snap.session.clone().expect("second session id");
+    assert_ne!(first, second, "the second create must mint its own session");
+
+    // And the release was not an end: the first session resumes.
+    bridge
+        .dispatch(ClientCommand::ReleaseSession)
+        .await
+        .expect("release second session");
+    drain_until_snapshot(&mut rx, |s| s.session.is_none(), Duration::from_secs(5)).await;
+    bridge
+        .dispatch(ClientCommand::ResumeSession {
+            session: first.clone(),
+        })
+        .await
+        .expect("resume the released session");
+    let snap = drain_until_snapshot(
+        &mut rx,
+        |s| s.session == Some(first.clone()),
+        Duration::from_secs(5),
+    )
+    .await;
+    assert_eq!(
+        snap.session,
+        Some(first.clone()),
+        "a released session must be resumable; only EndSession is terminal"
+    );
+    assert!(
+        snap.store_failure.is_none(),
+        "resuming a released session is not a durability failure: {:?}",
+        snap.store_failure
+    );
+
+    bridge.close().await.expect("clean shutdown");
+}
+
+/// A lease a dead process left behind can be reclaimed, and the session then
+/// resumes.
+///
+/// `mjolnr sessions release <id>` was the only way to do this, and it reaches a
+/// *directory* plus mjolnr's own filename — so it could not open the desktop's
+/// `mjolnr-desktop.db` at all. A desktop user whose app crashed had no way back
+/// to their own session.
+#[tokio::test]
+async fn a_lease_left_by_a_dead_process_can_be_reclaimed() {
+    use crate::core::store::EventStore;
+    use crate::runtime::Runtime;
+    use crate::store::sqlite::SqliteEventStore;
+    use tempfile::TempDir;
+
+    let dir = TempDir::new().expect("tempdir");
+    let db_path = dir.path().join("test.db");
+    let workspace = dir.path().canonicalize().expect("canonicalize");
+
+    // First "process": creates a session and dies without releasing.
+    let stranded = {
+        let store_sqlite = SqliteEventStore::open(&db_path).await.expect("open sqlite");
+        let store: Arc<dyn EventStore> = Arc::new(store_sqlite);
+        let runtime = Runtime::spawn(Vec::new(), store);
+        let bridge = ClientBridge::start(Arc::new(runtime));
+        let mut rx = bridge.take_updates().expect("updates");
+        bridge
+            .dispatch(ClientCommand::OpenProject {
+                root: workspace.to_string_lossy().into_owned(),
+            })
+            .await
+            .expect("open project");
+        bridge
+            .dispatch(ClientCommand::CreateSession {
+                provider: "anthropic".to_owned(),
+                model: "claude-3-5-sonnet".to_owned(),
+            })
+            .await
+            .expect("create session");
+        let snap =
+            drain_until_snapshot(&mut rx, |s| s.session.is_some(), Duration::from_secs(5)).await;
+        let id = snap.session.clone().expect("session id");
+        // Dropped, not closed: a clean close would delete the lease row, which
+        // is precisely the case that does *not* need reclaiming.
+        drop(bridge);
+        id
+    };
+
+    let store_sqlite = SqliteEventStore::open(&db_path).await.expect("reopen");
+    let store: Arc<dyn EventStore> = Arc::new(store_sqlite);
+    let runtime = Runtime::spawn(Vec::new(), store);
+    let bridge = ClientBridge::start(Arc::new(runtime));
+    let mut rx = bridge.take_updates().expect("updates");
+
+    bridge
+        .dispatch(ClientCommand::OpenProject {
+            root: workspace.to_string_lossy().into_owned(),
+        })
+        .await
+        .expect("open project");
+
+    // The lease is still held, so resuming refuses.
+    bridge
+        .dispatch(ClientCommand::ResumeSession {
+            session: stranded.clone(),
+        })
+        .await
+        .expect("dispatch resume");
+    let snap = drain_until_snapshot(
+        &mut rx,
+        |s| s.store_failure.is_some(),
+        Duration::from_secs(5),
+    )
+    .await;
+    assert!(
+        snap.session.is_none(),
+        "a leased session must not open under a second writer"
+    );
+
+    bridge
+        .dispatch(ClientCommand::ReclaimSession {
+            session: stranded.clone(),
+        })
+        .await
+        .expect("reclaim");
+    drain_until_snapshot(
+        &mut rx,
+        |s| s.store_failure.is_none(),
+        Duration::from_secs(5),
+    )
+    .await;
+
+    bridge
+        .dispatch(ClientCommand::ResumeSession {
+            session: stranded.clone(),
+        })
+        .await
+        .expect("resume after reclaim");
+    let snap = drain_until_snapshot(
+        &mut rx,
+        |s| s.session == Some(stranded.clone()),
+        Duration::from_secs(5),
+    )
+    .await;
+    assert_eq!(
+        snap.session,
+        Some(stranded),
+        "a reclaimed session must open for work again"
+    );
+
+    bridge.close().await.expect("clean shutdown");
+}
+
+/// The terminal half of the same pair: an *ended* session cannot come back.
+///
+/// Guards the distinction from the other side, so a future change that made
+/// `EndSession` merely release would be caught rather than silently widening
+/// what "ended" promises.
+#[tokio::test]
+async fn an_ended_session_cannot_be_resumed() {
+    use crate::core::store::EventStore;
+    use crate::runtime::Runtime;
+    use crate::store::sqlite::SqliteEventStore;
+    use tempfile::TempDir;
+
+    let dir = TempDir::new().expect("tempdir");
+    let workspace = dir.path().canonicalize().expect("canonicalize");
+    let store_sqlite = SqliteEventStore::open(&dir.path().join("test.db"))
+        .await
+        .expect("open sqlite");
+    let store: Arc<dyn EventStore> = Arc::new(store_sqlite);
+    let runtime = Runtime::spawn(Vec::new(), store);
+    let bridge = ClientBridge::start(Arc::new(runtime));
+    let mut rx = bridge
+        .take_updates()
+        .expect("update receiver must be available");
+
+    bridge
+        .dispatch(ClientCommand::OpenProject {
+            root: workspace.to_string_lossy().into_owned(),
+        })
+        .await
+        .expect("open project");
+    bridge
+        .dispatch(ClientCommand::CreateSession {
+            provider: "anthropic".to_owned(),
+            model: "claude-3-5-sonnet".to_owned(),
+        })
+        .await
+        .expect("create session");
+    let snap = drain_until_snapshot(
+        &mut rx,
+        |s| s.session.is_some(),
+        Duration::from_secs(5),
+    )
+    .await;
+    let ended = snap.session.clone().expect("session id");
+
+    bridge
+        .dispatch(ClientCommand::EndSession)
+        .await
+        .expect("end session");
+    drain_until_snapshot(&mut rx, |s| s.session.is_none(), Duration::from_secs(5)).await;
+
+    bridge
+        .dispatch(ClientCommand::ResumeSession {
+            session: ended.clone(),
+        })
+        .await
+        .expect("dispatch resume");
+    let snap = drain_until_snapshot(
+        &mut rx,
+        |s| s.store_failure.is_some(),
+        Duration::from_secs(5),
+    )
+    .await;
+    assert!(
+        snap.session.is_none(),
+        "an ended session must not become active again"
+    );
+    let failure = snap.store_failure.clone().expect("refusal");
+    assert!(
+        failure.contains("ended"),
+        "the refusal must say the session ended, got: {failure}"
+    );
+
+    // Not `expect("clean shutdown")`: the refusal above is still the runtime's
+    // standing store failure, and shutdown reports it rather than swallowing
+    // it. Asserting a clean close here would be asserting that mjolnr forgets
+    // a refusal it was right to make.
+    drop(bridge.close().await);
 }
 
 /// A minimal `EventStore` mock whose `sessions()` call fails, used to

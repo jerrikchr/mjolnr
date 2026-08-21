@@ -58,6 +58,7 @@
   import { Button } from '$lib/components/ui/button';
   import * as Card from '$lib/components/ui/card';
   import * as Command from '$lib/components/ui/command';
+  import * as Dialog from '$lib/components/ui/dialog';
   import * as Field from '$lib/components/ui/field';
   import { Input } from '$lib/components/ui/input';
   import * as Resizable from '$lib/components/ui/resizable';
@@ -97,6 +98,10 @@
   // search the command palette already does against the durable store. This
   // one only ever narrows what is already in `snap.sessions`.
   let sidebarFilter = $state('');
+  // `EndSession` is terminal, so the one path that reaches it confirms first.
+  // Switching sessions does not come through here: it releases the lease
+  // instead, which leaves the session resumable.
+  let endSessionConfirmOpen = $state(false);
   let projectPathInput = $state('');
   let projectedWorkspaceRoot = $state('');
   let hasProjectedWorkspaceRoot = $state(false);
@@ -136,9 +141,13 @@
     governanceOpen = true;
   }
 
-  function startNewChat() {
+  async function startNewChat() {
     messageInput = '';
     activeSurface = 'Conversation';
+    // The runtime allows one open session at a time, so the seat has to be
+    // free first. Releasing is not ending: the session keeps its `Active` row
+    // and resumes later, so this needs no confirmation.
+    if (snap.session && !(await freeTheSeat())) return;
     createSession();
   }
 
@@ -298,6 +307,37 @@
     modelChoices.find((choice) => choice.model === selectedModel)?.displayName ?? 'Select model'
   );
   let canCreateSession = $derived(Boolean(snap.workspaceRoot && selectedProvider && selectedModel));
+  /**
+   * Why a session cannot start, or `null` when one can.
+   *
+   * `createSession` and `sendMessage` both used to wrap their dispatch in a
+   * bare `if (canCreateSession)` with no else, so with no project open the
+   * "+" button and the composer did nothing at all and said nothing about it —
+   * the dead button `openProject` was already fixed for (AGENTS.md §1.3). The
+   * reason is derived rather than set on click so it is on screen *before*
+   * someone presses a control that cannot work.
+   */
+  /**
+   * The session id in a stale-lease refusal, or `null` for any other failure.
+   *
+   * Read from the runtime's own message rather than tracked separately: the
+   * refusal is the only thing that knows *which* session is held, and a second
+   * copy of that fact could disagree with the banner the user is reading.
+   */
+  let staleLeaseSession = $derived(
+    /session ([0-9a-f-]{36}) is already open in another mjolnr process/.exec(
+      snap.storeFailure ?? ''
+    )?.[1] ?? null
+  );
+  let sessionBlocker = $derived(
+    snap.workspaceRoot
+      ? snap.models.length === 0
+        ? 'Connect a provider before starting a session.'
+        : selectedProvider && selectedModel
+          ? null
+          : 'Choose a model before starting a session.'
+      : 'Open a project folder to start a session — mjolnr records every session against a project root.'
+  );
   let journeyState = $derived(
     !snap.workspaceRoot
       ? 'workspace'
@@ -476,9 +516,9 @@
   function openSearchResult(result: ClientWorkspaceSearchResult) {
     paletteOpen = false;
     activeSurface = 'Conversation';
-    if (snap.session !== result.sessionId) {
-      dispatch({ type: 'resumeSession', session: result.sessionId });
-    }
+    // Through the same door as the sidebar: the one-open-session rule applies
+    // here too, and a bare dispatch would just draw a refusal banner.
+    resumeSession(result.sessionId);
   }
 
   function dispatch(command: Parameters<typeof clientStore.dispatch>[0]) {
@@ -522,14 +562,73 @@
   }
 
   function createSession() {
-    if (canCreateSession) {
-      dispatch({ type: 'createSession', provider: selectedProvider, model: selectedModel });
+    if (!canCreateSession) {
+      // Nothing to dispatch, but the reason is already rendered beside the
+      // composer by `sessionBlocker`; a click must never be a silent no-op.
+      return;
+    }
+    dispatch({ type: 'createSession', provider: selectedProvider, model: selectedModel });
+  }
+
+  async function resumeSession(session: string) {
+    if (snap.session === session) return;
+    // Same one-seat rule as `createSession`.
+    if (snap.session && !(await freeTheSeat())) return;
+    dispatch({ type: 'resumeSession', session });
+  }
+
+  /**
+   * Release the open session so the one seat is available again.
+   *
+   * Returns whether the seat is actually free. A release can be refused — an
+   * active run or an unresolved recovery decision both block it — and the
+   * refusal lands on the durability banner, so callers stop rather than firing
+   * a follow-up the runtime would refuse for the same reason.
+   */
+  async function freeTheSeat() {
+    await clientStore.releaseSession();
+    // The runtime publishes the post-release snapshot on its own channel; the
+    // same settle the send path uses keeps the follow-up from racing it.
+    await new Promise((r) => setTimeout(r, 60));
+    return !snap.session;
+  }
+
+  /**
+   * End the open session for good.
+   *
+   * Terminal by design: `resume_session` refuses a session whose status is
+   * `Ended`, so this is only ever reached through an explicit confirmation.
+   * Everything that merely needs the seat calls `freeTheSeat` instead.
+   */
+  async function confirmEndSession() {
+    endSessionConfirmOpen = false;
+    await clientStore.endSession();
+  }
+
+  /**
+   * How a session row reads in the sidebar.
+   *
+   * `rollupStatus` is `running` whenever the session is *leased*, which is not
+   * the same as a run being in flight — the badge said "running" next to an
+   * idle transcript. The lease is what the reader cares about, so name it.
+   */
+  function sessionBadge(session: { id: string; rollupStatus: string }) {
+    if (session.id === snap.session) return 'current';
+    switch (session.rollupStatus) {
+      case 'running':
+        return 'open';
+      case 'completed':
+        return 'ended';
+      default:
+        return session.rollupStatus;
     }
   }
 
-  function resumeSession(session: string) {
-    if (snap.session === session) return;
-    dispatch({ type: 'resumeSession', session });
+  function sessionRowHint(session: { id: string; rollupStatus: string; title: string }) {
+    const name = session.title || session.id;
+    if (session.id === snap.session) return `${name} — the open session`;
+    if (session.rollupStatus === 'completed') return `${name} — ended, cannot be resumed`;
+    return name;
   }
 
   function resolveResume(choice: ClientResumeChoice) {
@@ -540,17 +639,24 @@
     const text = (textOverride ?? messageInput).trim();
     if (!text || snap.runActive) return;
     if (!snap.session) {
-      if (canCreateSession) {
-        dispatch({ type: 'createSession', provider: selectedProvider, model: selectedModel });
-        await new Promise((r) => setTimeout(r, 60));
-      } else if (snap.models.length > 0) {
-        const first = snap.models[0];
-        dispatch({ type: 'createSession', provider: first.provider, model: first.model });
-        await new Promise((r) => setTimeout(r, 60));
-      } else {
+      if (snap.models.length === 0) {
         goto('/onboarding');
         return;
       }
+      // Without a project root the runtime refuses the create, and sending
+      // afterwards would clear the composer and drop the typed text on the
+      // floor. Keep the text and leave `sessionBlocker` on screen saying why.
+      if (!snap.workspaceRoot) return;
+      if (canCreateSession) {
+        dispatch({ type: 'createSession', provider: selectedProvider, model: selectedModel });
+      } else {
+        const first = snap.models[0];
+        dispatch({ type: 'createSession', provider: first.provider, model: first.model });
+      }
+      await new Promise((r) => setTimeout(r, 60));
+      // The create can still be refused — a stale lease from a crashed process
+      // is the common one. The banner names it; do not also lose the prompt.
+      if (!snap.session) return;
     }
     messageInput = '';
     dispatch({ type: 'sendMessage', text });
@@ -842,17 +948,29 @@
                 {/if}
                 <Sidebar.Menu>
                   {#each snap.sessions.filter((s) => !sidebarFilter.trim() || (s.title || s.id).toLowerCase().includes(sidebarFilter.trim().toLowerCase())) as session (session.id)}
+                    {@const isCurrent = snap.session === session.id}
+                    {@const isEnded = session.rollupStatus === 'completed'}
                     <Sidebar.MenuItem>
                       <Sidebar.MenuButton
-                        isActive={snap.session === session.id}
-                        aria-disabled={snap.session === session.id}
-                        tooltipContent={session.title || session.id}
-                        class="h-7 text-xs gap-2 pl-2"
-                        onclick={() => resumeSession(session.id)}
+                        isActive={isCurrent}
+                        aria-current={isCurrent ? 'true' : undefined}
+                        aria-disabled={isCurrent || isEnded}
+                        tooltipContent={sessionRowHint(session)}
+                        title={sessionRowHint(session)}
+                        class={cn(
+                          'h-7 text-xs gap-2 pl-2',
+                          isCurrent && 'font-semibold',
+                          isEnded && 'opacity-50'
+                        )}
+                        onclick={() => (isEnded ? undefined : resumeSession(session.id))}
                       >
-                        <HugeiconsIcon icon={CircleIcon} strokeWidth={2} class="size-2 text-primary/70 shrink-0" />
+                        <HugeiconsIcon
+                          icon={CircleIcon}
+                          strokeWidth={2}
+                          class={cn('size-2 shrink-0', isCurrent ? 'text-primary' : 'text-primary/40')}
+                        />
                         <span class="truncate">{session.title || session.id.slice(0, 8)}</span>
-                        <Sidebar.MenuBadge class="text-[9px] py-0">{session.rollupStatus}</Sidebar.MenuBadge>
+                        <Sidebar.MenuBadge class="text-[9px] py-0">{sessionBadge(session)}</Sidebar.MenuBadge>
                       </Sidebar.MenuButton>
                     </Sidebar.MenuItem>
                   {/each}
@@ -1190,6 +1308,18 @@
                   <HugeiconsIcon icon={StopIcon} strokeWidth={2} data-icon="inline-start" />
                   Cancel
                 </Button>
+              {:else if snap.session}
+                <!-- The only exit from the runtime's one-open-session rule.
+                     Hidden during a run because `end_session` returns early
+                     while one is live, which would read as a dead button. -->
+                <Button
+                  variant="outline"
+                  size="sm"
+                  data-testid="end-session"
+                  onclick={() => (endSessionConfirmOpen = true)}
+                >
+                  End session
+                </Button>
               {/if}
             </div>
           </div>
@@ -1199,6 +1329,23 @@
               <HugeiconsIcon icon={Alert02Icon} strokeWidth={2} />
               <Alert.Title>Durability failure</Alert.Title>
               <Alert.Description>{snap.storeFailure}</Alert.Description>
+              {#if staleLeaseSession}
+                <Alert.Action class="flex flex-col items-start gap-1.5">
+                  <p class="text-xs opacity-90">
+                    If that process is gone — a crash, or a dev server you restarted — reclaiming the
+                    lease makes the session resumable again. Only do this if you are sure no other
+                    mjolnr is still writing to it.
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    data-testid="reclaim-session"
+                    onclick={() => clientStore.reclaimSession(staleLeaseSession!)}
+                  >
+                    Reclaim lease
+                  </Button>
+                </Alert.Action>
+              {/if}
             </Alert.Root>
           {:else if snap.recovery.state === 'required'}
             <Alert.Root variant="destructive" class="mx-6 mt-4">
@@ -1379,7 +1526,18 @@
                         </Button>
                       </div>
                     </div>
-                  </div>
+                    {#if sessionBlocker && !snap.session}
+                      <button
+                        type="button"
+                        data-testid="session-blocker"
+                        class="mb-2 flex w-full items-center gap-2 rounded-md border border-dashed border-amber-500/50 bg-amber-500/5 px-2.5 py-1.5 text-left text-xs text-amber-600 dark:text-amber-400 hover:border-amber-500 transition-colors cursor-pointer"
+                        onclick={() => (snap.workspaceRoot ? undefined : chooseWorkspace())}
+                      >
+                        <HugeiconsIcon icon={Alert02Icon} strokeWidth={2} class="size-3.5 shrink-0" />
+                        <span>{sessionBlocker}</span>
+                      </button>
+                    {/if}
+                    </div>
 
                   <!-- Norse Myth Prompt Suggestion Chips -->
                   <div class="flex flex-wrap items-center justify-center gap-2 max-w-2xl">
@@ -1701,6 +1859,28 @@
 />
 
 <ProviderAuthModal bind:open={providerAuthOpen} />
+
+<Dialog.Root bind:open={endSessionConfirmOpen}>
+  <Dialog.Content class="sm:max-w-md">
+    <Dialog.Header>
+      <Dialog.Title>End session {snap.session ? snap.session.slice(0, 8) : ''}?</Dialog.Title>
+      <Dialog.Description>
+        This closes the session for good. You do not need to end a session to start or switch to
+        another one — that releases this one and leaves it resumable.
+      </Dialog.Description>
+    </Dialog.Header>
+    <p class="text-xs text-muted-foreground">
+      The transcript stays in the durable store and stays searchable, but an ended session cannot be
+      resumed or accept new work.
+    </p>
+    <Dialog.Footer>
+      <Button variant="outline" size="sm" onclick={() => (endSessionConfirmOpen = false)}>Cancel</Button>
+      <Button variant="destructive" size="sm" data-testid="end-session-confirm" onclick={confirmEndSession}>
+        End session
+      </Button>
+    </Dialog.Footer>
+  </Dialog.Content>
+</Dialog.Root>
 
 <Command.Dialog
   bind:open={paletteOpen}

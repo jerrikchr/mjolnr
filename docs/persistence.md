@@ -157,6 +157,7 @@ mjolnr therefore leases a session:
 - A conflict refuses the open plainly and names the holder. Phase 4 has no read-only session client.
 - A clean shutdown deletes the row.
 - An ended session cannot acquire a new lease and cannot be resumed for work.
+- **Releasing is not ending.** `ReleaseSession` checkpoints the settled state, deletes the lease row, and clears live state, leaving the session row `active`. The session is resumable afterwards; only `EndSession` writes `SessionEnded` and moves the row to `ended`. This is what makes switching sessions non-destructive: a human who wants to work on something else releases the seat rather than spending the session to free it. A release is refused while a run is active or a recovery decision is unresolved, for the same reason shutdown declines to checkpoint over an interruption (§7).
 
 **A crash leaves the row behind, and mjolnr does not steal it.** It cannot prove the holder is dead — the honest position under `AGENTS.md` §1.2 (fail closed) and §1.3 (never lie about state). `mjolnr sessions release <id>` is the explicit human act that reclaims it. This is not an accident of the design: a crashed session is exactly the one whose interrupted work needs a human anyway (§6).
 

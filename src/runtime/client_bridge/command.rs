@@ -76,6 +76,10 @@ fn map_session_control_command(
             mode: (*policy).into(),
         },
         ClientCommand::EndSession => MjolnrCommand::EndSession,
+        ClientCommand::ReleaseSession => MjolnrCommand::ReleaseSession,
+        ClientCommand::ReclaimSession { session } => MjolnrCommand::ReclaimSession {
+            session: parse_session(session)?,
+        },
         _ => return Ok(None),
     };
     Ok(Some(mapped))

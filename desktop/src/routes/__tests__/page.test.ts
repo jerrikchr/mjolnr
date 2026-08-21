@@ -484,7 +484,13 @@ describe('Desktop workspace route', () => {
       search.mockRestore();
     });
 
-    it('resumes the result’s session, and does not re-resume the active one', async () => {
+    /**
+     * A session is already open, and the runtime allows exactly one. Dispatching
+     * the resume straight from the palette only produced a refusal banner, so the
+     * palette releases the open session first — releasing, not ending, so the
+     * session it leaves stays resumable.
+     */
+    it('releases the open session before resuming the result’s session', async () => {
       const dispatch = vi.spyOn(clientStore, 'dispatch').mockResolvedValue(null);
       const search = vi.spyOn(clientStore, 'searchWorkspace').mockResolvedValue({
         items: [
@@ -503,12 +509,25 @@ describe('Desktop workspace route', () => {
       const { getAllByText } = await openPaletteAndType('another');
       const item = await waitFor(() => getAllByText('in another session')[0]);
 
+      // The release frees the seat, so the snapshot the follow-up reads has none.
+      dispatch.mockImplementation(async (command) => {
+        if (command.type === 'releaseSession') {
+          clientStore.snapshot = { ...baseSnapshot, session: undefined };
+        }
+        return null;
+      });
+
       await fireEvent.click(item);
 
-      expect(dispatch).toHaveBeenCalledWith({
-        type: 'resumeSession',
-        session: '0190d5f0-elsewhere'
-      });
+      await waitFor(() => expect(dispatch).toHaveBeenCalledWith({ type: 'releaseSession' }));
+      await waitFor(() =>
+        expect(dispatch).toHaveBeenCalledWith({
+          type: 'resumeSession',
+          session: '0190d5f0-elsewhere'
+        })
+      );
+      // Switching must never be terminal for the session being left.
+      expect(dispatch).not.toHaveBeenCalledWith({ type: 'endSession' });
       dispatch.mockRestore();
       search.mockRestore();
     });

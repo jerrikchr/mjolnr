@@ -277,6 +277,21 @@ pub enum MjolnrCommand {
     },
     CancelRun,
     EndSession,
+    /// Let go of the open session without ending it, so it can be resumed.
+    ///
+    /// Distinct from [`EndSession`](Self::EndSession): ending is terminal and a
+    /// session that has ended cannot accept new work, so it is the wrong answer
+    /// to "switch to another session".
+    ReleaseSession,
+    /// Break the write lease a crashed process left on a session.
+    ///
+    /// mjolnr never takes a lease on its own — it cannot prove the holder is
+    /// gone (`docs/persistence.md` §5), so this is the explicit human act that
+    /// says so. Same authority as `mjolnr sessions release <id>`, reachable
+    /// from a client that has no terminal.
+    ReclaimSession {
+        session: crate::core::event::SessionId,
+    },
     /// Start a bounded model-led interview for a new greenfield workflow.
     StartPlanInterview {
         goal: String,
