@@ -16,11 +16,12 @@
 /.mjolnr/
 /.smed/
 
-# Local agent-tooling state (oh-my-codex, CommandCode). Contains turn logs,
+# Local agent-tooling state (oh-my-codex, CommandCode, Freebuff). Contains turn logs,
 # learned-preference files, and session state that may include conversation
 # content. Local-only, never committed.
 /.omx/
 /.commandcode/
+/.freebuff/
 *.sqlite
 *.sqlite-wal
 *.sqlite-shm
