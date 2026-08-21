@@ -920,26 +920,14 @@
               </Sidebar.MenuItem>
               <Sidebar.MenuItem>
                 <Sidebar.MenuButton class="h-7 text-xs gap-2" onclick={() => (activeSurface = 'Changes')}>
-                  <HugeiconsIcon icon={GitBranchIcon} strokeWidth={2} class="size-3.5" />
-                  <span>Pull requests</span>
+                  <HugeiconsIcon icon={FileEditIcon} strokeWidth={2} class="size-3.5" />
+                  <span>Changes</span>
                 </Sidebar.MenuButton>
               </Sidebar.MenuItem>
               <Sidebar.MenuItem>
-                <Sidebar.MenuButton class="h-7 text-xs gap-2" onclick={() => (activeSurface = 'Board')}>
-                  <HugeiconsIcon icon={Image02Icon} strokeWidth={2} class="size-3.5" />
-                  <span>Sites &amp; previews</span>
-                </Sidebar.MenuButton>
-              </Sidebar.MenuItem>
-              <Sidebar.MenuItem>
-                <Sidebar.MenuButton class="h-7 text-xs gap-2" onclick={() => (activeSurface = 'Attention')}>
-                  <HugeiconsIcon icon={Task01Icon} strokeWidth={2} class="size-3.5" />
-                  <span>Scheduled cloud tasks</span>
-                </Sidebar.MenuButton>
-              </Sidebar.MenuItem>
-              <Sidebar.MenuItem>
-                <Sidebar.MenuButton class="h-7 text-xs gap-2" onclick={() => openGovernance('plugins')}>
-                  <HugeiconsIcon icon={BotIcon} strokeWidth={2} class="size-3.5" />
-                  <span>Plugins &amp; MCP</span>
+                <Sidebar.MenuButton class="h-7 text-xs gap-2" onclick={() => (providerAuthOpen = true)}>
+                  <HugeiconsIcon icon={Key01Icon} strokeWidth={2} class="size-3.5" />
+                  <span>Connections</span>
                 </Sidebar.MenuButton>
               </Sidebar.MenuItem>
             </Sidebar.Menu>
