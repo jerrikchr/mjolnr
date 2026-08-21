@@ -467,6 +467,29 @@ async fn auth_api_key_login(
     Ok(())
 }
 
+/// Verify Jules before persisting its API key. A failed verification never
+/// leaves an unusable credential behind and returns no provider response body.
+#[tauri::command]
+async fn auth_jules_login(key: String) -> Result<(), String> {
+    if key.trim().is_empty() {
+        return Err("no Jules API key entered".to_owned());
+    }
+    let client = mjolnr::integrations::jules::JulesClient::new(
+        mjolnr::core::secrets::Secret::new(key.clone()),
+    );
+    client
+        .list_sources()
+        .await
+        .map_err(|error| format!("Jules connection refused: {error}"))?;
+    let secrets = OsSecretStore::new();
+    secrets
+        .store(
+            &ProviderId::new("jules"),
+            Credential::ApiKey(Secret::new(key)),
+        )
+        .map_err(|error| format!("could not store Jules credential: {error}"))
+}
+
 /// Remove a stored credential for a provider, then trigger a catalog refresh.
 #[tauri::command]
 async fn auth_logout(
@@ -859,6 +882,7 @@ pub fn run() {
             editor_preferences_save,
             auth_lm_studio_login,
             auth_api_key_login,
+            auth_jules_login,
             auth_logout,
             query_graph,
             query_board,

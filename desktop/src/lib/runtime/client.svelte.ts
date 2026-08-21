@@ -581,6 +581,24 @@ export class MjolnrClient {
     return { error: msg };
   }
 
+  /** Verify Jules against its source catalog before storing its key. */
+  async authJulesLogin(key: string): Promise<true | { error: string }> {
+    if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('auth_jules_login', { key });
+        return true;
+      } catch (err: unknown) {
+        const refusal = describeRefusal(err);
+        this.lastError = refusal.message;
+        return { error: refusal.message };
+      }
+    }
+    const msg = 'Tauri IPC unavailable (browser mode)';
+    this.lastError = msg;
+    return { error: msg };
+  }
+
   /** Remove a stored credential for a provider, then refresh. */
   async authLogout(provider: string): Promise<boolean> {
     if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {

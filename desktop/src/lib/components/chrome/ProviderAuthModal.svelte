@@ -34,6 +34,7 @@
   let lmStudioAddress = $state('http://localhost:1234');
   let lmStudioToken = $state('');
   let apiKeyInput = $state('');
+  let julesConnected = $state(false);
 
   type Card = {
     provider: string;
@@ -75,7 +76,8 @@
   type ClientModel = { provider: string; model: string; displayName: string };
 
   let cards: Card[] = $derived(
-    snap.accounts.map((account) => ({
+    [
+      ...snap.accounts.map((account) => ({
       provider: account.provider,
       state: account.state,
       detail: account.detail,
@@ -83,7 +85,11 @@
         .filter((m) => m.provider.toLowerCase() === account.provider.toLowerCase())
         .map((m) => m.model),
       kind: cardKind(account.state)
-    }))
+      })),
+      ...(snap.accounts.some((account) => account.provider === 'jules')
+        ? []
+        : [{ provider: 'jules', state: julesConnected ? 'connected' : 'disconnected', models: [], kind: julesConnected ? 'connected' as const : 'disconnected' as const }])
+    ]
   );
 
   let filtered = $derived(
@@ -160,8 +166,11 @@
 
   async function doApiKeyConnect(provider: string) {
     connectingError = null;
-    const result = await clientStore.authApiKeyLogin(provider, apiKeyInput);
+    const result = provider === 'jules'
+      ? await clientStore.authJulesLogin(apiKeyInput)
+      : await clientStore.authApiKeyLogin(provider, apiKeyInput);
     if (result === true) {
+      if (provider === 'jules') julesConnected = true;
       connectingProvider = null;
       await handleRefresh();
     } else {
@@ -171,6 +180,7 @@
 
   async function doLogout(provider: string) {
     await clientStore.authLogout(provider);
+    if (provider === 'jules') julesConnected = false;
     await handleRefresh();
   }
 </script>
