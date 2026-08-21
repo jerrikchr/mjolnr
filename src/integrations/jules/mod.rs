@@ -9,7 +9,8 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
-use crate::core::secrets::Secret;
+use crate::core::model::ProviderId;
+use crate::core::secrets::{CredentialKind, Secret, SecretError, SecretStore};
 
 use super::{IntegrationError, IntegrationId};
 
@@ -37,6 +38,33 @@ impl JulesClient {
             client: reqwest::Client::new(),
             base_url: DEFAULT_BASE_URL.to_owned(),
         }
+    }
+
+    /// Resolve the Jules key through mjolnr's owner-only credential boundary.
+    ///
+    /// `ProviderId("jules")` intentionally produces `JULES_API_KEY` in the
+    /// shared secret store. The adapter never reads the process environment or
+    /// credential files itself, so the API key cannot bypass the store policy.
+    pub fn from_secret_store(store: &dyn SecretStore) -> Result<Self, IntegrationError> {
+        let provider = ProviderId::new("jules");
+        let resolved = store
+            .resolve(&provider, CredentialKind::ApiKey)
+            .map_err(secret_error)?;
+        let credential =
+            resolved
+                .credential
+                .api_key()
+                .ok_or_else(|| IntegrationError::CredentialMissing {
+                    integration: integration_id(),
+                    variable: "JULES_API_KEY".to_owned(),
+                })?;
+        if credential.is_blank() {
+            return Err(IntegrationError::CredentialMissing {
+                integration: integration_id(),
+                variable: "JULES_API_KEY".to_owned(),
+            });
+        }
+        Ok(Self::new(Secret::new(credential.expose().to_owned())))
     }
 
     /// Override the endpoint for a local HTTP test server.
@@ -457,5 +485,105 @@ fn invalid_id(label: &str, value: &str) -> IntegrationError {
         integration: integration_id(),
         task_id: value.to_owned(),
         detail: format!("invalid {label}"),
+    }
+}
+
+fn secret_error(error: SecretError) -> IntegrationError {
+    match error {
+        SecretError::NotFound { .. } => IntegrationError::CredentialMissing {
+            integration: integration_id(),
+            variable: "JULES_API_KEY".to_owned(),
+        },
+        SecretError::KindMismatch { .. } | SecretError::Unavailable { .. } => {
+            IntegrationError::Transport {
+                integration: integration_id(),
+                detail: "Jules credential store could not resolve an API key".to_owned(),
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::secrets::{Credential, ResolvedCredential, SecretSource};
+    use wiremock::matchers::{header, method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    #[derive(Debug)]
+    struct TestSecrets {
+        key: Option<String>,
+    }
+
+    impl SecretStore for TestSecrets {
+        fn resolve(
+            &self,
+            _provider: &ProviderId,
+            _kind: CredentialKind,
+        ) -> Result<ResolvedCredential, SecretError> {
+            self.key
+                .as_ref()
+                .map(|key| ResolvedCredential {
+                    credential: Credential::ApiKey(Secret::new(key.clone())),
+                    source: SecretSource::File,
+                })
+                .ok_or_else(|| SecretError::NotFound {
+                    provider: ProviderId::new("jules"),
+                })
+        }
+
+        fn store(
+            &self,
+            _provider: &ProviderId,
+            _credential: Credential,
+        ) -> Result<(), SecretError> {
+            Err(SecretError::Unavailable {
+                detail: "test".to_owned(),
+            })
+        }
+
+        fn delete(&self, _provider: &ProviderId) -> Result<(), SecretError> {
+            Err(SecretError::Unavailable {
+                detail: "test".to_owned(),
+            })
+        }
+    }
+
+    #[test]
+    fn missing_store_key_is_a_credential_refusal() {
+        let error = JulesClient::from_secret_store(&TestSecrets { key: None }).unwrap_err();
+        assert!(
+            matches!(error, IntegrationError::CredentialMissing { variable, .. } if variable == "JULES_API_KEY")
+        );
+    }
+
+    #[tokio::test]
+    async fn list_sources_uses_jules_header_and_decodes_payload() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/sources"))
+            .and(header("X-Goog-Api-Key", "test-key"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "sources": [{
+                    "name": "sources/github/acme/repo",
+                    "displayName": "repo",
+                    "defaultBranch": "main"
+                }]
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client =
+            JulesClient::new(Secret::new("test-key".to_owned())).with_base_url(server.uri());
+        let sources = client.list_sources().await.unwrap();
+        assert_eq!(sources[0].name, "sources/github/acme/repo");
+    }
+
+    #[tokio::test]
+    async fn invalid_session_id_is_refused_before_network() {
+        let client = JulesClient::new(Secret::new("test-key".to_owned()));
+        let error = client.get_session("session/escape").await.unwrap_err();
+        assert!(matches!(error, IntegrationError::InvalidTaskId { .. }));
     }
 }
