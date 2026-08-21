@@ -22,6 +22,7 @@
 //! provide.
 
 pub mod github;
+pub mod jules;
 pub mod linear;
 pub mod supabase;
 pub mod vercel;

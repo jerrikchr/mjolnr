@@ -262,6 +262,8 @@
       ? snap.workspaceRoot.replace(/\/+$/, '').split('/').pop() || snap.workspaceRoot
       : null
   );
+  let workspaceName = $derived(projectName ? `${projectName} workspace` : 'Local workspace');
+  let recentSessions = $derived(snap.sessions.filter((session) => session.rollupStatus === 'completed'));
   let isConnected = $derived(clientStore.connected);
   let streamingText = $derived(clientStore.streamingText);
   let quotaWindow = $derived(relevantQuotaWindow(snap.quota));
@@ -864,10 +866,14 @@
 
   {#if sidebarOpen}
     <Sidebar.Root collapsible="none" class="w-60 h-full border-r border-sidebar-border/40 shrink-0 bg-sidebar select-none">
-      <!-- Header with Projects & Chats, Search, and New Chat Icon Button -->
+      <!-- Workspace header; project/session hierarchy starts below it. -->
       <Sidebar.Header class="p-2.5 px-3 flex flex-row items-center justify-between border-b border-sidebar-border/40">
         <div class="flex items-center gap-2">
-          <span class="font-bold text-xs text-foreground tracking-tight uppercase">Projects & Chats</span>
+          <AppEmblem size={20} />
+          <div class="min-w-0">
+            <span class="block truncate font-bold text-xs text-foreground tracking-tight">{workspaceName}</span>
+            <span class="block text-[9px] uppercase tracking-wider text-muted-foreground">Workspace</span>
+          </div>
         </div>
 
         <div class="flex items-center gap-1">
@@ -900,10 +906,51 @@
           {/each}
         </div>
 
-        <!-- Projects Section (Codex / LM Studio style) -->
+        <!-- Global views. Each item selects an existing governed surface; it does
+             not perform the remote action named by its label. -->
+        <Sidebar.Group class="py-1 border-b border-sidebar-border/30">
+          <Sidebar.GroupContent>
+            <Sidebar.Menu>
+              <Sidebar.MenuItem>
+                <Sidebar.MenuButton class="h-7 text-xs gap-2" onclick={startNewChat} title="New chat (⌘N)">
+                  <HugeiconsIcon icon={PlusSignIcon} strokeWidth={2.5} class="size-3.5 text-primary" />
+                  <span>New chat</span>
+                  <span class="ml-auto font-mono text-[9px] text-muted-foreground">⌘N</span>
+                </Sidebar.MenuButton>
+              </Sidebar.MenuItem>
+              <Sidebar.MenuItem>
+                <Sidebar.MenuButton class="h-7 text-xs gap-2" onclick={() => (activeSurface = 'Changes')}>
+                  <HugeiconsIcon icon={GitBranchIcon} strokeWidth={2} class="size-3.5" />
+                  <span>Pull requests</span>
+                </Sidebar.MenuButton>
+              </Sidebar.MenuItem>
+              <Sidebar.MenuItem>
+                <Sidebar.MenuButton class="h-7 text-xs gap-2" onclick={() => (activeSurface = 'Board')}>
+                  <HugeiconsIcon icon={Image02Icon} strokeWidth={2} class="size-3.5" />
+                  <span>Sites &amp; previews</span>
+                </Sidebar.MenuButton>
+              </Sidebar.MenuItem>
+              <Sidebar.MenuItem>
+                <Sidebar.MenuButton class="h-7 text-xs gap-2" onclick={() => (activeSurface = 'Attention')}>
+                  <HugeiconsIcon icon={Task01Icon} strokeWidth={2} class="size-3.5" />
+                  <span>Scheduled cloud tasks</span>
+                </Sidebar.MenuButton>
+              </Sidebar.MenuItem>
+              <Sidebar.MenuItem>
+                <Sidebar.MenuButton class="h-7 text-xs gap-2" onclick={() => openGovernance('plugins')}>
+                  <HugeiconsIcon icon={BotIcon} strokeWidth={2} class="size-3.5" />
+                  <span>Plugins &amp; MCP</span>
+                </Sidebar.MenuButton>
+              </Sidebar.MenuItem>
+            </Sidebar.Menu>
+          </Sidebar.GroupContent>
+        </Sidebar.Group>
+
+        <!-- Projects Section. The current runtime root is the authoritative
+             project projection; sessions remain nested beneath it. -->
         <Sidebar.Group class="py-1 min-h-0 flex-1">
           <Sidebar.GroupLabel class="flex items-center justify-between text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1">
-            <span>Workspace</span>
+            <span>Projects</span>
             <button
               type="button"
               class="text-muted-foreground hover:text-primary transition-colors p-0.5 rounded cursor-pointer"
@@ -920,7 +967,12 @@
                   <HugeiconsIcon icon={FolderOpenIcon} strokeWidth={2} class="size-3.5 text-primary shrink-0" />
                   <span class="truncate font-mono">{projectName}</span>
                 </div>
-                <StatusOrb state="active" size={5} />
+                <div class="flex items-center gap-1.5">
+                  <StatusOrb state="active" size={5} />
+                  <button type="button" class="rounded p-0.5 text-muted-foreground hover:text-primary" onclick={startNewChat} title="New session in project">
+                    <HugeiconsIcon icon={PlusSignIcon} strokeWidth={2.5} class="size-3" />
+                  </button>
+                </div>
               </div>
             {:else}
               <button
@@ -933,9 +985,9 @@
               </button>
             {/if}
 
-            <!-- Project Sessions / Recent Chats -->
+            <!-- Sessions are deliberately nested under the project. -->
             {#if snap.sessions.length > 0}
-              <div class="flex flex-col gap-0.5 mt-1">
+              <div class="ml-2 flex flex-col gap-0.5 border-l border-sidebar-border/50 pl-1 mt-1">
                 {#if snap.sessions.length > 3}
                   <div class="px-1 pb-1">
                     <Input
@@ -976,6 +1028,16 @@
                   {/each}
                 </Sidebar.Menu>
               </div>
+            {/if}
+            {#if recentSessions.length > 0}
+              <details class="mt-2 rounded-md border border-sidebar-border/40 px-2 py-1 text-xs">
+                <summary class="cursor-pointer text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Recents ({recentSessions.length})</summary>
+                <div class="mt-1 space-y-1 pl-1">
+                  {#each recentSessions.slice(0, 5) as session (session.id)}
+                    <div class="truncate text-muted-foreground" title={session.title || session.id}>{session.title || session.id.slice(0, 8)}</div>
+                  {/each}
+                </div>
+              </details>
             {/if}
             {#if showProjectAdvanced}
               <div class="mt-2 space-y-1.5 px-1">
