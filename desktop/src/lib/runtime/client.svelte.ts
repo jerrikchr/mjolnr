@@ -599,6 +599,37 @@ export class MjolnrClient {
     return { error: msg };
   }
 
+  /** Start the desktop loopback OAuth flow for Gemini CLI or Antigravity. */
+  async authGoogleOAuth(provider: string): Promise<true | { error: string }> {
+    if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('auth_google_oauth', { provider });
+        await this.dispatch({ type: 'requestSnapshot' });
+        return true;
+      } catch (err: unknown) {
+        const refusal = describeRefusal(err);
+        this.lastError = refusal.message;
+        return { error: refusal.message };
+      }
+    }
+    const msg = 'Tauri IPC unavailable (browser mode)';
+    this.lastError = msg;
+    return { error: msg };
+  }
+
+  async authJulesStatus(): Promise<boolean> {
+    if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        return await invoke<boolean>('auth_jules_status');
+      } catch {
+        return false;
+      }
+    }
+    return false;
+  }
+
   /** Remove a stored credential for a provider, then refresh. */
   async authLogout(provider: string): Promise<boolean> {
     if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {

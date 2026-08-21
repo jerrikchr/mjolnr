@@ -48,6 +48,7 @@
   import FileExplorer from '$lib/components/panes/FileExplorer.svelte';
   import GraphPane from '$lib/components/graph/GraphPane.svelte';
   import InspectorPane from '$lib/components/inspector/InspectorPane.svelte';
+  import IntegrationsSurface from '$lib/components/surfaces/IntegrationsSurface.svelte';
   import PlanSurface from '$lib/components/plan/PlanSurface.svelte';
   import RepositoryPanel from '$lib/components/repository/RepositoryPanel.svelte';
   import CloneRepository from '$lib/components/repository/CloneRepository.svelte';
@@ -78,7 +79,7 @@
     ClientWorkspaceSearchResult
   } from '$lib/runtime/contract';
 
-  type SurfaceId = 'Conversation' | 'Plan' | 'Board' | 'Changes' | 'Verify' | 'Attention';
+  type SurfaceId = 'Conversation' | 'Plan' | 'Board' | 'Changes' | 'Verify' | 'Attention' | 'Integrations';
 
   const surfaces: Array<{
     value: SurfaceId;
@@ -869,10 +870,9 @@
       <!-- Workspace header; project/session hierarchy starts below it. -->
       <Sidebar.Header class="p-2.5 px-3 flex flex-row items-center justify-between border-b border-sidebar-border/40">
         <div class="flex items-center gap-2">
-          <AppEmblem size={20} />
           <div class="min-w-0">
             <span class="block truncate font-bold text-xs text-foreground tracking-tight">{workspaceName}</span>
-            <span class="block text-[9px] uppercase tracking-wider text-muted-foreground">Workspace</span>
+            <span class="block text-[9px] uppercase tracking-wider text-muted-foreground">mjolnr harness</span>
           </div>
         </div>
 
@@ -906,8 +906,6 @@
           {/each}
         </div>
 
-        <!-- Global views. Each item selects an existing governed surface; it does
-             not perform the remote action named by its label. -->
         <Sidebar.Group class="py-1 border-b border-sidebar-border/30">
           <Sidebar.GroupContent>
             <Sidebar.Menu>
@@ -918,6 +916,15 @@
                   <span class="ml-auto font-mono text-[9px] text-muted-foreground">⌘N</span>
                 </Sidebar.MenuButton>
               </Sidebar.MenuItem>
+            </Sidebar.Menu>
+          </Sidebar.GroupContent>
+        </Sidebar.Group>
+
+        <!-- Global views. Each item selects an existing governed surface; it does
+             not perform the remote action named by its label. -->
+        <Sidebar.Group class="order-last py-1 border-t border-sidebar-border/30">
+          <Sidebar.GroupContent>
+            <Sidebar.Menu>
               <Sidebar.MenuItem>
                 <Sidebar.MenuButton class="h-7 text-xs gap-2" onclick={() => (activeSurface = 'Changes')}>
                   <HugeiconsIcon icon={FileEditIcon} strokeWidth={2} class="size-3.5" />
@@ -925,7 +932,7 @@
                 </Sidebar.MenuButton>
               </Sidebar.MenuItem>
               <Sidebar.MenuItem>
-                <Sidebar.MenuButton class="h-7 text-xs gap-2" onclick={() => (providerAuthOpen = true)}>
+                <Sidebar.MenuButton class="h-7 text-xs gap-2" onclick={() => (activeSurface = 'Integrations')}>
                   <HugeiconsIcon icon={Key01Icon} strokeWidth={2} class="size-3.5" />
                   <span>Connections</span>
                 </Sidebar.MenuButton>
@@ -1763,6 +1770,9 @@
       <Tabs.Content value="Changes" class="min-h-0 flex-1 overflow-auto"><ChangesSurface /></Tabs.Content>
       <Tabs.Content value="Verify" class="min-h-0 flex-1 overflow-auto"><VerifySurface /></Tabs.Content>
       <Tabs.Content value="Attention" class="min-h-0 flex-1 overflow-auto"><AttentionSurface /></Tabs.Content>
+      <Tabs.Content value="Integrations" class="min-h-0 flex-1 overflow-auto">
+        <IntegrationsSurface onopenconnections={() => (providerAuthOpen = true)} />
+      </Tabs.Content>
         </Tabs.Root>
         {#if activeSurface === 'Conversation' && editorPath}
           <EditorPane

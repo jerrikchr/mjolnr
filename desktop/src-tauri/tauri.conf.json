@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "mjolnr — AI Workspace",
+        "title": "mjolnr — AI Coding Harness",
         "width": 1280,
         "height": 840,
         "resizable": true,

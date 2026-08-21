@@ -14,6 +14,8 @@
     PlugSocketIcon
   } from '@hugeicons/core-free-icons';
   import { clientStore } from '$lib/runtime/client.svelte';
+  import { listen } from '@tauri-apps/api/event';
+  import { onMount } from 'svelte';
   import * as Dialog from '$lib/components/ui/dialog';
   import { Badge } from '$lib/components/ui/badge';
   import { Button } from '$lib/components/ui/button';
@@ -35,6 +37,13 @@
   let lmStudioToken = $state('');
   let apiKeyInput = $state('');
   let julesConnected = $state(false);
+
+  onMount(() => {
+    if (typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window)) return;
+    void listen<string>('mjolnr-oauth-authorize', (event) => {
+      window.open(event.payload, '_blank', 'noopener,noreferrer');
+    });
+  });
 
   type Card = {
     provider: string;
@@ -146,6 +155,21 @@
       lmStudioToken = '';
     } else {
       apiKeyInput = '';
+    }
+  }
+
+  function isGoogleOAuth(provider: string): boolean {
+    return provider === 'gemini-cli' || provider === 'antigravity';
+  }
+
+  async function doGoogleOAuth(provider: string) {
+    connectingError = null;
+    const result = await clientStore.authGoogleOAuth(provider);
+    if (result === true) {
+      connectingProvider = null;
+      await handleRefresh();
+    } else {
+      connectingError = result.error;
     }
   }
 
@@ -271,6 +295,9 @@
                           </Button>
                         {:else if provider.kind === 'unavailable'}
                           <Badge variant="destructive" class="text-[11px]">Unavailable</Badge>
+                        {:else if isGoogleOAuth(provider.provider)}
+                          <p class="text-[11px] font-medium text-foreground">Google account</p>
+                          <p class="text-[11px] text-muted-foreground">A browser window will open to complete OAuth securely.</p>
                         {:else}
                           <Button variant="outline" size="sm" class="h-6 text-[10px] gap-1 px-2" onclick={() => startConnect(provider.provider)}>
                             <HugeiconsIcon icon={PlugSocketIcon} strokeWidth={2} class="size-3" />
@@ -314,10 +341,10 @@
                           <Button
                             size="sm"
                             class="h-6 text-[10px] gap-1"
-                            onclick={provider.provider === 'lm-studio' ? doLmStudioConnect : () => doApiKeyConnect(provider.provider)}
+                            onclick={provider.provider === 'lm-studio' ? doLmStudioConnect : isGoogleOAuth(provider.provider) ? () => doGoogleOAuth(provider.provider) : () => doApiKeyConnect(provider.provider)}
                           >
                             <HugeiconsIcon icon={ArrowRight02Icon} strokeWidth={2} class="size-3" />
-                            {provider.provider === 'lm-studio' ? 'Connect LM Studio' : 'Save Key'}
+                            {provider.provider === 'lm-studio' ? 'Connect LM Studio' : isGoogleOAuth(provider.provider) ? 'Continue with Google' : 'Save Key'}
                           </Button>
                         </div>
                       </div>

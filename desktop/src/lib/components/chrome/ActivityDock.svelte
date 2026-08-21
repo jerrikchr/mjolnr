@@ -22,7 +22,7 @@
   import { cn } from '$lib/utils';
   import { clientStore } from '$lib/runtime/client.svelte';
 
-  type SurfaceId = 'Conversation' | 'Plan' | 'Board' | 'Changes' | 'Verify' | 'Attention';
+  type SurfaceId = 'Conversation' | 'Plan' | 'Board' | 'Changes' | 'Verify' | 'Attention' | 'Integrations';
 
   let {
     activeSurface = $bindable('Conversation'),

@@ -490,6 +490,34 @@ async fn auth_jules_login(key: String) -> Result<(), String> {
         .map_err(|error| format!("could not store Jules credential: {error}"))
 }
 
+/// Start the loopback OAuth flow for Google Gemini CLI or Antigravity. The
+/// authorize URL is emitted before waiting for the callback so the webview can
+/// open it while this command remains pending.
+#[tauri::command]
+async fn auth_google_oauth(provider: String, app: AppHandle) -> Result<(), String> {
+    let config = match provider.as_str() {
+        "gemini-cli" => &mjolnr::providers::gemini_cli::GEMINI_CLI,
+        "antigravity" => &mjolnr::providers::gemini_cli::ANTIGRAVITY,
+        _ => return Err("unsupported Google OAuth provider".to_owned()),
+    };
+    let provider_id = ProviderId::new(&provider);
+    let secrets: Arc<dyn SecretStore> = Arc::new(OsSecretStore::new());
+    mjolnr::providers::gemini_cli::browser_login(config, secrets, |prompt| {
+        let _ = app.emit("mjolnr-oauth-authorize", prompt.authorize_url);
+    })
+    .await
+    .map(|_| ())
+    .map_err(|error| format!("{provider_id} OAuth failed: {error}"))
+}
+
+#[tauri::command]
+fn auth_jules_status() -> Result<bool, String> {
+    let secrets = OsSecretStore::new();
+    Ok(secrets
+        .resolve(&ProviderId::new("jules"), mjolnr::core::secrets::CredentialKind::ApiKey)
+        .is_ok())
+}
+
 /// Remove a stored credential for a provider, then trigger a catalog refresh.
 #[tauri::command]
 async fn auth_logout(
@@ -883,6 +911,8 @@ pub fn run() {
             auth_lm_studio_login,
             auth_api_key_login,
             auth_jules_login,
+            auth_google_oauth,
+            auth_jules_status,
             auth_logout,
             query_graph,
             query_board,
