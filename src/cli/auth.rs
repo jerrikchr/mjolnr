@@ -31,6 +31,7 @@ use crate::core::secrets::{
 /// debug a "missing credential" error with the credential sitting right there.
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
 pub enum AuthProvider {
+    Jules,
     Anthropic,
     Gemini,
     Openai,
@@ -62,6 +63,7 @@ pub enum AuthProvider {
 impl AuthProvider {
     fn id(self) -> ProviderId {
         match self {
+            Self::Jules => ProviderId::new("jules"),
             Self::Anthropic => ProviderId::new(crate::providers::anthropic::PROVIDER_ID),
             Self::Gemini => ProviderId::new(crate::providers::gemini::PROVIDER_ID),
             Self::Openai => ProviderId::new(crate::providers::openai::PROVIDER_ID),
@@ -372,6 +374,7 @@ fn login_oauth(provider: AuthProvider, secrets: &Arc<dyn SecretStore>) -> i32 {
 /// a provider without listing it here would make it invisible to `auth status`,
 /// and a credential you cannot see is one you cannot debug.
 const ALL_AUTH_PROVIDERS: &[AuthProvider] = &[
+    AuthProvider::Jules,
     AuthProvider::Anthropic,
     AuthProvider::Gemini,
     AuthProvider::Openai,

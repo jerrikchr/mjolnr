@@ -753,6 +753,7 @@ fn keyring_providers() -> Vec<ProviderId> {
         ProviderId::new(openai_codex::PROVIDER_ID),
         ProviderId::new(gemini::PROVIDER_ID),
         ProviderId::new(openrouter::PROVIDER_ID),
+        ProviderId::new("jules"),
         ProviderId::new(mjolnr::providers::gemini_cli::GEMINI_CLI_PROVIDER_ID),
         ProviderId::new(mjolnr::providers::gemini_cli::ANTIGRAVITY_PROVIDER_ID),
     ];
