@@ -22,6 +22,7 @@
 
 pub mod auth;
 pub mod init;
+pub mod jules;
 pub mod onboard;
 pub mod plugin;
 pub mod sessions;
@@ -99,10 +100,15 @@ impl Cli {
             // hand SQLite an empty file to "open", turning a mistyped path into
             // a brand-new empty store rather than an error — the difference
             // between "your sessions are gone" and "that path is wrong".
-            if let Some(parent) = file.parent().filter(|parent| !parent.as_os_str().is_empty()) {
-                std::fs::create_dir_all(parent).map_err(|error| paths::PathError::NotCreatable {
-                    path: parent.to_path_buf(),
-                    detail: error.to_string(),
+            if let Some(parent) = file
+                .parent()
+                .filter(|parent| !parent.as_os_str().is_empty())
+            {
+                std::fs::create_dir_all(parent).map_err(|error| {
+                    paths::PathError::NotCreatable {
+                        path: parent.to_path_buf(),
+                        detail: error.to_string(),
+                    }
                 })?;
             }
             return Ok(file.clone());
@@ -160,6 +166,10 @@ pub enum Command {
     /// Manage provider credentials.
     #[command(subcommand)]
     Auth(auth::AuthCommand),
+
+    /// Inspect the governed Google Jules cloud-agent connection.
+    #[command(subcommand)]
+    Jules(jules::JulesCommand),
 
     /// Set mjolnr up: connect a provider, confirm a model, assign roles, choose
     /// an identity and a theme, then write `.mjolnr/`. Nothing is written until
@@ -254,6 +264,7 @@ pub async fn run_with_store(command: Command, store: &sessions::Store) -> Result
         // Auth, Exec, Init, Onboard, and Plugin run before the store is opened; main removes
         // them from this path, so these arms are unreachable defence.
         Command::Auth(_)
+        | Command::Jules(_)
         | Command::Exec(_)
         | Command::Init { .. }
         | Command::Onboard

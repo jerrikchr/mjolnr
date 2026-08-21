@@ -109,6 +109,11 @@ fn main() -> ExitCode {
         return ExitCode::from(u8::try_from(code).unwrap_or(1));
     }
 
+    if let Some(Command::Jules(command)) = cli.command.take_if(is_jules) {
+        let code = cli::jules::run(command, &secrets);
+        return ExitCode::from(u8::try_from(code).unwrap_or(1));
+    }
+
     // Plugin scaffolding runs instead of the TUI and needs no database — only
     // the working directory it writes into (ADR-0016).
     if let Some(Command::Plugin(command)) = cli.command.take_if(is_plugin) {
@@ -263,6 +268,10 @@ fn onboarding_theme_step() -> cli::onboard::ThemeStep {
 
 fn is_auth(command: &mut Command) -> bool {
     matches!(command, Command::Auth(_))
+}
+
+fn is_jules(command: &mut Command) -> bool {
+    matches!(command, Command::Jules(_))
 }
 
 fn is_plugin(command: &mut Command) -> bool {
