@@ -1,5 +1,5 @@
 <!--
-  ProviderAuthModal: Connect Provider surface — Orca-inspired.
+  ProviderAuthModal: Connections surface — providers and cloud integrations.
   Searchable, grouped provider cards with inline auth forms.
 -->
 <script lang="ts">
@@ -41,7 +41,7 @@
     state: string;
     detail?: string;
     models: string[];
-    kind: 'connected' | 'connecting' | 'needsAuth' | 'disconnected' | 'unavailable';
+    kind: 'connected' | 'connecting' | 'needsAuth' | 'disconnected' | 'unavailable' | 'cloudAgent';
   };
 
   function cardKind(state: string): Card['kind'] {
@@ -88,7 +88,7 @@
       })),
       ...(snap.accounts.some((account) => account.provider === 'jules')
         ? []
-        : [{ provider: 'jules', state: julesConnected ? 'connected' : 'disconnected', models: [], kind: julesConnected ? 'connected' as const : 'disconnected' as const }])
+        : [{ provider: 'jules', state: julesConnected ? 'connected' : 'disconnected', models: [], kind: 'cloudAgent' as const }])
     ]
   );
 
@@ -105,7 +105,7 @@
   );
 
   let grouped = $derived((() => {
-    const order: Record<Card['kind'], number> = { connected: 0, connecting: 1, needsAuth: 2, unavailable: 3, disconnected: 4 };
+    const order: Record<Card['kind'], number> = { connected: 0, cloudAgent: 1, connecting: 2, needsAuth: 3, unavailable: 4, disconnected: 5 };
     const groups = new Map<Card['kind'], Card[]>();
     for (const card of filtered) {
       const bucket = groups.get(card.kind) ?? [];
@@ -119,6 +119,7 @@
 
   function kindLabel(kind: Card['kind']): string {
     switch (kind) {
+      case 'cloudAgent': return 'Cloud integrations';
       case 'connected': return 'Connected';
       case 'connecting': return 'Discovering';
       case 'needsAuth': return 'Needs Reauth';
@@ -191,7 +192,7 @@
       <div class="flex items-center justify-between gap-3">
         <Dialog.Title class="flex items-center gap-2.5 text-lg font-bold text-foreground">
           <HugeiconsIcon icon={SparklesIcon} strokeWidth={2} class="size-5 text-primary" />
-          <span>Connect Provider</span>
+          <span>Connections</span>
         </Dialog.Title>
         <Badge variant={connectedTotal > 0 ? 'default' : 'secondary'} class="font-mono text-xs shrink-0">
           {connectedTotal} connected · {cards.length} available
@@ -200,7 +201,7 @@
       <div class="relative mt-3">
         <HugeiconsIcon icon={Search01Icon} strokeWidth={2} class="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
         <Input
-          placeholder="Filter providers · e.g. lm-studio, local, openai"
+          placeholder="Filter connections · e.g. Jules, lm-studio, openai"
           class="h-8 pl-8 text-sm"
           bind:value={query}
         />
@@ -221,6 +222,7 @@
                   class="rounded-full px-2 py-0.5 text-[11px] font-semibold tracking-wide
                     {kind === 'connected' ? 'bg-gov-verified-bg text-gov-verified border border-gov-verified-border' : ''}
                     {kind === 'connecting' ? 'bg-gov-proposal-bg text-gov-proposal border border-gov-proposal-border' : ''}
+                    {kind === 'cloudAgent' ? 'bg-gov-proposal-bg text-gov-proposal border border-gov-proposal-border' : ''}
                     {kind === 'needsAuth' ? 'bg-gov-approval-bg text-gov-approval border border-gov-approval-border' : ''}
                     {kind === 'unavailable' ? 'bg-gov-refusal-bg text-gov-refusal border border-gov-refusal-border' : ''}
                     {kind === 'disconnected' ? 'bg-muted text-muted-foreground border border-border/60' : ''}"
