@@ -136,6 +136,48 @@ pub struct PastePrompt {
     pub authorize_url: String,
 }
 
+/// The browser half of Claude's paste-code OAuth flow. The verifier and state
+/// stay in memory until the owner completes the second step; neither is shown
+/// or persisted as a credential.
+#[derive(Debug, Clone)]
+pub struct PasteLoginSession {
+    pub authorize_url: String,
+    verifier: String,
+    state: String,
+}
+
+/// Start Claude's browser authorization without blocking on terminal input.
+pub fn begin_paste_login() -> Result<PasteLoginSession, OAuthError> {
+    begin_paste_login_at(OAuthEndpoints::default())
+}
+
+fn begin_paste_login_at(endpoints: OAuthEndpoints) -> Result<PasteLoginSession, OAuthError> {
+    let verifier = random_url_safe(32)?;
+    let challenge = base64_url(&sha2::Sha256::digest(verifier.as_bytes()));
+    let state = random_url_safe(32)?;
+    Ok(PasteLoginSession {
+        authorize_url: endpoints.authorize_url(&challenge, &state),
+        verifier,
+        state,
+    })
+}
+
+/// Complete a previously started Claude browser authorization.
+pub async fn complete_paste_login(
+    session: PasteLoginSession,
+    secrets: Arc<dyn SecretStore>,
+    pasted: String,
+) -> Result<i64, OAuthError> {
+    complete_paste_login_at(
+        reqwest::Client::new(),
+        OAuthEndpoints::default(),
+        session,
+        secrets,
+        pasted,
+    )
+    .await
+}
+
 #[derive(Debug, Serialize)]
 struct ExchangeRequest<'a> {
     grant_type: &'a str,
@@ -179,41 +221,27 @@ where
     F: FnOnce(PastePrompt),
     R: FnOnce() -> Result<String, OAuthError>,
 {
-    paste_login_at(
-        reqwest::Client::new(),
-        OAuthEndpoints::default(),
-        secrets,
-        announce,
-        read_code,
-    )
-    .await
-}
-
-async fn paste_login_at<F, R>(
-    client: reqwest::Client,
-    endpoints: OAuthEndpoints,
-    secrets: Arc<dyn SecretStore>,
-    announce: F,
-    read_code: R,
-) -> Result<i64, OAuthError>
-where
-    F: FnOnce(PastePrompt),
-    R: FnOnce() -> Result<String, OAuthError>,
-{
-    let verifier = random_url_safe(32)?;
-    let challenge = base64_url(&sha2::Sha256::digest(verifier.as_bytes()));
-    let state = random_url_safe(32)?;
-
+    let session = begin_paste_login()?;
     announce(PastePrompt {
-        authorize_url: endpoints.authorize_url(&challenge, &state),
+        authorize_url: session.authorize_url.clone(),
     });
     let pasted = read_code()?;
+    complete_paste_login(session, secrets, pasted).await
+}
+
+async fn complete_paste_login_at(
+    client: reqwest::Client,
+    endpoints: OAuthEndpoints,
+    session: PasteLoginSession,
+    secrets: Arc<dyn SecretStore>,
+    pasted: String,
+) -> Result<i64, OAuthError> {
     // The console page renders `code#state`; accept a bare code too.
     let (code, pasted_state) = match pasted.trim().split_once('#') {
         Some((code, state_part)) if !state_part.is_empty() => {
             (code.to_owned(), state_part.to_owned())
         }
-        _ => (pasted.trim().to_owned(), state.clone()),
+        _ => (pasted.trim().to_owned(), session.state.clone()),
     };
     if code.is_empty() {
         return Err(OAuthError::Protocol {
@@ -229,7 +257,7 @@ where
             code: &code,
             state: &pasted_state,
             redirect_uri: REDIRECT_URI,
-            code_verifier: &verifier,
+            code_verifier: &session.verifier,
         })
         .send()
         .await?;
@@ -555,19 +583,21 @@ mod tests {
             .await;
 
         let store = Arc::new(MemoryStore::default());
-        let mut seen_url = None;
-        let expires_at = paste_login_at(
+        let session =
+            begin_paste_login_at(OAuthEndpoints::for_test(server.uri())).expect("session");
+        let seen_url = session.authorize_url.clone();
+        let expires_at = complete_paste_login_at(
             reqwest::Client::new(),
             OAuthEndpoints::for_test(server.uri()),
+            session,
             Arc::clone(&store) as Arc<dyn SecretStore>,
-            |prompt| seen_url = Some(prompt.authorize_url),
-            || Ok("the-code#the-state".to_owned()),
+            "the-code#the-state".to_owned(),
         )
         .await
         .expect("login");
 
         assert!(expires_at > unix_time());
-        let url = seen_url.expect("announced");
+        let url = seen_url;
         assert!(url.contains("code_challenge_method=S256"), "{url}");
         assert!(url.contains(CLIENT_ID), "{url}");
         let stored = store

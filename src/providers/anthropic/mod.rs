@@ -5,7 +5,10 @@ mod stream;
 mod translate;
 mod wire;
 
-pub use oauth::{OAuthError, PastePrompt, paste_login};
+pub use oauth::{
+    OAuthError, PasteLoginSession, PastePrompt, begin_paste_login, complete_paste_login,
+    paste_login,
+};
 
 use std::sync::Arc;
 

@@ -5,6 +5,8 @@ import type {
   ClientEvent,
   ClientSnapshot,
   ClientUpdate,
+  ContextTaggedUpdate,
+  ClientProjectSummary,
   ClientDirectoryPage,
   ClientFileOpen,
   ClientEditorPreferences,
@@ -159,6 +161,8 @@ export class MjolnrClient {
   connected = $state<boolean>(false);
   lastError = $state<string | null>(null);
   streamingText = $state<string>('');
+  projects = $state<ClientProjectSummary[]>([]);
+  selectedContextId = $state<string | null>(null);
 
   private addWorktree(entry: WorktreeEntry) {
     this.worktrees = [...this.worktrees.slice(-(MAX_WORKTREES - 1)), entry];
@@ -207,11 +211,14 @@ export class MjolnrClient {
         // Fetch initial snapshot
         const snap = await invoke<ClientSnapshot>('get_snapshot');
         this.snapshot = snap;
+        await this.refreshProjects(invoke);
         this.connected = true;
 
         // Listen for updates from backend channel
-        await listen<ClientUpdate>('mjolnr-update', (event) => {
-          this.handleUpdate(event.payload);
+        await listen<ContextTaggedUpdate>('mjolnr-update', (event) => {
+          if (this.selectedContextId && event.payload.contextId !== this.selectedContextId) return;
+          this.selectedContextId = event.payload.contextId;
+          this.handleUpdate(event.payload.update);
         });
 
         // Trigger subscription channel setup
@@ -225,6 +232,12 @@ export class MjolnrClient {
       this.connected = false;
       this.lastError = 'Tauri IPC unavailable (browser mode)';
     }
+  }
+
+  private async refreshProjects(invoke: typeof import('@tauri-apps/api/core').invoke) {
+    this.projects = await invoke<ClientProjectSummary[]>('list_projects');
+    this.selectedContextId = this.projects.find((project) => project.selected)?.contextId ?? null;
+    this.snapshot = await invoke<ClientSnapshot>('get_snapshot');
   }
 
   handleUpdate(update: ClientUpdate) {
@@ -285,6 +298,7 @@ export class MjolnrClient {
       try {
         const { invoke } = await import('@tauri-apps/api/core');
         await invoke('dispatch_command', { command });
+        if (command.type === 'openProject') await this.refreshProjects(invoke);
         this.lastError = null;
         return null;
       } catch (err: unknown) {
@@ -297,6 +311,25 @@ export class MjolnrClient {
       code: null,
       message: 'Cannot dispatch command: Tauri IPC unavailable (browser mode)'
     };
+    this.lastError = refusal.message;
+    return refusal;
+  }
+
+  async selectProject(contextId: string): Promise<ClientRefusal | null> {
+    if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('select_project', { contextId });
+        await this.refreshProjects(invoke);
+        this.selectedContextId = contextId;
+        return null;
+      } catch (err: unknown) {
+        const refusal = describeRefusal(err);
+        this.lastError = refusal.message;
+        return refusal;
+      }
+    }
+    const refusal = { code: null, message: 'Cannot select project: Tauri IPC unavailable (browser mode)' };
     this.lastError = refusal.message;
     return refusal;
   }
@@ -605,6 +638,61 @@ export class MjolnrClient {
       try {
         const { invoke } = await import('@tauri-apps/api/core');
         await invoke('auth_google_oauth', { provider });
+        await this.dispatch({ type: 'requestSnapshot' });
+        return true;
+      } catch (err: unknown) {
+        const refusal = describeRefusal(err);
+        this.lastError = refusal.message;
+        return { error: refusal.message };
+      }
+    }
+    const msg = 'Tauri IPC unavailable (browser mode)';
+    this.lastError = msg;
+    return { error: msg };
+  }
+
+  /** Start the Codex subscription device flow, then refresh discovered models. */
+  async authCodexOAuth(): Promise<true | { error: string }> {
+    if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('auth_codex_oauth');
+        await this.dispatch({ type: 'requestSnapshot' });
+        return true;
+      } catch (err: unknown) {
+        const refusal = describeRefusal(err);
+        this.lastError = refusal.message;
+        return { error: refusal.message };
+      }
+    }
+    const msg = 'Tauri IPC unavailable (browser mode)';
+    this.lastError = msg;
+    return { error: msg };
+  }
+
+  /** Start Claude's paste-code flow. Completion is submitted separately. */
+  async authAnthropicOAuthStart(): Promise<true | { error: string }> {
+    if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('auth_anthropic_oauth_start');
+        return true;
+      } catch (err: unknown) {
+        const refusal = describeRefusal(err);
+        this.lastError = refusal.message;
+        return { error: refusal.message };
+      }
+    }
+    const msg = 'Tauri IPC unavailable (browser mode)';
+    this.lastError = msg;
+    return { error: msg };
+  }
+
+  async authAnthropicOAuthComplete(code: string): Promise<true | { error: string }> {
+    if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('auth_anthropic_oauth_complete', { code });
         await this.dispatch({ type: 'requestSnapshot' });
         return true;
       } catch (err: unknown) {

@@ -245,6 +245,7 @@ pub fn session_summary_to_client(summary: &SessionSummary) -> ClientSessionSumma
     ClientSessionSummary {
         id: summary.id.to_string(),
         title: summary.title.clone(),
+        project_root: summary.project_root.to_string_lossy().into_owned(),
         status: summary.status.as_str().to_owned(),
         rollup_status: rollup_status_for(summary),
         provider: summary.provider.as_ref().map(|id| id.as_str().to_owned()),
@@ -550,6 +551,7 @@ fn snapshot_sessions(snapshot: &RuntimeSnapshot) -> Vec<ClientSessionSummary> {
         .map(|s| ClientSessionSummary {
             id: s.id.to_string(),
             title: s.title.clone(),
+            project_root: s.project_root.to_string_lossy().into_owned(),
             status: s.status.as_str().to_owned(),
             rollup_status: rollup_status_for(s),
             provider: s

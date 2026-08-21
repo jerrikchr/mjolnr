@@ -607,6 +607,7 @@ fn session_summary_round_trips() {
     let summary = ClientSessionSummary {
         id: "s".to_owned(),
         title: "fix the bug".to_owned(),
+        project_root: "/work/project".to_owned(),
         status: "active".to_owned(),
         rollup_status: ClientRollupStatus::Running,
         provider: Some("gemini".to_owned()),

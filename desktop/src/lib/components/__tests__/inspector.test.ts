@@ -29,6 +29,7 @@ const baseSnapshot: ClientSnapshot = {
     {
       id: '0190d5f0-test-session',
       title: 'Active Session 1',
+      projectRoot: '/test/root',
       status: 'active',
       rollupStatus: 'running',
       provider: 'anthropic',

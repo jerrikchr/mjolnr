@@ -1,6 +1,6 @@
 <!--
-  ProviderAuthModal: Connections surface — providers and cloud integrations.
-  Searchable, grouped provider cards with inline auth forms.
+  ProviderConnectionsSurface: persistent connections view — providers and cloud
+  integrations. Searchable, grouped provider cards with inline auth forms.
 -->
 <script lang="ts">
   import { HugeiconsIcon } from '@hugeicons/svelte';
@@ -16,17 +16,10 @@
   import { clientStore } from '$lib/runtime/client.svelte';
   import { listen } from '@tauri-apps/api/event';
   import { onMount } from 'svelte';
-  import * as Dialog from '$lib/components/ui/dialog';
   import { Badge } from '$lib/components/ui/badge';
   import { Button } from '$lib/components/ui/button';
   import { Input } from '$lib/components/ui/input';
   import StatusOrb from './StatusOrb.svelte';
-
-  let {
-    open = $bindable(false)
-  }: {
-    open?: boolean;
-  } = $props();
 
   let snap = $derived(clientStore.snapshot);
   let refreshing = $state(false);
@@ -37,12 +30,17 @@
   let lmStudioToken = $state('');
   let apiKeyInput = $state('');
   let julesConnected = $state(false);
+  let oauthCodeInput = $state('');
+  let oauthPrompt = $state<{ provider: string; url: string; userCode?: string } | null>(null);
 
   onMount(() => {
     if (typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window)) return;
-    void listen<string>('mjolnr-oauth-authorize', (event) => {
-      window.open(event.payload, '_blank', 'noopener,noreferrer');
-    });
+    // Browser-mode tests can expose partial Tauri internals without the
+    // callback bridge. A missing bridge is unavailable integration state, not
+    // a reason to create an unhandled rejection during surface rendering.
+    void listen<{ provider: string; url: string; userCode?: string }>('mjolnr-oauth-authorize', (event) => {
+      oauthPrompt = event.payload;
+    }).catch(() => undefined);
   });
 
   type Card = {
@@ -84,22 +82,25 @@
 
   type ClientModel = { provider: string; model: string; displayName: string };
 
-  let cards: Card[] = $derived(
-    [
-      ...snap.accounts.map((account) => ({
-      provider: account.provider,
-      state: account.state,
-      detail: account.detail,
-      models: snap.models
-        .filter((m) => m.provider.toLowerCase() === account.provider.toLowerCase())
-        .map((m) => m.model),
-      kind: cardKind(account.state)
-      })),
-      ...(snap.accounts.some((account) => account.provider === 'jules')
-        ? []
-        : [{ provider: 'jules', state: julesConnected ? 'connected' : 'disconnected', models: [], kind: 'cloudAgent' as const }])
-    ]
-  );
+  const providerCatalog = ['openai-codex', 'anthropic', 'gemini-cli', 'antigravity', 'openai', 'gemini', 'openrouter', 'ollama', 'lm-studio'];
+  let cards: Card[] = $derived([
+    ...providerCatalog.map((provider) => {
+      const account = snap.accounts.find((candidate) => candidate.provider === provider);
+      return {
+        provider,
+        state: account?.state ?? 'disconnected',
+        detail: account?.detail,
+        models: snap.models.filter((model) => model.provider.toLowerCase() === provider).map((model) => model.model),
+        kind: cardKind(account?.state ?? 'disconnected')
+      };
+    }),
+    {
+      provider: 'jules',
+      state: julesConnected ? 'connected' : 'disconnected',
+      models: [],
+      kind: 'cloudAgent' as const
+    }
+  ]);
 
   let filtered = $derived(
     (() => {
@@ -156,10 +157,16 @@
     } else {
       apiKeyInput = '';
     }
+    oauthCodeInput = '';
+    oauthPrompt = null;
   }
 
   function isGoogleOAuth(provider: string): boolean {
     return provider === 'gemini-cli' || provider === 'antigravity';
+  }
+
+  function isOAuthProvider(provider: string): boolean {
+    return provider === 'anthropic' || provider === 'openai-codex' || isGoogleOAuth(provider);
   }
 
   async function doGoogleOAuth(provider: string) {
@@ -171,6 +178,32 @@
     } else {
       connectingError = result.error;
     }
+  }
+
+  async function doCodexOAuth() {
+    connectingError = null;
+    const result = await clientStore.authCodexOAuth();
+    if (result === true) {
+      connectingProvider = null;
+      oauthPrompt = null;
+      await handleRefresh();
+    } else connectingError = result.error;
+  }
+
+  async function doAnthropicOAuthStart() {
+    connectingError = null;
+    const result = await clientStore.authAnthropicOAuthStart();
+    if (result !== true) connectingError = result.error;
+  }
+
+  async function doAnthropicOAuthComplete() {
+    connectingError = null;
+    const result = await clientStore.authAnthropicOAuthComplete(oauthCodeInput);
+    if (result === true) {
+      connectingProvider = null;
+      oauthPrompt = null;
+      await handleRefresh();
+    } else connectingError = result.error;
   }
 
   function cancelConnect() {
@@ -210,18 +243,20 @@
   }
 </script>
 
-<Dialog.Root bind:open>
-  <Dialog.Content class="w-[min(96vw,980px)] max-w-[980px] sm:max-w-[980px] max-h-[88vh] overflow-hidden bg-card border-border/80 shadow-2xl p-0 gap-0 flex flex-col">
-      <Dialog.Header class="px-6 pt-5 pb-3 border-b border-border/50 shrink-0">
+<div class="mx-auto flex w-full max-w-6xl flex-col gap-5 p-6">
+      <div class="border-b border-border/50 pb-4">
       <div class="flex items-center justify-between gap-3">
-        <Dialog.Title class="flex items-center gap-2.5 text-lg font-bold text-foreground">
+        <h1 class="flex items-center gap-2.5 text-2xl font-bold tracking-tight text-foreground">
           <HugeiconsIcon icon={SparklesIcon} strokeWidth={2} class="size-5 text-primary" />
           <span>Connections</span>
-        </Dialog.Title>
+        </h1>
         <Badge variant={connectedTotal > 0 ? 'default' : 'secondary'} class="font-mono text-xs shrink-0">
           {connectedTotal} connected · {cards.length} available
         </Badge>
       </div>
+      <p class="mt-1 max-w-3xl text-sm text-muted-foreground">
+        Connect model providers, cloud agents, and governed tools. Each connection keeps its own trust and execution boundary.
+      </p>
       <div class="relative mt-3">
         <HugeiconsIcon icon={Search01Icon} strokeWidth={2} class="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
         <Input
@@ -230,9 +265,9 @@
           bind:value={query}
         />
       </div>
-    </Dialog.Header>
+      </div>
 
-    <div class="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6">
+    <div class="min-h-0 flex-1 overflow-y-auto">
       {#if filtered.length === 0}
         <div class="rounded-lg border border-dashed border-border/60 bg-muted/20 px-4 py-8 text-center text-sm text-muted-foreground">
           No provider matches that filter.
@@ -295,9 +330,13 @@
                           </Button>
                         {:else if provider.kind === 'unavailable'}
                           <Badge variant="destructive" class="text-[11px]">Unavailable</Badge>
-                        {:else if isGoogleOAuth(provider.provider)}
-                          <p class="text-[11px] font-medium text-foreground">Google account</p>
-                          <p class="text-[11px] text-muted-foreground">A browser window will open to complete OAuth securely.</p>
+                        {:else if isOAuthProvider(provider.provider)}
+                          <p class="text-[11px] font-medium text-foreground">Subscription OAuth</p>
+                          <p class="text-[11px] text-muted-foreground">Use the provider account already included with your subscription.</p>
+                          <Button variant="outline" size="sm" class="h-6 text-[10px] gap-1 px-2" onclick={() => startConnect(provider.provider)}>
+                            <HugeiconsIcon icon={PlugSocketIcon} strokeWidth={2} class="size-3" />
+                            Connect with OAuth
+                          </Button>
                         {:else}
                           <Button variant="outline" size="sm" class="h-6 text-[10px] gap-1 px-2" onclick={() => startConnect(provider.provider)}>
                             <HugeiconsIcon icon={PlugSocketIcon} strokeWidth={2} class="size-3" />
@@ -321,7 +360,20 @@
                     <!-- Inline auth form -->
                     {#if connectingProvider === provider.provider}
                       <div class="rounded-lg border border-primary/30 bg-muted/20 px-3 py-3 space-y-2.5">
-                        {#if provider.provider === 'lm-studio'}
+                        {#if isOAuthProvider(provider.provider)}
+                          <p class="text-[11px] font-medium text-foreground">
+                            {provider.provider === 'anthropic' ? 'Claude subscription login' : provider.provider === 'openai-codex' ? 'Codex subscription login' : 'Google account login'}
+                          </p>
+                          {#if oauthPrompt?.provider === provider.provider && provider.provider === 'openai-codex'}
+                            <p class="text-[11px] text-muted-foreground">A browser window is open. Enter this one-time code:</p>
+                            <code class="block rounded border border-border/60 bg-background px-2 py-1.5 font-mono text-xs font-semibold text-foreground">{oauthPrompt.userCode}</code>
+                          {:else if oauthPrompt?.provider === provider.provider && provider.provider === 'anthropic'}
+                            <p class="text-[11px] text-muted-foreground">Authorize in the browser, then paste the code shown on the final Claude page.</p>
+                            <Input placeholder="Paste code or code#state" class="h-7 text-xs" bind:value={oauthCodeInput} />
+                          {:else if oauthPrompt?.provider === provider.provider}
+                            <p class="text-[11px] text-muted-foreground">A browser window is open. Waiting for the OAuth callback…</p>
+                          {/if}
+                        {:else if provider.provider === 'lm-studio'}
                           <p class="text-[11px] font-medium text-foreground">LM Studio Server</p>
                           <div class="space-y-2">
                             <Input placeholder="Server address" class="h-7 text-xs" bind:value={lmStudioAddress} />
@@ -341,10 +393,22 @@
                           <Button
                             size="sm"
                             class="h-6 text-[10px] gap-1"
-                            onclick={provider.provider === 'lm-studio' ? doLmStudioConnect : isGoogleOAuth(provider.provider) ? () => doGoogleOAuth(provider.provider) : () => doApiKeyConnect(provider.provider)}
+                            onclick={provider.provider === 'lm-studio'
+                              ? doLmStudioConnect
+                              : provider.provider === 'openai-codex'
+                                ? doCodexOAuth
+                                : provider.provider === 'anthropic'
+                                  ? oauthPrompt?.provider === 'anthropic' ? doAnthropicOAuthComplete : doAnthropicOAuthStart
+                                  : isGoogleOAuth(provider.provider) ? () => doGoogleOAuth(provider.provider) : () => doApiKeyConnect(provider.provider)}
                           >
                             <HugeiconsIcon icon={ArrowRight02Icon} strokeWidth={2} class="size-3" />
-                            {provider.provider === 'lm-studio' ? 'Connect LM Studio' : isGoogleOAuth(provider.provider) ? 'Continue with Google' : 'Save Key'}
+                            {provider.provider === 'lm-studio'
+                              ? 'Connect LM Studio'
+                              : provider.provider === 'openai-codex'
+                                ? 'Open Codex login'
+                                : provider.provider === 'anthropic'
+                                  ? oauthPrompt?.provider === 'anthropic' ? 'Complete Claude login' : 'Open Claude login'
+                                  : isGoogleOAuth(provider.provider) ? 'Continue with Google' : 'Save Key'}
                           </Button>
                         </div>
                       </div>
@@ -375,17 +439,15 @@
         </div>
       {/if}
 
-      <div class="px-3 py-1.5 text-[11px] text-muted-foreground border-t border-border/30 bg-muted/20 -mx-4 sm:-mx-6 -mb-4 mt-4 flex items-center justify-between">
+      <div class="px-3 py-2 text-[11px] text-muted-foreground border-t border-border/30 bg-muted/20 -mb-1 mt-4 flex items-center justify-between">
         <span>Env first → stored file · Local servers: <code class="font-mono">.mjolnr/providers/lm-studio.url</code></span>
       </div>
     </div>
 
-    <Dialog.Footer class="flex flex-wrap items-center justify-end gap-2 border-t border-border/50 px-6 py-3 shrink-0">
+    <div class="flex flex-wrap items-center justify-end gap-2 border-t border-border/50 pt-4">
       <Button variant="outline" size="sm" class="gap-1.5 text-xs font-semibold" disabled={refreshing} onclick={handleRefresh}>
         <HugeiconsIcon icon={RefreshIcon} strokeWidth={2} class={refreshing ? 'size-3.5 animate-spin' : 'size-3.5'} />
         <span>{refreshing ? 'Checking…' : 'Check & Refresh'}</span>
       </Button>
-      <Button size="sm" class="text-xs font-semibold" onclick={() => (open = false)}>Done</Button>
-    </Dialog.Footer>
-  </Dialog.Content>
-</Dialog.Root>
+    </div>
+</div>

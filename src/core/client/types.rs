@@ -403,6 +403,7 @@ pub enum ClientRollupStatus {
 pub struct ClientSessionSummary {
     pub id: String,
     pub title: String,
+    pub project_root: String,
     pub status: String,
     pub rollup_status: ClientRollupStatus,
     pub provider: Option<String>,

@@ -3,19 +3,21 @@
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 #![allow(clippy::doc_markdown)]
 
+mod coordinator;
+
+use std::io::Write as _;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::io::Write as _;
 
-use serde::{Deserialize, Serialize};
 use mjolnr::context::{DiscoveryConfig, ProjectContext};
-use mjolnr::core::client::{ClientCommand, ClientSnapshot};
-use mjolnr::core::client::workspace::ClientEditorPreferences;
 use mjolnr::core::client::terminal::{
     ClientTerminalInput, ClientTerminalLayout, ClientTerminalResize, ClientTerminalScroll,
     ClientTerminalSearch, ClientTerminalSnapshot,
 };
+use mjolnr::core::client::workspace::ClientEditorPreferences;
+use mjolnr::core::client::{ClientCommand, ClientSnapshot};
 use mjolnr::core::model::ProviderId;
 use mjolnr::core::provider::Provider;
 use mjolnr::core::routing::RouteTable;
@@ -31,8 +33,12 @@ use mjolnr::runtime::client_bridge::ClientBridge;
 use mjolnr::runtime::terminal::TerminalManager;
 use mjolnr::store::secrets::OsSecretStore;
 use mjolnr::store::sqlite::SqliteEventStore;
+use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, State};
+use tokio::sync::Mutex;
 use tracing::{error, info};
+
+use coordinator::{ProjectSummary, RuntimeCoordinator};
 
 #[derive(Debug, Clone, Serialize, Deserialize, thiserror::Error)]
 #[serde(tag = "type", content = "detail", rename_all = "camelCase")]
@@ -58,8 +64,45 @@ pub enum DesktopBridgeError {
 }
 
 pub struct AppState {
-    pub bridge: Arc<ClientBridge>,
+    pub bridge: Arc<RuntimeCoordinator>,
     pub terminal: Arc<TerminalManager>,
+    pending_anthropic_oauth: Mutex<Option<mjolnr::providers::anthropic::PasteLoginSession>>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct OAuthPromptEvent {
+    provider: String,
+    url: String,
+    user_code: Option<String>,
+}
+
+/// Open an owner-provided authorization URL in the operating system browser.
+/// This is deliberately an argv-based launch; the URL is never interpreted as
+/// shell text and the webview is not relied on to implement external opening.
+fn open_external_browser(url: &str) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    let mut command = {
+        let mut command = Command::new("open");
+        command.arg(url);
+        command
+    };
+    #[cfg(target_os = "windows")]
+    let mut command = {
+        let mut command = Command::new("cmd");
+        command.args(["/C", "start", "", url]);
+        command
+    };
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let mut command = {
+        let mut command = Command::new("xdg-open");
+        command.arg(url);
+        command
+    };
+    command
+        .spawn()
+        .map(|_| ())
+        .map_err(|error| format!("could not open the system browser: {error}"))
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -110,12 +153,13 @@ fn onboarding_status(
     files
         .iter()
         .map(|file| {
-            let target = mjolnr::policy::paths::for_write(root, &file.relative_path).map_err(
-                |refusal| DesktopBridgeError::Refused {
-                    code: Some(refusal.code.as_str().to_owned()),
-                    message: refusal.detail,
-                },
-            )?;
+            let target =
+                mjolnr::policy::paths::for_write(root, &file.relative_path).map_err(|refusal| {
+                    DesktopBridgeError::Refused {
+                        code: Some(refusal.code.as_str().to_owned()),
+                        message: refusal.detail,
+                    }
+                })?;
             Ok(OnboardingFileStatus {
                 path: file.relative_path.to_string_lossy().into_owned(),
                 action: if target.exists() {
@@ -147,12 +191,13 @@ fn onboarding_write(draft: OnboardingDraft) -> Result<OnboardingPreview, Desktop
     let root = onboarding_root(&draft)?;
     let files = onboarding_files(&draft);
     for file in &files {
-        let target = mjolnr::policy::paths::for_write(&root, &file.relative_path).map_err(
-            |refusal| DesktopBridgeError::Refused {
-                code: Some(refusal.code.as_str().to_owned()),
-                message: refusal.detail,
-            },
-        )?;
+        let target =
+            mjolnr::policy::paths::for_write(&root, &file.relative_path).map_err(|refusal| {
+                DesktopBridgeError::Refused {
+                    code: Some(refusal.code.as_str().to_owned()),
+                    message: refusal.detail,
+                }
+            })?;
         if target.exists() {
             continue;
         }
@@ -164,12 +209,13 @@ fn onboarding_write(draft: OnboardingDraft) -> Result<OnboardingPreview, Desktop
                 ))
             })?;
         }
-        let target = mjolnr::policy::paths::for_write(&root, &file.relative_path).map_err(
-            |refusal| DesktopBridgeError::Refused {
-                code: Some(refusal.code.as_str().to_owned()),
-                message: refusal.detail,
-            },
-        )?;
+        let target =
+            mjolnr::policy::paths::for_write(&root, &file.relative_path).map_err(|refusal| {
+                DesktopBridgeError::Refused {
+                    code: Some(refusal.code.as_str().to_owned()),
+                    message: refusal.detail,
+                }
+            })?;
         let mut handle = match std::fs::OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -192,12 +238,14 @@ fn onboarding_write(draft: OnboardingDraft) -> Result<OnboardingPreview, Desktop
                 )));
             }
         };
-        handle.write_all(file.contents.as_bytes()).map_err(|error| {
-            DesktopBridgeError::Initialization(format!(
-                "write onboarding file {}: {error}",
-                file.relative_path.display()
-            ))
-        })?;
+        handle
+            .write_all(file.contents.as_bytes())
+            .map_err(|error| {
+                DesktopBridgeError::Initialization(format!(
+                    "write onboarding file {}: {error}",
+                    file.relative_path.display()
+                ))
+            })?;
     }
 
     Ok(OnboardingPreview {
@@ -216,9 +264,7 @@ async fn dispatch_command(
         .dispatch(command)
         .await
         .map_err(|error| DesktopBridgeError::Refused {
-            code: error
-                .reason_code()
-                .map(|code| code.as_str().to_owned()),
+            code: error.reason_code().map(|code| code.as_str().to_owned()),
             message: error.to_string(),
         })
 }
@@ -226,6 +272,26 @@ async fn dispatch_command(
 #[tauri::command]
 async fn get_snapshot(state: State<'_, AppState>) -> Result<ClientSnapshot, DesktopBridgeError> {
     Ok(state.bridge.snapshot())
+}
+
+#[tauri::command]
+async fn list_projects(state: State<'_, AppState>) -> Result<Vec<ProjectSummary>, DesktopBridgeError> {
+    Ok(state.bridge.list_projects().await)
+}
+
+#[tauri::command]
+async fn select_project(
+    context_id: String,
+    state: State<'_, AppState>,
+) -> Result<(), DesktopBridgeError> {
+    state
+        .bridge
+        .select_project(context_id)
+        .await
+        .map_err(|error| DesktopBridgeError::Refused {
+            code: error.reason_code().map(|code| code.as_str().to_owned()),
+            message: error.to_string(),
+        })
 }
 
 /// One page of deterministic workspace search (Phase D4 client half).
@@ -299,12 +365,11 @@ fn editor_preferences_path(root: &Path) -> Result<PathBuf, DesktopBridgeError> {
     if !mjolnr_dir.exists() {
         return Ok(mjolnr_dir.join(EDITOR_PREFERENCES_FILE));
     }
-    let mjolnr_dir = std::fs::canonicalize(&mjolnr_dir).map_err(|error| {
-        DesktopBridgeError::Refused {
+    let mjolnr_dir =
+        std::fs::canonicalize(&mjolnr_dir).map_err(|error| DesktopBridgeError::Refused {
             code: Some("PATH_OUTSIDE_WORKSPACE".to_owned()),
             message: format!("cannot validate the .mjolnr preferences directory: {error}"),
-        }
-    })?;
+        })?;
     if !mjolnr_dir.starts_with(&root) {
         return Err(DesktopBridgeError::Refused {
             code: Some("PATH_OUTSIDE_WORKSPACE".to_owned()),
@@ -320,12 +385,11 @@ fn editor_preferences_path(root: &Path) -> Result<PathBuf, DesktopBridgeError> {
             });
         }
         Ok(_) => {
-            let existing = std::fs::canonicalize(&path).map_err(|error| {
-                DesktopBridgeError::Refused {
+            let existing =
+                std::fs::canonicalize(&path).map_err(|error| DesktopBridgeError::Refused {
                     code: Some("PATH_OUTSIDE_WORKSPACE".to_owned()),
                     message: format!("cannot validate the editor preferences file: {error}"),
-                }
-            })?;
+                })?;
             if !existing.starts_with(&root) {
                 return Err(DesktopBridgeError::Refused {
                     code: Some("PATH_OUTSIDE_WORKSPACE".to_owned()),
@@ -344,9 +408,7 @@ fn editor_preferences_path(root: &Path) -> Result<PathBuf, DesktopBridgeError> {
     Ok(path)
 }
 
-fn load_editor_preferences(
-    root: &Path,
-) -> Result<ClientEditorPreferences, DesktopBridgeError> {
+fn load_editor_preferences(root: &Path) -> Result<ClientEditorPreferences, DesktopBridgeError> {
     let path = editor_preferences_path(root)?;
     let bytes = match std::fs::read(&path) {
         Ok(bytes) => bytes,
@@ -359,11 +421,9 @@ fn load_editor_preferences(
             )));
         }
     };
-    serde_json::from_slice(&bytes).map_err(|error| {
-        DesktopBridgeError::Refused {
-            code: Some("SCHEMA_INVALID".to_owned()),
-            message: format!("editor preferences are invalid: {error}"),
-        }
+    serde_json::from_slice(&bytes).map_err(|error| DesktopBridgeError::Refused {
+        code: Some("SCHEMA_INVALID".to_owned()),
+        message: format!("editor preferences are invalid: {error}"),
     })
 }
 
@@ -374,7 +434,9 @@ fn save_editor_preferences(
     let path = editor_preferences_path(root)?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|error| {
-            DesktopBridgeError::Initialization(format!("create editor preferences directory: {error}"))
+            DesktopBridgeError::Initialization(format!(
+                "create editor preferences directory: {error}"
+            ))
         })?;
     }
     let path = editor_preferences_path(root)?;
@@ -414,8 +476,8 @@ async fn auth_lm_studio_login(
     token: String,
     state: State<'_, AppState>,
 ) -> Result<String, String> {
-    let workspace = std::env::current_dir()
-        .map_err(|error| format!("could not resolve project: {error}"))?;
+    let workspace =
+        std::env::current_dir().map_err(|error| format!("could not resolve project: {error}"))?;
 
     let endpoint = if address == "default" {
         mjolnr::providers::openai_compat::configured_lm_studio_base_url(&workspace)?
@@ -474,9 +536,9 @@ async fn auth_jules_login(key: String) -> Result<(), String> {
     if key.trim().is_empty() {
         return Err("no Jules API key entered".to_owned());
     }
-    let client = mjolnr::integrations::jules::JulesClient::new(
-        mjolnr::core::secrets::Secret::new(key.clone()),
-    );
+    let client = mjolnr::integrations::jules::JulesClient::new(mjolnr::core::secrets::Secret::new(
+        key.clone(),
+    ));
     client
         .list_sources()
         .await
@@ -494,7 +556,11 @@ async fn auth_jules_login(key: String) -> Result<(), String> {
 /// authorize URL is emitted before waiting for the callback so the webview can
 /// open it while this command remains pending.
 #[tauri::command]
-async fn auth_google_oauth(provider: String, app: AppHandle) -> Result<(), String> {
+async fn auth_google_oauth(
+    provider: String,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
     let config = match provider.as_str() {
         "gemini-cli" => &mjolnr::providers::gemini_cli::GEMINI_CLI,
         "antigravity" => &mjolnr::providers::gemini_cli::ANTIGRAVITY,
@@ -503,27 +569,108 @@ async fn auth_google_oauth(provider: String, app: AppHandle) -> Result<(), Strin
     let provider_id = ProviderId::new(&provider);
     let secrets: Arc<dyn SecretStore> = Arc::new(OsSecretStore::new());
     mjolnr::providers::gemini_cli::browser_login(config, secrets, |prompt| {
-        let _ = app.emit("mjolnr-oauth-authorize", prompt.authorize_url);
+        let _ = open_external_browser(&prompt.authorize_url);
+        let _ = app.emit(
+            "mjolnr-oauth-authorize",
+            OAuthPromptEvent {
+                provider: provider.clone(),
+                url: prompt.authorize_url,
+                user_code: None,
+            },
+        );
     })
     .await
     .map(|_| ())
-    .map_err(|error| format!("{provider_id} OAuth failed: {error}"))
+    .map_err(|error| format!("{provider_id} OAuth failed: {error}"))?;
+    state
+        .bridge
+        .dispatch(ClientCommand::RefreshCredentials)
+        .await
+        .map_err(|error| format!("credential refresh failed: {error}"))
+}
+
+/// Start Codex's device flow and emit the verification URL plus one-time code
+/// before polling begins. The command remains pending until the browser login
+/// completes, while the client renders the prompt as durable in-progress state.
+#[tauri::command]
+async fn auth_codex_oauth(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    let secrets: Arc<dyn SecretStore> = Arc::new(OsSecretStore::new());
+    mjolnr::providers::openai_codex::device_login(secrets, |prompt| {
+        let _ = open_external_browser(&prompt.verification_url);
+        let _ = app.emit(
+            "mjolnr-oauth-authorize",
+            OAuthPromptEvent {
+                provider: "openai-codex".to_owned(),
+                url: prompt.verification_url,
+                user_code: Some(prompt.user_code),
+            },
+        );
+    })
+    .await
+    .map_err(|error| format!("openai-codex OAuth failed: {error}"))?;
+    state
+        .bridge
+        .dispatch(ClientCommand::RefreshCredentials)
+        .await
+        .map_err(|error| format!("credential refresh failed: {error}"))
+}
+
+/// Begin Claude's browser authorization. Claude displays the final code on
+/// its callback page, so completion is a second explicit client command.
+#[tauri::command]
+async fn auth_anthropic_oauth_start(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let session = mjolnr::providers::anthropic::begin_paste_login()
+        .map_err(|error| format!("could not start anthropic OAuth: {error}"))?;
+    let event = OAuthPromptEvent {
+        provider: "anthropic".to_owned(),
+        url: session.authorize_url.clone(),
+        user_code: None,
+    };
+    *state.pending_anthropic_oauth.lock().await = Some(session);
+    open_external_browser(&event.url)?;
+    app.emit("mjolnr-oauth-authorize", event)
+        .map_err(|error| format!("could not open anthropic authorization: {error}"))
+}
+
+#[tauri::command]
+async fn auth_anthropic_oauth_complete(
+    code: String,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let session = state
+        .pending_anthropic_oauth
+        .lock()
+        .await
+        .take()
+        .ok_or_else(|| "no anthropic OAuth flow is waiting for a code".to_owned())?;
+    let secrets: Arc<dyn SecretStore> = Arc::new(OsSecretStore::new());
+    mjolnr::providers::anthropic::complete_paste_login(session, secrets, code)
+        .await
+        .map_err(|error| format!("anthropic OAuth failed: {error}"))?;
+    state
+        .bridge
+        .dispatch(ClientCommand::RefreshCredentials)
+        .await
+        .map_err(|error| format!("credential refresh failed: {error}"))
 }
 
 #[tauri::command]
 fn auth_jules_status() -> Result<bool, String> {
     let secrets = OsSecretStore::new();
     Ok(secrets
-        .resolve(&ProviderId::new("jules"), mjolnr::core::secrets::CredentialKind::ApiKey)
+        .resolve(
+            &ProviderId::new("jules"),
+            mjolnr::core::secrets::CredentialKind::ApiKey,
+        )
         .is_ok())
 }
 
 /// Remove a stored credential for a provider, then trigger a catalog refresh.
 #[tauri::command]
-async fn auth_logout(
-    provider: String,
-    state: State<'_, AppState>,
-) -> Result<(), String> {
+async fn auth_logout(provider: String, state: State<'_, AppState>) -> Result<(), String> {
     let secrets = OsSecretStore::new();
     let id = ProviderId::new(&provider);
     secrets
@@ -747,7 +894,7 @@ async fn subscribe_updates(
     state: State<'_, AppState>,
 ) -> Result<(), DesktopBridgeError> {
     let bridge = Arc::clone(&state.bridge);
-    if let Some(mut rx) = bridge.take_updates() {
+    if let Some(mut rx) = bridge.take_tagged_updates() {
         tokio::spawn(async move {
             while let Some(update) = rx.recv().await {
                 if app.emit("mjolnr-update", &update).is_err() {
@@ -798,7 +945,7 @@ fn provider_registry(secrets: &Arc<dyn SecretStore>) -> Vec<Arc<dyn Provider>> {
 /// `runtime` must be entered (or `block_on` called) before invoking.
 /// Used by `run()` for the real Tauri app and by the native smoke
 /// harness to exercise the bridge without a window.
-pub async fn init_bridge(database_path: PathBuf) -> Result<Arc<ClientBridge>, DesktopBridgeError> {
+pub async fn init_bridge(database_path: PathBuf) -> Result<Arc<RuntimeCoordinator>, DesktopBridgeError> {
     if let Some(parent) = database_path.parent() {
         tokio::fs::create_dir_all(parent).await.map_err(|e| {
             DesktopBridgeError::Initialization(format!("create data directory: {e}"))
@@ -814,7 +961,7 @@ pub async fn init_bridge(database_path: PathBuf) -> Result<Arc<ClientBridge>, De
         .parent()
         .and_then(|p| p.parent())
         .map_or_else(|| PathBuf::from("."), |p| p.to_path_buf());
-    let discovery = DiscoveryConfig::for_workspace(workspace_root)
+    let discovery = DiscoveryConfig::for_workspace(workspace_root.clone())
         .map_err(|e| DesktopBridgeError::Initialization(format!("discovery config: {e}")))?;
 
     let project_context = tokio::task::spawn_blocking(move || ProjectContext::discover(discovery))
@@ -828,8 +975,8 @@ pub async fn init_bridge(database_path: PathBuf) -> Result<Arc<ClientBridge>, De
     let providers = provider_registry(&secrets);
 
     let runtime = Runtime::spawn_with_tools_project_context_and_triggers(
-        providers,
-        store,
+        providers.clone(),
+        Arc::clone(&store),
         mjolnr::tools::ToolRegistry::default(),
         project_context,
         Arc::new(Vec::new()),
@@ -838,7 +985,13 @@ pub async fn init_bridge(database_path: PathBuf) -> Result<Arc<ClientBridge>, De
     );
 
     let bridge_runtime: Arc<dyn MjolnrRuntime> = Arc::new(runtime);
-    Ok(Arc::new(ClientBridge::start(bridge_runtime)))
+    let bridge = Arc::new(ClientBridge::start(bridge_runtime));
+    Ok(RuntimeCoordinator::from_initial(
+        format!("bootstrap:{}", workspace_root.to_string_lossy()),
+        bridge,
+        store,
+        providers,
+    ))
 }
 
 /// The desktop app always stores its database in the platform data directory
@@ -876,7 +1029,7 @@ pub fn run() {
             return;
         }
     };
-    let setup_result: Result<Arc<ClientBridge>, DesktopBridgeError> =
+    let setup_result: Result<Arc<RuntimeCoordinator>, DesktopBridgeError> =
         tokio_runtime.block_on(init_bridge(database_path));
 
     let bridge = match setup_result {
@@ -891,6 +1044,7 @@ pub fn run() {
     let state = AppState {
         bridge: Arc::clone(&bridge),
         terminal: Arc::clone(&terminal_manager),
+        pending_anthropic_oauth: Mutex::new(None),
     };
 
     let shutdown_executed = Arc::new(AtomicBool::new(false));
@@ -901,6 +1055,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             dispatch_command,
             get_snapshot,
+            list_projects,
+            select_project,
             onboarding_preview,
             onboarding_write,
             search_workspace,
@@ -912,6 +1068,9 @@ pub fn run() {
             auth_api_key_login,
             auth_jules_login,
             auth_google_oauth,
+            auth_codex_oauth,
+            auth_anthropic_oauth_start,
+            auth_anthropic_oauth_complete,
             auth_jules_status,
             auth_logout,
             query_graph,
@@ -941,7 +1100,12 @@ pub fn run() {
     app.run(move |_app_handle, event| {
         if matches!(
             event,
-            tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit
+            tauri::RunEvent::ExitRequested { .. }
+                | tauri::RunEvent::Exit
+                | tauri::RunEvent::WindowEvent {
+                    event: tauri::WindowEvent::CloseRequested { .. },
+                    ..
+                }
         ) && !shutdown_executed.swap(true, Ordering::SeqCst)
         {
             let bridge_clone = Arc::clone(&bridge);
@@ -1132,7 +1296,8 @@ mod tests {
             }
             async fn query_board(
                 &self,
-            ) -> Result<mjolnr::core::frontier::BoardOverview, mjolnr::core::error::MjolnrError> {
+            ) -> Result<mjolnr::core::frontier::BoardOverview, mjolnr::core::error::MjolnrError>
+            {
                 Err(mjolnr::core::error::MjolnrError::workspace_refused(
                     mjolnr::core::error::ReasonCode::WorkspaceCapabilityUnavailable,
                     "this dummy runtime has no board projection",
@@ -1231,7 +1396,8 @@ mod tests {
             }
             async fn query_board(
                 &self,
-            ) -> Result<mjolnr::core::frontier::BoardOverview, mjolnr::core::error::MjolnrError> {
+            ) -> Result<mjolnr::core::frontier::BoardOverview, mjolnr::core::error::MjolnrError>
+            {
                 Err(mjolnr::core::error::MjolnrError::workspace_refused(
                     mjolnr::core::error::ReasonCode::WorkspaceCapabilityUnavailable,
                     "this dummy runtime has no board projection",

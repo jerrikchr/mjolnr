@@ -12,6 +12,7 @@
     FileEditIcon,
     CheckmarkCircle02Icon,
     Notification02Icon,
+    PuzzleIcon,
     SearchIcon,
     BotIcon,
     MaskTheater01Icon,
@@ -52,7 +53,8 @@
     { id: 'Board', label: 'Board', shortcut: '⌘3', icon: DashboardSquare01Icon },
     { id: 'Changes', label: 'Changes & Git', shortcut: '⌘4', icon: FileEditIcon },
     { id: 'Verify', label: 'Verify', shortcut: '⌘5', icon: CheckmarkCircle02Icon },
-    { id: 'Attention', label: 'Attention', shortcut: '⌘6', icon: Notification02Icon }
+    { id: 'Attention', label: 'Attention', shortcut: '⌘6', icon: Notification02Icon },
+    { id: 'Integrations', label: 'Connections', shortcut: '⌘7', icon: PuzzleIcon }
   ];
 </script>
 

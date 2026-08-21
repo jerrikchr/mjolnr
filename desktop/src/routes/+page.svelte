@@ -25,6 +25,7 @@
     SentIcon,
     SparklesIcon,
     Key01Icon,
+    PuzzleIcon,
     StopIcon,
     Sun01Icon,
     Task01Icon,
@@ -39,7 +40,6 @@
   import AuroraBackground from '$lib/components/chrome/AuroraBackground.svelte';
   import GovernanceModal from '$lib/components/chrome/GovernanceModal.svelte';
   import ModelPicker from '$lib/components/chrome/ModelPicker.svelte';
-  import ProviderAuthModal from '$lib/components/chrome/ProviderAuthModal.svelte';
   import StatusOrb from '$lib/components/chrome/StatusOrb.svelte';
   import AttentionSurface from '$lib/components/surfaces/AttentionSurface.svelte';
   import BoardPane from '$lib/components/board/BoardPane.svelte';
@@ -92,7 +92,8 @@
     { value: 'Board', label: 'Board', shortcut: '⌘3', icon: DashboardSquare01Icon },
     { value: 'Changes', label: 'Changes', shortcut: '⌘4', icon: FileEditIcon },
     { value: 'Verify', label: 'Verify', shortcut: '⌘5', icon: CheckmarkCircle02Icon },
-    { value: 'Attention', label: 'Attention', shortcut: '⌘6', icon: Notification02Icon }
+    { value: 'Attention', label: 'Attention', shortcut: '⌘6', icon: Notification02Icon },
+    { value: 'Integrations', label: 'Connections', shortcut: '⌘7', icon: PuzzleIcon }
   ];
 
   // A real, local filter over the session list — not the §D4 recorded-work
@@ -113,8 +114,6 @@
   let paletteOpen = $state(false);
   let governanceOpen = $state(false);
   let governanceTab = $state('council');
-  let providerAuthOpen = $state(false);
-  let gitAccordionOpen = $state(false);
   let sidebarOpen = $state(true);
   let showProjectAdvanced = $state(false);
   let explorerOpen = $state(false);
@@ -169,6 +168,19 @@
   let fileSearching = $state(false);
   let splitPreset = $state<'none' | 'changes' | 'verify' | 'inspector' | 'graph'>('none');
   let activeSurface = $state<SurfaceId>('Conversation');
+
+  function openIntegrations() {
+    activeSurface = 'Integrations';
+  }
+
+  function restoreProject(root: string) {
+    void clientStore.dispatch({ type: 'openProject', root });
+  }
+
+  function selectModel(choice: { provider: string; model: string }) {
+    selectedProvider = choice.provider;
+    selectedModel = choice.model;
+  }
 
   /**
    * Prefer the window whose pool actually covers the active model
@@ -263,8 +275,15 @@
       ? snap.workspaceRoot.replace(/\/+$/, '').split('/').pop() || snap.workspaceRoot
       : null
   );
+  let activeSessionSummary = $derived(snap.sessions.find((session) => session.id === snap.session));
+  let activeSessionTitle = $derived(
+    activeSessionSummary?.title || (snap.session ? `Session ${snap.session.slice(0, 8)}` : 'Conversation')
+  );
   let workspaceName = $derived(projectName ? `${projectName} workspace` : 'Local workspace');
   let recentSessions = $derived(snap.sessions.filter((session) => session.rollupStatus === 'completed'));
+  let recentProjectRoots = $derived(
+    Array.from(new Set(snap.sessions.map((session) => session.projectRoot).filter(Boolean))).slice(0, 5)
+  );
   let isConnected = $derived(clientStore.connected);
   let streamingText = $derived(clientStore.streamingText);
   let quotaWindow = $derived(relevantQuotaWindow(snap.quota));
@@ -306,9 +325,6 @@
     Array.from(new Map(snap.models.map((choice) => [choice.provider, choice.provider])).values())
   );
   let modelChoices = $derived(snap.models.filter((choice) => choice.provider === selectedProvider));
-  let selectedModelLabel = $derived(
-    modelChoices.find((choice) => choice.model === selectedModel)?.displayName ?? 'Select model'
-  );
   let canCreateSession = $derived(Boolean(snap.workspaceRoot && selectedProvider && selectedModel));
   /**
    * Why a session cannot start, or `null` when one can.
@@ -858,7 +874,7 @@
   <ActivityDock
     bind:activeSurface
     {attentionCount}
-    onopenproviderauth={() => (providerAuthOpen = true)}
+    onopenproviderauth={openIntegrations}
     onopengovernance={(tab) => openGovernance(tab)}
     onopengraph={() => {
       splitPreset = splitPreset === 'graph' ? 'none' : 'graph';
@@ -956,6 +972,23 @@
             </button>
           </Sidebar.GroupLabel>
           <Sidebar.GroupContent>
+            {#if clientStore.projects.length > 0}
+              <div class="mb-2 flex flex-col gap-0.5">
+                {#each clientStore.projects as project (project.contextId)}
+                  <button
+                    type="button"
+                    class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-sidebar-accent"
+                    class:bg-sidebar-accent={project.selected}
+                    onclick={() => clientStore.selectProject(project.contextId)}
+                    title={project.root}
+                  >
+                    <StatusOrb state={project.recoveryRequired ? 'attention' : project.runActive ? 'active' : 'idle'} size={5} />
+                    <span class="truncate">{project.root.split('/').filter(Boolean).at(-1) ?? project.root}</span>
+                    {#if project.approvalPending}<span class="ml-auto text-[10px] text-warning">needs attention</span>{/if}
+                  </button>
+                {/each}
+              </div>
+            {/if}
             {#if snap.workspaceRoot}
               <div class="mb-1.5 flex items-center justify-between rounded-md bg-sidebar-accent/60 px-2 py-1.5 text-xs font-medium text-foreground">
                 <div class="flex items-center gap-2 truncate">
@@ -978,6 +1011,22 @@
                 <HugeiconsIcon icon={Folder01Icon} strokeWidth={2} class="size-3.5" />
                 <span>Open project folder</span>
               </button>
+              {#if recentProjectRoots.length > 0}
+                <div class="mt-2 space-y-1 px-1">
+                  <p class="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Recent projects</p>
+                  {#each recentProjectRoots as root (root)}
+                    <button
+                      type="button"
+                      class="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-xs text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
+                      title={root}
+                      onclick={() => restoreProject(root)}
+                    >
+                      <HugeiconsIcon icon={Folder01Icon} strokeWidth={2} class="size-3.5 shrink-0 text-primary" />
+                      <span class="truncate font-mono">{root.split('/').filter(Boolean).pop() || root}</span>
+                    </button>
+                  {/each}
+                </div>
+              {/if}
             {/if}
 
             <!-- Sessions are deliberately nested under the project. -->
@@ -1164,7 +1213,7 @@
         {#if snap.models.length === 0}
           <div class="rounded-md border border-border/80 bg-muted/30 p-2 text-xs flex flex-col gap-1.5">
             <p class="text-muted-foreground text-[11px]">No models connected yet.</p>
-            <Button variant="outline" size="sm" class="w-full text-xs h-6.5 gap-1 text-primary border-primary/40" onclick={() => (providerAuthOpen = true)}>
+            <Button variant="outline" size="sm" class="w-full text-xs h-6.5 gap-1 text-primary border-primary/40" onclick={openIntegrations}>
               <HugeiconsIcon icon={SparklesIcon} class="size-3" />
               Connect a provider
             </Button>
@@ -1207,7 +1256,7 @@
       <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
         <div class="flex items-center gap-1.5 rounded-md border border-border/70 bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-xs">
           <HugeiconsIcon icon={Message01Icon} strokeWidth={2} class="size-3.5 text-primary shrink-0" />
-          <span class="truncate max-w-40 font-mono text-[11px]">{snap.session ? `Chat: ${snap.session.slice(0, 8)}` : 'Chat'}</span>
+          <span class="truncate max-w-40 text-[11px]">{snap.session ? activeSessionTitle : 'New conversation'}</span>
         </div>
 
         {#if editorPath}
@@ -1350,7 +1399,7 @@
           <div class="flex items-center justify-between border-b px-5 py-3">
             <div class="flex min-w-0 flex-col gap-0.5">
               <h1 class="truncate text-base font-semibold">
-                {snap.session ? `Session ${snap.session.slice(0, 8)}` : projectName ? `Project ${projectName}` : 'What should we work on?'}
+                {snap.session ? activeSessionTitle : projectName ? `Project ${projectName}` : 'What should we work on?'}
               </h1>
               <p class="text-xs text-muted-foreground">
                 {snap.runActive ? 'mjolnr is working' : snap.session ? 'Ready for your next instruction' : 'Type a prompt or choose a project to start chatting'}
@@ -1384,7 +1433,7 @@
           {#if snap.storeFailure}
             <Alert.Root variant="destructive" class="mx-6 mt-4">
               <HugeiconsIcon icon={Alert02Icon} strokeWidth={2} />
-              <Alert.Title>Durability failure</Alert.Title>
+                    <Alert.Title>Previous session needs recovery</Alert.Title>
               <Alert.Description>{snap.storeFailure}</Alert.Description>
               {#if staleLeaseSession}
                 <Alert.Action class="flex flex-col items-start gap-1.5">
@@ -1399,7 +1448,7 @@
                     data-testid="reclaim-session"
                     onclick={() => clientStore.reclaimSession(staleLeaseSession!)}
                   >
-                    Reclaim lease
+                      Reclaim previous session
                   </Button>
                 </Alert.Action>
               {/if}
@@ -1407,7 +1456,7 @@
           {:else if snap.recovery.state === 'required'}
             <Alert.Root variant="destructive" class="mx-6 mt-4">
               <HugeiconsIcon icon={Alert02Icon} strokeWidth={2} />
-              <Alert.Title>Recovery decision required</Alert.Title>
+                    <Alert.Title>This session needs recovery</Alert.Title>
               <Alert.Description>{snap.recovery.summary}</Alert.Description>
               <Alert.Action class="flex gap-2">
                 <Button size="sm" variant="outline" onclick={() => dispatch({ type: 'resolveRecovery', decision: 'abandon-and-continue' })}>
@@ -1477,10 +1526,32 @@
                       {#if projectName}
                         What shall we forge in <button type="button" class="underline decoration-primary/40 underline-offset-4 hover:decoration-primary cursor-pointer transition-colors" onclick={chooseWorkspace}>{projectName}</button> today?
                       {:else}
-                        Wield Mjölnir to forge your code.
+                        Start with a governed workspace.
                       {/if}
                     </h2>
                   </div>
+
+                  {#if !snap.workspaceRoot || snap.models.length === 0}
+                    <div class="w-full max-w-2xl rounded-xl border border-primary/25 bg-card/80 p-4 text-left shadow-lg backdrop-blur-md">
+                      <div class="flex items-start gap-3">
+                        <div class="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">1</div>
+                        <div class="min-w-0 flex-1">
+                          <p class="text-sm font-semibold text-foreground">Prepare the workspace</p>
+                          <p class="mt-1 text-xs text-muted-foreground">Choose a project folder first, then connect a model. mjolnr will keep the session and every effect tied to that project root.</p>
+                          <div class="mt-3 flex flex-wrap gap-2">
+                            <Button size="sm" class="gap-1.5" onclick={chooseWorkspace}>
+                              <HugeiconsIcon icon={FolderOpenIcon} strokeWidth={2} class="size-3.5" />
+                              {snap.workspaceRoot ? 'Project selected' : 'Open project folder'}
+                            </Button>
+                            <Button variant="outline" size="sm" class="gap-1.5" onclick={openIntegrations}>
+                              <HugeiconsIcon icon={PuzzleIcon} strokeWidth={2} class="size-3.5" />
+                              {snap.models.length > 0 ? 'Model connected' : 'Connect a model'}
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  {/if}
 
                   <!-- Floating Central Chat Box (Single Central Composer) -->
                   <!-- Floating Command-Deck Composer (LM Studio style) -->
@@ -1506,12 +1577,12 @@
                       <div class="flex flex-wrap items-center gap-1.5">
                         <!-- Model Selector Pill -->
                         {#if snap.models.length > 0}
-                          <ModelPicker models={snap.models} bind:value={selectedModel} onopenproviderauth={() => (providerAuthOpen = true)} />
+                          <ModelPicker models={snap.models} bind:value={selectedModel} onselect={selectModel} onopenproviderauth={openIntegrations} />
                         {:else}
                           <button
                             type="button"
                             class="flex items-center gap-1 rounded-md border border-primary/40 bg-primary/10 px-2 py-1 text-[11px] text-primary hover:bg-primary/20 transition-colors cursor-pointer font-medium"
-                            onclick={() => (providerAuthOpen = true)}
+                            onclick={openIntegrations}
                           >
                             <HugeiconsIcon icon={SparklesIcon} class="size-3" />
                             <span>Connect Model</span>
@@ -1618,7 +1689,7 @@
                   <!-- Hidden Accessible Project Setup Hook (preserves launch-journey test assertions) -->
                   <div class="sr-only" data-testid="launch-journey" data-journey-state={journeyState}>
                     <Button onclick={chooseWorkspace} data-testid="choose-workspace">Choose project folder</Button>
-                    <Button onclick={() => (providerAuthOpen = true)} data-testid="guided-setup">Guided setup</Button>
+                    <Button onclick={openIntegrations} data-testid="guided-setup">Connect a model</Button>
                     <p>mjolnr started without a project folder. Choose the directory mjolnr is allowed to inspect and modify.</p>
                     <Input
                       id="launch-project-root"
@@ -1656,10 +1727,14 @@
                       <pre class="max-h-56 overflow-auto p-3 font-mono text-xs text-muted-foreground">{message.detail}</pre>
                     </div>
                   {:else}
-                    <Card.Root class={message.kind === 'user' ? 'ml-auto max-w-[80%]' : 'max-w-[90%]'}>
+                    <Card.Root class={cn(
+                      message.kind === 'user'
+                        ? 'ml-auto w-fit min-w-24 max-w-[78%] rounded-2xl border-primary/25 bg-primary/10'
+                        : 'w-fit max-w-[90%] bg-card/80'
+                    )}>
                       <Card.Header class="pb-2">
                         <div class="flex items-center justify-between gap-3">
-                          <Card.Title class="text-sm capitalize">{message.kind}</Card.Title>
+                          <Card.Title class="text-sm">{message.kind === 'user' ? 'You' : 'mjolnr'}</Card.Title>
                           {#if message.kind === 'assistant' && message.provider}
                             <Badge variant="outline">{message.provider} · {message.model}</Badge>
                           {/if}
@@ -1673,7 +1748,7 @@
                 {/each}
                 {#if streamingText}
                   <Card.Root class="max-w-[90%]">
-                    <Card.Header class="pb-2"><Card.Title class="text-sm">assistant · streaming</Card.Title></Card.Header>
+                    <Card.Header class="pb-2"><Card.Title class="text-sm">mjolnr · responding</Card.Title></Card.Header>
                     <Card.Content>
                       <p class="whitespace-pre-wrap text-sm">
                         {streamingText}<span class="stream-cursor"></span>
@@ -1710,7 +1785,7 @@
                   <div class="flex flex-wrap items-center gap-1.5">
                     <!-- Model Selector Pill -->
                     {#if snap.models.length > 0}
-                      <ModelPicker models={snap.models} bind:value={selectedModel} onopenproviderauth={() => (providerAuthOpen = true)} />
+                      <ModelPicker models={snap.models} bind:value={selectedModel} onselect={selectModel} onopenproviderauth={openIntegrations} />
                     {/if}
 
                     <button
@@ -1771,7 +1846,7 @@
       <Tabs.Content value="Verify" class="min-h-0 flex-1 overflow-auto"><VerifySurface /></Tabs.Content>
       <Tabs.Content value="Attention" class="min-h-0 flex-1 overflow-auto"><AttentionSurface /></Tabs.Content>
       <Tabs.Content value="Integrations" class="min-h-0 flex-1 overflow-auto">
-        <IntegrationsSurface onopenconnections={() => (providerAuthOpen = true)} />
+        <IntegrationsSurface />
       </Tabs.Content>
         </Tabs.Root>
         {#if activeSurface === 'Conversation' && editorPath}
@@ -1917,8 +1992,6 @@
   bind:activeTab={governanceTab}
   onamendment={openAmendmentInEditor}
 />
-
-<ProviderAuthModal bind:open={providerAuthOpen} />
 
 <Dialog.Root bind:open={endSessionConfirmOpen}>
   <Dialog.Content class="sm:max-w-md">

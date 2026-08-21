@@ -154,6 +154,16 @@ describe('Desktop workspace route', () => {
     expect(gotoMock).toHaveBeenCalledWith('/gallery');
   });
 
+  it('treats connections as a persistent workspace surface', async () => {
+    const view = render(Page);
+
+    await fireEvent.keyDown(window, { key: '7', metaKey: true });
+
+    expect(view.getByRole('heading', { name: 'Connections' })).toBeDefined();
+    expect(view.queryByRole('dialog')).toBeNull();
+    expect(view.getByPlaceholderText(/Filter connections/)).toBeDefined();
+  });
+
   /**
    * The Repository panel is mounted in the shell, not merely written. ADR 0009
    * places it at the foot of the file explorer; the explorer is D7 and unbuilt,

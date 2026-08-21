@@ -343,6 +343,16 @@ export interface ClientSnapshot {
   preview?: ClientPreviewState;
 }
 
+export interface ClientProjectSummary {
+  contextId: string;
+  root: string;
+  selected: boolean;
+  session?: string;
+  runActive: boolean;
+  approvalPending: boolean;
+  recoveryRequired: boolean;
+}
+
 export type ClientViewportPreset = 'desktop' | 'tablet' | 'mobile';
 
 export interface ClientPreviewViewport {
@@ -550,6 +560,7 @@ export interface ClientBoardOverview {
 export interface ClientSessionSummary {
   id: string;
   title: string;
+  projectRoot: string;
   status: string;
   rollupStatus: ClientRollupStatus;
   provider?: string;
@@ -615,6 +626,12 @@ export type ClientUpdate =
   | { type: 'event'; sequence: number; event: ClientEvent }
   | { type: 'resync'; missed: number; snapshot: ClientSnapshot }
   | { type: 'closed' };
+
+export interface ContextTaggedUpdate {
+  contextId: string;
+  sequence: number;
+  update: ClientUpdate;
+}
 
 export type ClientCommand =
   | { type: 'openProject'; root: string }

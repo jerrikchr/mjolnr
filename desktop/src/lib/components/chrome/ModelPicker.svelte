@@ -11,11 +11,13 @@
   let {
     models = [],
     value = $bindable(''),
-    onopenproviderauth
+    onopenproviderauth,
+    onselect
   }: {
     models: ModelChoice[];
     value: string;
     onopenproviderauth?: () => void;
+    onselect?: (choice: ModelChoice) => void;
   } = $props();
 
   let query = $state('');
@@ -47,6 +49,15 @@
   let labelForValue = $derived(
     models.find((m) => m.model === value)?.displayName ?? (value || 'Select model')
   );
+
+  // The model id is the visible selection contract, but provider identity is
+  // equally authoritative for session creation. Keep the parent synchronized
+  // whenever the select changes so choosing a Gemini model cannot leave the
+  // previous Codex provider paired with it.
+  $effect(() => {
+    const choice = models.find((model) => model.model === value);
+    if (choice) onselect?.(choice);
+  });
 </script>
 
 <Select.Root type="single" bind:value>

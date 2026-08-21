@@ -60,6 +60,10 @@ pub struct GoogleClient {
     /// Whether requests need the Antigravity envelope (requestId/sessionId/
     /// labels/userAgent) rather than the plain Gemini CLI shape.
     pub(crate) antigravity: bool,
+    /// Whether Cloud Code Assist may provision an account-bound project after
+    /// OAuth. Gemini CLI standard-tier requires an owner-supplied project;
+    /// Antigravity's subscription flow provisions its own project.
+    pub(crate) provision_project_without_env: bool,
     /// (wire id, display name, context tokens) — wire ids differ per client;
     /// Antigravity's were captured from the real `antigravity/hub` traffic.
     pub(crate) models: &'static [(&'static str, &'static str, u32)],
@@ -88,6 +92,7 @@ pub static GEMINI_CLI: GoogleClient = GoogleClient {
     endpoint: "https://cloudcode-pa.googleapis.com",
     inference_endpoint: "https://cloudcode-pa.googleapis.com",
     antigravity: false,
+    provision_project_without_env: false,
     models: &[
         (
             "gemini-3.1-pro-preview",
@@ -127,6 +132,7 @@ pub static ANTIGRAVITY: GoogleClient = GoogleClient {
     endpoint: "https://cloudcode-pa.googleapis.com",
     inference_endpoint: "https://daily-cloudcode-pa.googleapis.com",
     antigravity: true,
+    provision_project_without_env: true,
     models: &[
         (
             "gemini-3.1-pro-low",
@@ -168,6 +174,22 @@ impl GoogleClient {
 
     fn client_secret(&self) -> String {
         unmask_bytes(self.client_secret_bytes)
+    }
+
+    fn discovery_user_agent(&self) -> String {
+        if self.antigravity {
+            format!(
+                "antigravity/hub/2.1.4 {}/{}",
+                std::env::consts::OS,
+                std::env::consts::ARCH
+            )
+        } else {
+            format!(
+                "GeminiCLI/0.46.0/gemini-3.1-pro-preview ({}; {}; terminal)",
+                std::env::consts::OS,
+                std::env::consts::ARCH
+            )
+        }
     }
 
     fn redirect_uri(&self) -> String {
@@ -525,15 +547,19 @@ async fn discover_project(
     access_token: &str,
 ) -> Result<String, OAuthError> {
     let env_project = environment_project();
-    let response = client
-        .post(format!("{}/v1internal:loadCodeAssist", config.endpoint))
-        .bearer_auth(access_token)
-        .json(&LoadRequest {
-            cloudaicompanion_project: env_project.clone(),
-            metadata: metadata(config, env_project.clone()),
-        })
-        .send()
-        .await?;
+    let response = authenticated_discovery_request(
+        client,
+        format!("{}/v1internal:loadCodeAssist", config.endpoint),
+        config,
+        access_token,
+        reqwest::Method::POST,
+    )
+    .json(&LoadRequest {
+        cloudaicompanion_project: env_project.clone(),
+        metadata: metadata(config, env_project.clone()),
+    })
+    .send()
+    .await?;
     if !response.status().is_success() {
         return Err(status_error("loadCodeAssist", response.status()));
     }
@@ -543,20 +569,29 @@ async fn discover_project(
         if let Some(project) = load.cloudaicompanion_project.and_then(ProjectRef::into_id) {
             return Ok(project);
         }
-        return env_project.ok_or_else(|| OAuthError::Protocol {
-            detail: "this Google account needs GOOGLE_CLOUD_PROJECT set; \
-                     see https://goo.gle/gemini-cli-auth-docs#workspace-gca"
-                .to_owned(),
-        });
+        if let Some(project) = env_project.clone() {
+            return Ok(project);
+        }
+        if !config.provision_project_without_env {
+            return Err(OAuthError::Protocol {
+                detail: "this Google account needs GOOGLE_CLOUD_PROJECT set; \
+                         see https://goo.gle/gemini-cli-auth-docs#workspace-gca"
+                    .to_owned(),
+            });
+        }
     }
 
     let tier_id = load
-        .allowed_tiers
-        .iter()
-        .find(|tier| tier.is_default)
-        .and_then(|tier| tier.id.clone())
+        .current_tier
+        .and_then(|tier| tier.id)
+        .or_else(|| {
+            load.allowed_tiers
+                .iter()
+                .find(|tier| tier.is_default)
+                .and_then(|tier| tier.id.clone())
+        })
         .unwrap_or_else(|| "legacy-tier".to_owned());
-    if tier_id != "free-tier" && env_project.is_none() {
+    if requires_external_project(config, &tier_id, env_project.as_deref()) {
         return Err(OAuthError::Protocol {
             detail: format!(
                 "tier {tier_id} needs GOOGLE_CLOUD_PROJECT set; \
@@ -565,18 +600,22 @@ async fn discover_project(
         });
     }
 
-    let response = client
-        .post(format!("{}/v1internal:onboardUser", config.endpoint))
-        .bearer_auth(access_token)
-        .json(&OnboardRequest {
-            tier_id: tier_id.clone(),
-            cloudaicompanion_project: (tier_id != "free-tier")
-                .then(|| env_project.clone())
-                .flatten(),
-            metadata: metadata(config, env_project.clone()),
-        })
-        .send()
-        .await?;
+    let response = authenticated_discovery_request(
+        client,
+        format!("{}/v1internal:onboardUser", config.endpoint),
+        config,
+        access_token,
+        reqwest::Method::POST,
+    )
+    .json(&OnboardRequest {
+        tier_id: tier_id.clone(),
+        cloudaicompanion_project: (tier_id != "free-tier")
+            .then(|| env_project.clone())
+            .flatten(),
+        metadata: metadata(config, env_project.clone()),
+    })
+    .send()
+    .await?;
     if !response.status().is_success() {
         return Err(status_error("onboardUser", response.status()));
     }
@@ -595,11 +634,15 @@ async fn discover_project(
             });
         }
         tokio::time::sleep(ONBOARD_POLL_INTERVAL).await;
-        let response = client
-            .get(format!("{}/v1internal/{name}", config.endpoint))
-            .bearer_auth(access_token)
-            .send()
-            .await?;
+        let response = authenticated_discovery_request(
+            client,
+            format!("{}/v1internal/{name}", config.endpoint),
+            config,
+            access_token,
+            reqwest::Method::GET,
+        )
+        .send()
+        .await?;
         if !response.status().is_success() {
             return Err(status_error("operation poll", response.status()));
         }
@@ -614,6 +657,35 @@ async fn discover_project(
         .ok_or_else(|| OAuthError::Protocol {
             detail: "could not discover or provision a Cloud Code Assist project".to_owned(),
         })
+}
+
+fn authenticated_discovery_request(
+    client: &reqwest::Client,
+    url: String,
+    config: &GoogleClient,
+    access_token: &str,
+    method: reqwest::Method,
+) -> reqwest::RequestBuilder {
+    let request = client
+        .request(method, url)
+        .bearer_auth(access_token)
+        .header(reqwest::header::USER_AGENT, config.discovery_user_agent());
+    if config.antigravity {
+        request
+    } else {
+        request.header(
+            "Client-Metadata",
+            "ideType=IDE_UNSPECIFIED,platform=PLATFORM_UNSPECIFIED,pluginType=GEMINI",
+        )
+    }
+}
+
+fn requires_external_project(
+    config: &GoogleClient,
+    tier_id: &str,
+    env_project: Option<&str>,
+) -> bool {
+    tier_id != "free-tier" && env_project.is_none() && !config.provision_project_without_env
 }
 
 /// Access material for one Cloud Code Assist request.
@@ -1024,5 +1096,25 @@ mod tests {
         assert!(url.contains("localhost%3A8085%2Foauth2callback"));
         let url = ANTIGRAVITY.authorize_url("state-2");
         assert!(url.contains("localhost%3A51121%2Foauth-callback"));
+    }
+
+    #[test]
+    fn subscription_project_policy_is_provider_specific() {
+        assert!(requires_external_project(
+            &GEMINI_CLI,
+            "standard-tier",
+            None
+        ));
+        assert!(!requires_external_project(
+            &ANTIGRAVITY,
+            "standard-tier",
+            None
+        ));
+        assert!(!requires_external_project(
+            &GEMINI_CLI,
+            "standard-tier",
+            Some("owner-project")
+        ));
+        assert!(!requires_external_project(&GEMINI_CLI, "free-tier", None));
     }
 }
