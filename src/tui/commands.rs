@@ -318,6 +318,30 @@ pub const COMMANDS: &[SlashCommand] = &[
             Some(format!("{count} discovered"))
         },
     },
+    SlashCommand {
+        name: "/leave",
+        aliases: &[],
+        summary: "release the open session (resumable later, not terminal)",
+        hint: None,
+        state: |view| view.snapshot.session.as_ref().map(|s| format!("session {}", &s.to_string()[..8.min(s.to_string().len())])),
+    },
+    SlashCommand {
+        name: "/end",
+        aliases: &[],
+        summary: "end the open session permanently (cannot be resumed)",
+        hint: None,
+        state: |view| view.snapshot.session.as_ref().map(|s| format!("session {}", &s.to_string()[..8.min(s.to_string().len())])),
+    },
+    SlashCommand {
+        name: "/reclaim",
+        aliases: &[],
+        summary: "break a write lease a crashed process left behind",
+        hint: Some("<session id prefix>"),
+        state: |view| {
+            let stale: Vec<_> = view.snapshot.sessions.iter().filter(|s| s.leased).collect();
+            Some(format!("{} stale lease(s)", stale.len()))
+        },
+    },
 ];
 
 /// One row of the command menu: a built-in or a discovered prompt template.

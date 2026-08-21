@@ -1040,6 +1040,70 @@ async fn submit(view: &mut ViewState, runtime: &dyn MjolnrRuntime) -> Flow {
         // from the snapshot on the next frame.
         return Flow::Redraw;
     }
+    // Session lifecycle commands. "Leave" releases the seat without ending the
+    // session (it stays resumable). "End" is terminal: an ended session cannot
+    // accept new work. The runtime refuses both while a run is active or
+    // recovery is pending, and the refusal lands on the durability banner.
+    if text == "/leave" {
+        view.close_overlay();
+        let _ = runtime.dispatch(MjolnrCommand::ReleaseSession).await;
+        return Flow::Redraw;
+    }
+    if text == "/end" {
+        view.close_overlay();
+        let _ = runtime.dispatch(MjolnrCommand::EndSession).await;
+        return Flow::Redraw;
+    }
+    if text == "/reclaim" || text.starts_with("/reclaim ") {
+        view.close_overlay();
+        let argument = text.strip_prefix("/reclaim").unwrap_or_default().trim();
+        if argument.is_empty() {
+            // Find the first stale lease from the snapshot.
+            let stale = view
+                .snapshot
+                .sessions
+                .iter()
+                .find(|s| s.leased)
+                .map(|s| s.id.clone());
+            match stale {
+                Some(session) => {
+                    let _ = runtime
+                        .dispatch(MjolnrCommand::ReclaimSession { session })
+                        .await;
+                }
+                None => {
+                    view.note_model_command_failure(
+                        "NO_STALE_LEASE — no session has a stale lease to reclaim",
+                    );
+                }
+            }
+        } else {
+            // Match by prefix against known sessions.
+            let prefix = argument.to_lowercase();
+            let candidate = view
+                .snapshot
+                .sessions
+                .iter()
+                .find(|s| {
+                    let id = s.id.to_string();
+                    id.to_lowercase().starts_with(&prefix)
+                })
+                .map(|s| s.id.clone());
+            match candidate {
+                Some(session) => {
+                    let _ = runtime
+                        .dispatch(MjolnrCommand::ReclaimSession { session })
+                        .await;
+                }
+                None => {
+                    view.note_model_command_failure(&format!(
+                        "NO_MATCH — no session id starts with `{argument}`"
+                    ));
+                }
+            }
+        }
+        return Flow::Redraw;
+    }
     // A prompt template expands into the user message and is sent as if the
     // user had typed it. Built-ins were all matched above, so a template can
     // never shadow one — it only ever reaches here for a name none of them

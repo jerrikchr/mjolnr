@@ -790,29 +790,18 @@ pub async fn init_bridge(database_path: PathBuf) -> Result<Arc<ClientBridge>, De
     Ok(Arc::new(ClientBridge::start(bridge_runtime)))
 }
 
-/// Keep workspace-local history when the app is launched from a mjolnr
-/// workspace, but give a bundled app a writable persistence location when
-/// LaunchServices supplies an unrelated working directory (often `/`).
-///
-/// A desktop app cannot treat its process cwd as durable application state:
-/// Finder and Spotlight do not promise one, and the old path made a packaged
-/// launch fail before a window could be shown. The workspace picker remains
-/// the authority for the project being acted on; this fallback is only the
-/// pre-workspace event store needed to start the client safely.
+/// The desktop app always stores its database in the platform data directory
+/// (`~/Library/Application Support/mjolnr` on macOS,
+/// `$XDG_DATA_HOME/mjolnr` on Linux). The cwd-derived branch was removed
+/// because `tauri dev` and a packaged build have different working
+/// directories, which silently split sessions across two stores.
 fn launch_database_path() -> Result<PathBuf, DesktopBridgeError> {
-    if let Ok(workspace_root) = std::env::current_dir() {
-        let mjolnr_dir = workspace_root.join(".mjolnr");
-        if mjolnr_dir.is_dir() {
-            return Ok(mjolnr_dir.join("mjolnr-desktop.db"));
-        }
-    }
-
-    let fallback = mjolnr::store::paths::default_database_path().map_err(|error| {
+    let path = mjolnr::store::paths::default_database_path().map_err(|error| {
         DesktopBridgeError::Initialization(format!(
             "resolve desktop application data directory: {error}"
         ))
     })?;
-    Ok(fallback.with_file_name("mjolnr-desktop.db"))
+    Ok(path.with_file_name("mjolnr-desktop.db"))
 }
 
 pub fn run() {
