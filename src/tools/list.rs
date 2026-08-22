@@ -10,7 +10,19 @@ use crate::policy::paths;
 use crate::tools::files;
 use crate::tools::output;
 
-const IGNORED_DIRECTORIES: &[&str] = &[".git", "target", "node_modules", ".next", "dist", "build"];
+// Byte-code and dependency caches are build artifacts of a workspace's
+// tooling, not its content; listing them buried real files under noise and
+// burned the model's bounded output on `__pycache__` entries.
+const IGNORED_DIRECTORIES: &[&str] = &[
+    ".git",
+    "target",
+    "node_modules",
+    ".next",
+    "dist",
+    "build",
+    "__pycache__",
+    ".venv",
+];
 
 #[derive(Debug)]
 pub(super) struct ListFiles;
@@ -150,4 +162,34 @@ fn walk(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The noise case from the field: a Python workspace's `__pycache__` and
+    /// virtualenv directories buried the real files under byte-code and ate
+    /// the bounded output budget. Ignored names must never appear, at any
+    /// depth.
+    #[test]
+    fn walk_skips_cache_and_virtualenv_directories() {
+        let workspace = tempfile::tempdir().expect("temp dir");
+        let root = workspace.path();
+        std::fs::write(root.join("app.py"), b"x").expect("write app.py");
+        std::fs::create_dir_all(root.join("__pycache__")).expect("create cache");
+        std::fs::write(root.join("__pycache__").join("app.cpython-314.pyc"), b"x")
+            .expect("write pyc");
+        std::fs::create_dir_all(root.join(".venv").join("lib")).expect("create venv");
+        std::fs::write(root.join(".venv").join("lib").join("site.py"), b"x").expect("write venv");
+        std::fs::create_dir_all(root.join("src").join("__pycache__")).expect("nested cache");
+        std::fs::write(root.join("src").join("main.py"), b"x").expect("write nested");
+
+        let cancel = CancellationToken::new();
+        let mut found = Vec::new();
+        walk(root, root, true, 500, &cancel, &mut found).expect("walk succeeds");
+        found.sort();
+
+        assert_eq!(found, vec!["app.py", "src/main.py"]);
+    }
 }
