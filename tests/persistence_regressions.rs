@@ -453,6 +453,9 @@ impl EventStore for CheckpointFailingStore {
     async fn end_session(&self, session: SessionId) -> Result<(), StoreError> {
         self.inner.end_session(session).await
     }
+    async fn rename_session(&self, session: SessionId, title: String) -> Result<(), StoreError> {
+        self.inner.rename_session(session, title).await
+    }
     async fn sessions(&self) -> Result<Vec<SessionSummary>, StoreError> {
         self.inner.sessions().await
     }

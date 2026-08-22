@@ -62,6 +62,11 @@ pub(super) enum Request {
         session: SessionId,
         reply: Reply<()>,
     },
+    RenameSession {
+        session: SessionId,
+        title: String,
+        reply: Reply<()>,
+    },
     Sessions {
         reply: Reply<Vec<SessionSummary>>,
     },
@@ -165,6 +170,7 @@ impl std::fmt::Debug for Request {
             Self::OpenProject { .. } => "OpenProject",
             Self::CreateSession { .. } => "CreateSession",
             Self::EndSession { .. } => "EndSession",
+            Self::RenameSession { .. } => "RenameSession",
             Self::Sessions { .. } => "Sessions",
             Self::Append { .. } => "Append",
             Self::AppendAfter { .. } => "AppendAfter",
@@ -253,6 +259,7 @@ async fn handle(connection: &Connection, database_path: &Path, request: Request)
         Request::OpenProject { .. }
         | Request::CreateSession { .. }
         | Request::EndSession { .. }
+        | Request::RenameSession { .. }
         | Request::Sessions { .. } => handle_session(connection, request).await,
 
         Request::Append { .. }
@@ -323,6 +330,22 @@ async fn handle_session(connection: &Connection, request: Request) {
         }
         Request::EndSession { session, reply } => {
             let result = match call(connection, move |c| queries::end_session(c, session)).await {
+                Ok(true) => Ok(()),
+                Ok(false) => Err(StoreError::UnknownSession { session }),
+                Err(error) => Err(error),
+            };
+            answer(reply, result);
+        }
+        Request::RenameSession {
+            session,
+            title,
+            reply,
+        } => {
+            let result = match call(connection, move |c| {
+                queries::rename_session(c, session, &title)
+            })
+            .await
+            {
                 Ok(true) => Ok(()),
                 Ok(false) => Err(StoreError::UnknownSession { session }),
                 Err(error) => Err(error),

@@ -144,6 +144,16 @@ impl EventStore for InMemoryEventStore {
         Ok(())
     }
 
+    async fn rename_session(&self, session: SessionId, title: String) -> Result<(), StoreError> {
+        let mut inner = self.lock();
+        let Some(entry) = inner.sessions.get_mut(&session) else {
+            return Err(StoreError::UnknownSession { session });
+        };
+        entry.title = title;
+        entry.updated_at = OffsetDateTime::now_utc();
+        Ok(())
+    }
+
     async fn sessions(&self) -> Result<Vec<SessionSummary>, StoreError> {
         let inner = self.lock();
         let roots: BTreeMap<ProjectId, PathBuf> = inner

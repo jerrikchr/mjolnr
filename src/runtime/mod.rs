@@ -2436,6 +2436,10 @@ impl Actor {
         let run = RunId::new();
         let cancel = CancellationToken::new();
 
+        // Derived before `text` moves into the durable message: the title is
+        // display metadata cut from the same bytes the record keeps.
+        let derived_title = durability::title_from_directive(&text);
+
         let message = CanonicalMessage::user(text);
         // The first message after a rewind is the branch point; every message
         // after it continues that branch normally.
@@ -2453,6 +2457,16 @@ impl Actor {
             }
         };
         self.state.push_message(Some(stored.sequence), message);
+        // The first directive the owner types names the session, so a list of
+        // sessions reads as work rather than as seven copies of one folder
+        // name. A failed rename leaves the folder-name title, which was true
+        // before and stays true; naming never blocks the run that follows.
+        if self.state.messages().len() == 1
+            && durability::directive_names_session(source)
+            && !derived_title.is_empty()
+        {
+            let _ = self.store.rename_session(session, derived_title).await;
+        }
 
         // The run marker is durable before the provider request. The user
         // message comes first so a failed marker leaves an honest unanswered

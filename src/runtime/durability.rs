@@ -47,6 +47,38 @@ fn default_title(state: &SessionState) -> String {
         )
 }
 
+/// The longest title derived from a directive. Long enough to recognise the
+/// work; short enough to survive a sidebar without ellipsis games.
+const DIRECTIVE_TITLE_MAX_CHARS: usize = 60;
+
+/// A bounded, single-line session title from the first owner directive.
+///
+/// The first line carries the intent; the rest is usually context. Truncation
+/// counts `char`s, not bytes, so a multibyte directive cannot be cut mid-codepoint.
+#[must_use]
+pub(super) fn title_from_directive(text: &str) -> String {
+    let first_line = text.lines().map(str::trim).find(|line| !line.is_empty());
+    let Some(line) = first_line else {
+        return String::new();
+    };
+    if line.chars().count() <= DIRECTIVE_TITLE_MAX_CHARS {
+        return line.to_owned();
+    }
+    let truncated: String = line.chars().take(DIRECTIVE_TITLE_MAX_CHARS).collect();
+    format!("{truncated}…")
+}
+
+/// Whether this directive should name the session it opens.
+///
+/// Only text the owner typed names work. Subagent sessions keep the identity
+/// their parent minted, and externally sourced directives keep the folder-name
+/// default — what someone outside the session asked for is data about the
+/// work, not a claim on how mjolnr's records describe it (`AGENTS.md` §11.6).
+#[must_use]
+pub(super) fn directive_names_session(source: &crate::core::directive::DirectiveSource) -> bool {
+    matches!(source, crate::core::directive::DirectiveSource::Human)
+}
+
 impl Actor {
     /// Open a project root, canonicalised off the async worker.
     ///
@@ -1379,4 +1411,39 @@ fn estimate_context_tokens(messages: &[crate::core::message::TranscriptEntry]) -
         .map(|message| message.text().chars().count())
         .sum::<usize>();
     u64::try_from(characters.div_ceil(4)).unwrap_or(u64::MAX)
+}
+
+#[cfg(test)]
+mod title_tests {
+    use super::{DIRECTIVE_TITLE_MAX_CHARS, directive_names_session, title_from_directive};
+    use crate::core::directive::DirectiveSource;
+
+    #[test]
+    fn a_title_is_the_first_non_empty_line_bounded() {
+        let directive = "  Fix the parser\n\ncontext: it drops multibyte input  ";
+        assert_eq!(title_from_directive(directive), "Fix the parser");
+    }
+
+    #[test]
+    fn a_long_title_truncates_on_char_boundaries_with_disclosure() {
+        let long = "é".repeat(DIRECTIVE_TITLE_MAX_CHARS + 10);
+        let title = title_from_directive(&long);
+        assert!(title.ends_with('…'));
+        // The ellipsis plus the kept characters, none of them cut mid-codepoint.
+        assert_eq!(title.chars().count(), DIRECTIVE_TITLE_MAX_CHARS + 1);
+    }
+
+    #[test]
+    fn whitespace_only_directives_name_nothing() {
+        assert_eq!(title_from_directive("   \n  \n"), String::new());
+    }
+
+    #[test]
+    fn only_owner_typed_directives_name_sessions() {
+        assert!(directive_names_session(&DirectiveSource::Human));
+        assert!(!directive_names_session(&DirectiveSource::Internal));
+        assert!(!directive_names_session(&DirectiveSource::External {
+            origin: "issue".to_owned()
+        }));
+    }
 }

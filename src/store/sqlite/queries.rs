@@ -87,6 +87,22 @@ pub(super) fn end_session(connection: &Connection, session: SessionId) -> SqlRes
     Ok(affected == 1)
 }
 
+pub(super) fn rename_session(
+    connection: &Connection,
+    session: SessionId,
+    title: &str,
+) -> SqlResult<bool> {
+    let affected = connection.execute(
+        "UPDATE sessions SET title = ?2, updated_at = ?3 WHERE id = ?1",
+        params![
+            session.to_string(),
+            title,
+            timestamp(OffsetDateTime::now_utc())?
+        ],
+    )?;
+    Ok(affected == 1)
+}
+
 /// Every session, newest first.
 pub(super) fn sessions(connection: &Connection) -> SqlResult<Vec<SessionSummary>> {
     let mut statement = connection.prepare(

@@ -321,6 +321,14 @@ pub trait EventStore: Send + Sync + std::fmt::Debug {
     /// Mark a session as accepting no further work.
     async fn end_session(&self, session: SessionId) -> Result<(), StoreError>;
 
+    /// Replace a session's display title.
+    ///
+    /// Called once, when the first owner-typed directive lands, so a session
+    /// is named for its work rather than its folder. The title is display
+    /// metadata only: it never widens policy or authority, and renaming says
+    /// nothing about whether a session may still accept work.
+    async fn rename_session(&self, session: SessionId, title: String) -> Result<(), StoreError>;
+
     /// Sessions known to the store, newest first.
     async fn sessions(&self) -> Result<Vec<SessionSummary>, StoreError>;
 

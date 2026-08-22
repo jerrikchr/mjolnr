@@ -220,6 +220,15 @@ impl EventStore for SqliteEventStore {
             .await
     }
 
+    async fn rename_session(&self, session: SessionId, title: String) -> Result<(), StoreError> {
+        self.request(|reply| Request::RenameSession {
+            session,
+            title,
+            reply,
+        })
+        .await
+    }
+
     async fn sessions(&self) -> Result<Vec<SessionSummary>, StoreError> {
         self.request(|reply| Request::Sessions { reply }).await
     }
