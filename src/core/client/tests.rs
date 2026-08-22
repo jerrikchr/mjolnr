@@ -307,6 +307,10 @@ fn every_command_variant_round_trips() {
             provider: "openai".to_owned(),
             model: "gpt-4o-mini".to_owned(),
         },
+        ClientCommand::SelectModel {
+            provider: "opencode-zen".to_owned(),
+            model: "claude-opus-4-8".to_owned(),
+        },
         ClientCommand::ResumeSession {
             session: "0190d5f0-0000-7000-8000-000000000004".to_owned(),
         },
@@ -386,7 +390,7 @@ fn every_command_variant_round_trips() {
     ];
     assert_eq!(
         commands.len(),
-        22,
+        23,
         "the client command allowlist changed; that is a reviewed contract act"
     );
     for command in commands {

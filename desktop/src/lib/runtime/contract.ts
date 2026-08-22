@@ -682,6 +682,11 @@ export type ClientCommand =
   // client read, and the runtime refuses a stale overwrite.
   | { type: 'saveFile'; path: string; expectedDigest: string; text: string }
   | { type: 'createSession'; provider: string; model: string }
+  /**
+   * Switch the open session's route while idle. The runtime refuses with a
+   * typed reason when a run is active or the target is not connected.
+   */
+  | { type: 'selectModel'; provider: string; model: string }
   | { type: 'resumeSession'; session: string }
   | { type: 'resolveResume'; choice: ClientResumeChoice }
   | { type: 'sendMessage'; text: string }

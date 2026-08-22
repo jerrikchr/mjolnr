@@ -49,6 +49,18 @@ fn map_session_control_command(
                 model: crate::core::model::ModelId::new(model),
             }
         }
+        ClientCommand::SelectModel { provider, model } => {
+            if provider.trim().is_empty() || model.trim().is_empty() {
+                return Err(invalid(
+                    "model",
+                    "a provider and model are required to switch models",
+                ));
+            }
+            MjolnrCommand::SelectModel {
+                provider: crate::core::model::ProviderId::new(provider),
+                model: crate::core::model::ModelId::new(model),
+            }
+        }
         ClientCommand::ResumeSession { session } => MjolnrCommand::ResumeSession {
             session: parse_session(session)?,
         },

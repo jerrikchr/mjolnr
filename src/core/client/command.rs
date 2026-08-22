@@ -146,6 +146,16 @@ pub enum ClientCommand {
         provider: String,
         model: String,
     },
+    /// Switch the open session's provider and model while idle.
+    ///
+    /// The runtime refuses with a typed reason when a run is active or the
+    /// target route is not connected, so the client can show why a pick did
+    /// not land instead of silently continuing on the old route.
+    #[serde(rename_all = "camelCase")]
+    SelectModel {
+        provider: String,
+        model: String,
+    },
     #[serde(rename_all = "camelCase")]
     ResumeSession {
         session: String,
