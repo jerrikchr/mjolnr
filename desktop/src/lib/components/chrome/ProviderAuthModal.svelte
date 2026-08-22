@@ -72,6 +72,8 @@
       case 'openrouter': return 'https://openrouter.ai/keys';
       case 'ollama': return 'https://ollama.com';
       case 'lm-studio': return 'https://lmstudio.ai/docs/app/api';
+      case 'opencode-zen': return 'https://opencode.ai';
+      case 'opencode-go': return 'https://opencode.ai';
       default: return '';
     }
   }
@@ -82,7 +84,7 @@
 
   type ClientModel = { provider: string; model: string; displayName: string };
 
-  const providerCatalog = ['openai-codex', 'anthropic', 'gemini-cli', 'antigravity', 'openai', 'gemini', 'openrouter', 'ollama', 'lm-studio'];
+  const providerCatalog = ['openai-codex', 'anthropic', 'gemini-cli', 'antigravity', 'openai', 'gemini', 'openrouter', 'opencode-zen', 'opencode-go', 'ollama', 'lm-studio'];
   let cards: Card[] = $derived([
     ...providerCatalog.map((provider) => {
       const account = snap.accounts.find((candidate) => candidate.provider === provider);
