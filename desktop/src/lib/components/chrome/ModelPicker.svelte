@@ -22,6 +22,23 @@
 
   let query = $state('');
 
+  // Item values carry their group (`provider::model`) so the same model id
+  // offered by two providers — routine now that full subscription catalogs
+  // overlap — resolves to exactly the row that was picked. The `value` prop
+  // stays a bare model id; this component owns the translation in both
+  // directions.
+  const SEPARATOR = '::';
+  function wireValue(choice: ModelChoice): string {
+    return `${choice.provider}${SEPARATOR}${choice.model}`;
+  }
+  function choiceForWire(wire: string): ModelChoice | undefined {
+    const index = wire.indexOf(SEPARATOR);
+    if (index === -1) return undefined;
+    const provider = wire.slice(0, index);
+    const model = wire.slice(index + SEPARATOR.length);
+    return models.find((m) => m.provider === provider && m.model === model);
+  }
+
   // Group by provider; locals first (Orca local-first: accounts panes surface
   // local / system-default affordances before remote), then alpha.
   let groups = $derived((() => {
@@ -50,20 +67,28 @@
     models.find((m) => m.model === value)?.displayName ?? (value || 'Select model')
   );
 
-  // The model id is the visible selection contract, but provider identity is
-  // equally authoritative for session creation. Keep the parent synchronized
-  // whenever the select changes so choosing a Gemini model cannot leave the
-  // previous Codex provider paired with it. Echo safety lives in the parent:
-  // its handler ignores picks identical to the route the snapshot reports,
-  // so syncing this picker to session truth cannot re-dispatch that truth as
-  // a command.
-  $effect(() => {
-    const choice = models.find((model) => model.model === value);
-    if (choice) onselect?.(choice);
+  // The bound value is a bare model id; translate it to the composite wire
+  // value the items use so highlight/selection state survives duplicates.
+  let selectedWire = $derived.by(() => {
+    const hit = models.find((m) => m.model === value);
+    return hit ? wireValue(hit) : value;
   });
+
+  // The parent synchronized on every select change so choosing a Gemini model
+  // cannot leave the previous Codex provider paired with it. Echo safety is
+  // now structural: programmatic writes to `value` re-enter here carrying a
+  // composite of exactly the snapshot's route, and the parent treats an
+  // identical-route pick as a no-op, so truth-sync can never re-dispatch
+  // truth as a command.
+  function handleSelect(wire: string) {
+    const choice = choiceForWire(wire);
+    if (!choice) return;
+    value = choice.model;
+    onselect?.(choice);
+  }
 </script>
 
-<Select.Root type="single" bind:value>
+<Select.Root type="single" value={selectedWire} onValueChange={handleSelect}>
   <Select.Trigger class="h-6.5 border-border/60 bg-muted/40 text-[11px] px-2 py-0 gap-1 rounded-md font-mono hover:bg-muted/70 hover:text-foreground min-w-36">
     <span class="text-primary font-sans font-medium">⚡</span>
     <span class="truncate max-w-40">{labelForValue}</span>
@@ -109,8 +134,8 @@
               <span>{provider}</span>
               <Badge variant="secondary" class="h-4 px-1.5 text-[10px] leading-none">{list.length}</Badge>
             </Select.Label>
-            {#each list as choice (choice.model)}
-              <Select.Item value={choice.model} label={choice.displayName} class="py-1.5">
+            {#each list as choice (wireValue(choice))}
+              <Select.Item value={wireValue(choice)} label={choice.displayName} class="py-1.5">
                 <div class="flex min-w-0 flex-col gap-0.5">
                   <span class="truncate font-mono text-xs">{choice.model}</span>
                   {#if choice.displayName !== choice.model}

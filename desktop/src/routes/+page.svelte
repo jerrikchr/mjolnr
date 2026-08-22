@@ -181,6 +181,11 @@
   }
 
   function selectModel(choice: { provider: string; model: string }) {
+    // Echo guard runs before any mutation. Truth-sync writes to the picker
+    // re-enter here as picks of the snapshot's own route; mutating locals
+    // first would let a mispaired echo corrupt selectedProvider and arm the
+    // next hop of a ping-pong.
+    if (snap.provider === choice.provider && snap.model === choice.model) return;
     if (choice.provider !== selectedProvider) selectedProvider = choice.provider;
     if (choice.model !== selectedModel) selectedModel = choice.model;
     // With a session open, a pick switches that session's route now — the
@@ -189,7 +194,6 @@
     // (active run, disconnected provider, absent model) with typed reasons
     // that surface through the global refusal channel.
     if (!snap.session) return;
-    if (snap.provider === choice.provider && snap.model === choice.model) return;
     void clientStore.selectSessionModel(choice.provider, choice.model);
   }
 
