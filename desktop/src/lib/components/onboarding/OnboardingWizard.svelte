@@ -158,6 +158,26 @@ say what you did and did not do, and seek approval before any side effect.
     }
     writing = false;
   }
+
+  /**
+   * Land back in the workspace on a fresh snapshot.
+   *
+   * The result step says what changed, what was verified, and what remains
+   * unavailable; the refresh makes the main page agree with all three instead
+   * of showing "connect a model" for work this wizard just finished.
+   */
+  async function returnToWorkspace() {
+    await clientStore.dispatch({ type: 'requestSnapshot' });
+    goto('/');
+  }
+
+  let writtenFiles = $derived((preview?.files ?? []).filter((file) => file.action === 'write'));
+  let preservedFiles = $derived((preview?.files ?? []).filter((file) => file.action === 'preserve'));
+  let disconnectedProviders = $derived(
+    ['anthropic', 'openai-codex', 'gemini-cli', 'ollama'].filter(
+      (provider) => !accounts.some((account) => account.provider === provider && account.state === 'connected')
+    )
+  );
 </script>
 
 <svelte:head>
@@ -195,16 +215,76 @@ say what you did and did not do, and seek approval before any side effect.
 
     <div class="min-h-[30rem] px-6 py-8 sm:px-10">
       {#if completed}
-        <div class="flex min-h-[28rem] flex-col items-center justify-center gap-5 text-center" data-testid="onboarding-complete">
-          <HugeiconsIcon icon={CheckmarkCircle02Icon} class="size-12 text-gov-verified" strokeWidth={2} />
-          <div>
-            <h2 class="text-xl font-semibold">Setup is ready</h2>
-            <p class="mt-2 max-w-lg text-sm text-muted-foreground">
-              Missing setup files were written under <code class="font-mono">.mjolnr/</code>; existing files were preserved.
-              The next step is still yours: a new project can begin the PRD interview, while an existing project can begin bounded discovery.
-            </p>
+        <div class="flex min-h-[28rem] flex-col justify-center gap-6 text-left" data-testid="onboarding-complete">
+          <div class="flex items-center gap-3">
+            <HugeiconsIcon icon={CheckmarkCircle02Icon} class="size-10 text-gov-verified" strokeWidth={2} />
+            <div>
+              <h2 class="text-xl font-semibold">Setup is ready</h2>
+              <p class="mt-1 text-sm text-muted-foreground">
+                What changed, what was verified, and what still needs you — all from the runtime, not assumption.
+              </p>
+            </div>
           </div>
-          <Button onclick={() => goto('/')}>Launch workspace</Button>
+
+          <div class="grid gap-3 sm:grid-cols-3">
+            <Card.Root>
+              <Card.Header class="pb-2"><Card.Title class="text-sm">Files under .mjolnr/</Card.Title></Card.Header>
+              <Card.Content class="space-y-1.5">
+                {#if preview && preview.files.length > 0}
+                  {#each preview.files as file (file.path)}
+                    <div class="flex items-center justify-between gap-2 text-xs">
+                      <code class="truncate font-mono">{file.path}</code>
+                      <span class={file.action === 'write' ? 'shrink-0 text-gov-verified' : 'shrink-0 text-muted-foreground'}>
+                        {file.action === 'write' ? 'written' : 'preserved'}
+                      </span>
+                    </div>
+                  {/each}
+                {:else}
+                  <p class="text-xs text-muted-foreground">Nothing needed writing; existing files were preserved.</p>
+                {/if}
+                <p class="pt-1 text-[11px] text-muted-foreground">
+                  {writtenFiles.length} written · {preservedFiles.length} preserved. Every file is diffable and revertible.
+                </p>
+              </Card.Content>
+            </Card.Root>
+
+            <Card.Root>
+              <Card.Header class="pb-2"><Card.Title class="text-sm">Verified state</Card.Title></Card.Header>
+              <Card.Content class="space-y-1.5 text-xs">
+                <p class={connectedCount > 0 ? 'text-gov-verified' : 'text-muted-foreground'}>
+                  {connectedCount} provider{connectedCount === 1 ? '' : 's'} connected
+                </p>
+                <p class={modelsAvailable > 0 ? 'text-gov-verified' : 'text-muted-foreground'}>
+                  {modelsAvailable} model{modelsAvailable === 1 ? '' : 's'} ready
+                </p>
+                <p class="text-muted-foreground">Default policy: {policy}</p>
+              </Card.Content>
+            </Card.Root>
+
+            <Card.Root>
+              <Card.Header class="pb-2"><Card.Title class="text-sm">Still unavailable</Card.Title></Card.Header>
+              <Card.Content class="space-y-1.5 text-xs">
+                {#if disconnectedProviders.length === 0}
+                  <p class="text-gov-verified">Nothing — every known provider is connected.</p>
+                {:else}
+                  <p class="text-muted-foreground">Not yet connected:</p>
+                  <div class="flex flex-wrap gap-1">
+                    {#each disconnectedProviders as provider (provider)}
+                      <span class="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px]">{provider}</span>
+                    {/each}
+                  </div>
+                  <p class="text-[11px] text-muted-foreground">Credentials are captured outside this window; connect later from Connections.</p>
+                {/if}
+              </Card.Content>
+            </Card.Root>
+          </div>
+
+          <p class="max-w-2xl text-xs text-muted-foreground">
+            The next step is yours: a new project can begin the PRD interview, while an existing project can begin bounded discovery.
+          </p>
+          <div>
+            <Button onclick={returnToWorkspace}>Return to workspace</Button>
+          </div>
         </div>
       {:else if currentStep === 1}
         <div class="space-y-6">

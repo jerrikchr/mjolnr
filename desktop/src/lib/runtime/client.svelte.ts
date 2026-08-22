@@ -152,6 +152,18 @@ export interface WorktreeEntry {
 
 const MAX_WORKTREES = 50;
 
+/**
+ * Reconnect budget for a lost desktop bridge.
+ *
+ * Six attempts doubling from 1s to a 16s ceiling (~63s total) covers a
+ * backend restarting under the webview. Past that, retrying silently would be
+ * a hidden loop pretending things are fine; the surface shows a manual retry
+ * instead and says what happened.
+ */
+const MAX_RECONNECT_ATTEMPTS = 6;
+const RECONNECT_MAX_DELAY_MS = 16_000;
+const MANUAL_RETRY_DELAY_MS = 250;
+
 export class MjolnrClient {
   snapshot = $state<ClientSnapshot>(cloneSnapshot());
   activityFeed = $state<ClientEvent[]>([]);
@@ -163,6 +175,16 @@ export class MjolnrClient {
   streamingText = $state<string>('');
   projects = $state<ClientProjectSummary[]>([]);
   selectedContextId = $state<string | null>(null);
+  /** True until the first snapshot has arrived or definitively failed to. */
+  connecting = $state<boolean>(true);
+  /** A bridge loss is being retried on a backoff right now. */
+  reconnecting = $state<boolean>(false);
+  /** The backoff gave up; only a human pressing retry resumes work. */
+  reconnectFailed = $state<boolean>(false);
+
+  private reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+  /** How many automatic reconnect attempts have fired; surfaced in the UI. */
+  reconnectAttempts = $state<number>(0);
 
   private addWorktree(entry: WorktreeEntry) {
     this.worktrees = [...this.worktrees.slice(-(MAX_WORKTREES - 1)), entry];
@@ -213,6 +235,7 @@ export class MjolnrClient {
         this.snapshot = snap;
         await this.refreshProjects(invoke);
         this.connected = true;
+        this.connecting = false;
 
         // Listen for updates from backend channel
         await listen<ContextTaggedUpdate>('mjolnr-update', (event) => {
@@ -226,11 +249,69 @@ export class MjolnrClient {
       } catch (err: any) {
         this.lastError = err?.message || String(err);
         this.connected = false;
+        this.connecting = false;
+        // A slow or restarting backend looks identical to a dead one at first
+        // contact, so the same bounded retry that covers bridge loss covers
+        // boot. If it exhausts, the surface says so instead of looping forever.
+        this.scheduleReconnect();
       }
     } else {
       // Browser environment outside Tauri: report disconnected without manufactured authority
       this.connected = false;
       this.lastError = 'Tauri IPC unavailable (browser mode)';
+      this.connecting = false;
+    }
+  }
+
+  /**
+   * Retry a lost bridge with doubling backoff.
+   *
+   * One pending timer at a time: a burst of `closed` events schedules one
+   * loop, not one per event. Reconnection goes through the same door as the
+   * original boot — re-subscribe, then read a fresh snapshot — so recovery
+   * claims connection only after truth has actually flowed again.
+   */
+  private scheduleReconnect(delayMs?: number) {
+    if (typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window)) return;
+    if (this.reconnectTimer !== undefined) return;
+    const attempt = this.reconnectAttempts + 1;
+    if (attempt > MAX_RECONNECT_ATTEMPTS) {
+      this.reconnecting = false;
+      this.reconnectFailed = true;
+      return;
+    }
+    this.reconnectAttempts = attempt;
+    this.reconnecting = true;
+    const delay =
+      delayMs ?? Math.min(1000 * 2 ** (attempt - 1), RECONNECT_MAX_DELAY_MS);
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = undefined;
+      void this.attemptReconnect();
+    }, delay);
+  }
+
+  /** Give up waiting and try again now; the human owns this decision. */
+  retryConnection() {
+    if (typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window)) return;
+    clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = undefined;
+    this.reconnectFailed = false;
+    this.reconnectAttempts = 0;
+    this.scheduleReconnect(MANUAL_RETRY_DELAY_MS);
+  }
+
+  private async attemptReconnect() {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('subscribe_updates');
+      await this.refreshProjects(invoke);
+      this.connected = true;
+      this.lastError = null;
+      this.reconnecting = false;
+      this.reconnectFailed = false;
+      this.reconnectAttempts = 0;
+    } catch {
+      this.scheduleReconnect();
     }
   }
 
@@ -279,6 +360,7 @@ export class MjolnrClient {
       case 'closed':
         this.connected = false;
         this.streamingText = '';
+        this.scheduleReconnect();
         break;
     }
   }
@@ -478,6 +560,21 @@ export class MjolnrClient {
     return {
       code: null,
       message: 'Cannot query code graph: Tauri IPC unavailable (browser mode)'
+    };
+  }
+
+  async queryGraphStatus(): Promise<import('./contract').ClientGraphStatus | ClientRefusal> {
+    if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        return await invoke<import('./contract').ClientGraphStatus>('query_graph_status');
+      } catch (err: unknown) {
+        return describeRefusal(err);
+      }
+    }
+    return {
+      code: null,
+      message: 'Cannot query code graph status: Tauri IPC unavailable (browser mode)'
     };
   }
 
@@ -748,4 +845,7 @@ export function resetClientStoreForTests() {
   clientStore.connected = false;
   clientStore.lastError = null;
   clientStore.streamingText = '';
+  clientStore.connecting = false;
+  clientStore.reconnecting = false;
+  clientStore.reconnectFailed = false;
 }

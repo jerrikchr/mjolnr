@@ -25,6 +25,7 @@
     SentIcon,
     SparklesIcon,
     Key01Icon,
+    GitGraphIcon,
     PuzzleIcon,
     StopIcon,
     Sun01Icon,
@@ -122,6 +123,7 @@
   let editorPath = $state<string | null>(null);
   let editorFile = $state<ClientFileOpen | null>(null);
   let editorTabs = $state<Array<{ path: string; file: ClientFileOpen }>>([]);
+  let editorExpanded = $state(false);
   let editorAutosave = $state(false);
   let editorPreferencesRefusal = $state<ClientRefusal | null>(null);
 
@@ -167,6 +169,7 @@
   let fileSearchTruncated = $state(false);
   let fileSearching = $state(false);
   let splitPreset = $state<'none' | 'changes' | 'verify' | 'inspector' | 'graph'>('none');
+  let graphExpanded = $state(false);
   let activeSurface = $state<SurfaceId>('Conversation');
 
   function openIntegrations() {
@@ -269,6 +272,56 @@
     return '';
   }
 
+  // Tool results are bounded on the wire but a bound can still be thousands of
+  // characters of log text. The transcript previews the head and expands only
+  // when asked, with an explicit count instead of a silent cut.
+  const TOOL_DETAIL_PREVIEW_CHARS = 2_000;
+  let expandedToolDetails = $state<Record<string, boolean>>({});
+  function boundedDetail(message: { id: string; detail: string }) {
+    if (expandedToolDetails[message.id]) return { text: message.detail, truncated: false };
+    const truncated = message.detail.length > TOOL_DETAIL_PREVIEW_CHARS;
+    const text = truncated
+      ? `${message.detail.slice(0, TOOL_DETAIL_PREVIEW_CHARS).trimEnd()}\n…`
+      : message.detail;
+    return { text, truncated };
+  }
+
+  // Message times come from the durable record (`at`, RFC 3339) and are shown
+  // as facts about when work happened. Absent means absent: older projections
+  // simply render without a clock rather than inventing one.
+  function formatMessageTime(at: string | null | undefined): string {
+    if (!at) return '';
+    const parsed = new Date(at);
+    if (Number.isNaN(parsed.getTime())) return '';
+    return parsed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  // "Done until seen" is view state, not authority: which completed sessions
+  // this operator has looked at lives in local projection storage and can be
+  // cleared freely. The runtime's own record never depends on it.
+  const SEEN_SESSIONS_KEY = 'mjolnr.seenSessions.v1';
+  function loadSeenSessionIds(): string[] {
+    try {
+      const raw = window.localStorage.getItem(SEEN_SESSIONS_KEY);
+      const parsed: unknown = raw === null ? [] : JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : [];
+    } catch {
+      return [];
+    }
+  }
+  let seenSessionIds = $state<string[]>(loadSeenSessionIds());
+  let seenSessionSet = $derived(new Set(seenSessionIds));
+  function markSessionSeen(id: string) {
+    if (seenSessionSet.has(id)) return;
+    seenSessionIds = [...seenSessionIds, id];
+    try {
+      window.localStorage.setItem(SEEN_SESSIONS_KEY, JSON.stringify(seenSessionIds));
+    } catch {
+      // A full or blocked store loses convenience state only; the marker
+      // reverts to unseen next load, which is honest.
+    }
+  }
+
   let snap = $derived(clientStore.snapshot);
   let projectName = $derived(
     snap.workspaceRoot
@@ -280,7 +333,28 @@
     activeSessionSummary?.title || (snap.session ? `Session ${snap.session.slice(0, 8)}` : 'Conversation')
   );
   let workspaceName = $derived(projectName ? `${projectName} workspace` : 'Local workspace');
-  let recentSessions = $derived(snap.sessions.filter((session) => session.rollupStatus === 'completed'));
+  // Completed work the operator has not looked at yet stays surfaced until it
+  // is visited — "done until seen". Seen completed work drops to the archive.
+  let needsReviewSessions = $derived(
+    snap.sessions.filter(
+      (session) => session.rollupStatus === 'completed' && !seenSessionSet.has(session.id)
+    )
+  );
+  let archivedSessions = $derived(
+    snap.sessions.filter(
+      (session) => session.rollupStatus === 'completed' && seenSessionSet.has(session.id)
+    )
+  );
+  // The everyday list is live work only: unseen completion lives in "Needs
+  // review", reviewed history in the archive below it.
+  let openSidebarSessions = $derived(
+    snap.sessions.filter((session) => session.rollupStatus !== 'completed')
+  );
+  function visible(sessions: { id: string; title: string; rollupStatus: string }[]) {
+    const filter = sidebarFilter.trim().toLowerCase();
+    if (!filter) return sessions;
+    return sessions.filter((session) => (session.title || session.id).toLowerCase().includes(filter));
+  }
   let recentProjectRoots = $derived(
     Array.from(new Set(snap.sessions.map((session) => session.projectRoot).filter(Boolean))).slice(0, 5)
   );
@@ -755,6 +829,7 @@
     const next = remaining[index] ?? remaining[index - 1];
     editorPath = next?.path ?? null;
     editorFile = next?.file ?? null;
+    if (!next) editorExpanded = false;
   }
 
   async function saveEditorText(text: string, expectedDigest: string): Promise<string | null> {
@@ -790,6 +865,12 @@
     paletteOpen = false;
     if (id.startsWith('surface-')) {
       activeSurface = id.slice('surface-'.length) as SurfaceId;
+      return;
+    }
+    if (id.startsWith('session-')) {
+      // Through the same governed door as the sidebar; `resumeSession` frees
+      // the seat first and ended sessions are never listed here.
+      void resumeSession(id.slice('session-'.length));
       return;
     }
     if (id === 'resync') dispatch({ type: 'requestSnapshot' });
@@ -869,6 +950,23 @@
 
 <svelte:window onkeydown={handleGlobalKeydown} />
 
+{#if clientStore.connecting}
+  <!--
+    Boot screen. Until the first snapshot arrives the UI cannot tell "fresh
+    install" from "backend still starting", and showing setup prompts for a
+    configured machine is lying about state (AGENTS.md §1.3). Nothing below
+    renders until truth has flowed once.
+  -->
+  <div
+    class="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-background"
+    data-testid="boot-overlay"
+    role="status"
+  >
+    <AppEmblem size={44} />
+    <p class="text-sm text-muted-foreground">Connecting to the mjolnr runtime…</p>
+  </div>
+{/if}
+
 <Sidebar.Provider class="h-screen w-screen overflow-hidden flex bg-background">
   <!-- Far Left 48px Global Activity Dock -->
   <ActivityDock
@@ -876,9 +974,6 @@
     {attentionCount}
     onopenproviderauth={openIntegrations}
     onopengovernance={(tab) => openGovernance(tab)}
-    onopengraph={() => {
-      splitPreset = splitPreset === 'graph' ? 'none' : 'graph';
-    }}
   />
 
   {#if sidebarOpen}
@@ -1029,7 +1124,9 @@
               {/if}
             {/if}
 
-            <!-- Sessions are deliberately nested under the project. -->
+            <!-- Sessions are deliberately nested under the project.
+                 Completed-but-unseen work surfaces first and stays there until
+                 visited; active work follows; reviewed history archives. -->
             {#if snap.sessions.length > 0}
               <div class="ml-2 flex flex-col gap-0.5 border-l border-sidebar-border/50 pl-1 mt-1">
                 {#if snap.sessions.length > 3}
@@ -1042,8 +1139,32 @@
                     />
                   </div>
                 {/if}
+                {#if needsReviewSessions.length > 0}
+                  <p class="px-1 pt-1 text-[10px] font-semibold uppercase tracking-wider text-gov-approval" data-testid="needs-review-label">
+                    Needs review ({needsReviewSessions.length})
+                  </p>
+                  <Sidebar.Menu>
+                    {#each visible(needsReviewSessions) as session (session.id)}
+                      {@const isCurrent = snap.session === session.id}
+                      <Sidebar.MenuItem>
+                        <Sidebar.MenuButton
+                          isActive={isCurrent}
+                          aria-current={isCurrent ? 'true' : undefined}
+                          tooltipContent={sessionRowHint(session)}
+                          title={sessionRowHint(session)}
+                          class={cn('h-7 text-xs gap-2 pl-2', isCurrent && 'font-semibold')}
+                          onclick={() => markSessionSeen(session.id)}
+                        >
+                          <StatusOrb state="attention" size={6} />
+                          <span class="truncate">{session.title || session.id.slice(0, 8)}</span>
+                          <Sidebar.MenuBadge class="text-[9px] py-0">review</Sidebar.MenuBadge>
+                        </Sidebar.MenuButton>
+                      </Sidebar.MenuItem>
+                    {/each}
+                  </Sidebar.Menu>
+                {/if}
                 <Sidebar.Menu>
-                  {#each snap.sessions.filter((s) => !sidebarFilter.trim() || (s.title || s.id).toLowerCase().includes(sidebarFilter.trim().toLowerCase())) as session (session.id)}
+                  {#each visible(openSidebarSessions) as session (session.id)}
                     {@const isCurrent = snap.session === session.id}
                     {@const isEnded = session.rollupStatus === 'completed'}
                     <Sidebar.MenuItem>
@@ -1058,7 +1179,7 @@
                           isCurrent && 'font-semibold',
                           isEnded && 'opacity-50'
                         )}
-                        onclick={() => (isEnded ? undefined : resumeSession(session.id))}
+                        onclick={() => (isEnded ? markSessionSeen(session.id) : resumeSession(session.id))}
                       >
                         <HugeiconsIcon
                           icon={CircleIcon}
@@ -1073,11 +1194,11 @@
                 </Sidebar.Menu>
               </div>
             {/if}
-            {#if recentSessions.length > 0}
+            {#if archivedSessions.length > 0}
               <details class="mt-2 rounded-md border border-sidebar-border/40 px-2 py-1 text-xs">
-                <summary class="cursor-pointer text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Recents ({recentSessions.length})</summary>
+                <summary class="cursor-pointer text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Reviewed ({archivedSessions.length})</summary>
                 <div class="mt-1 space-y-1 pl-1">
-                  {#each recentSessions.slice(0, 5) as session (session.id)}
+                  {#each archivedSessions.slice(0, 5) as session (session.id)}
                     <div class="truncate text-muted-foreground" title={session.title || session.id}>{session.title || session.id.slice(0, 8)}</div>
                   {/each}
                 </div>
@@ -1335,6 +1456,18 @@
         <kbd class="text-xs text-muted-foreground font-mono rounded bg-muted px-1 py-0.5">⌘K</kbd>
       </Button>
       <Button
+        variant={splitPreset === 'graph' ? 'default' : 'ghost'}
+        size="icon-sm"
+        aria-label="Open Yggdrasil — code graph"
+        title="Yggdrasil — code graph"
+        onclick={() => {
+          if (splitPreset === 'graph') { splitPreset = 'none'; graphExpanded = false; }
+          else splitPreset = 'graph';
+        }}
+      >
+        <HugeiconsIcon icon={GitGraphIcon} strokeWidth={2} />
+      </Button>
+      <Button
         variant={explorerOpen ? 'default' : 'ghost'}
         size="icon-sm"
         aria-label="Toggle file explorer (⌘E)"
@@ -1383,15 +1516,40 @@
       </Alert.Root>
     {/if}
 
+    {#if !isConnected && clientStore.reconnecting && !clientStore.connecting}
+      <Alert.Root class="m-4 mb-0" data-testid="reconnecting-banner">
+        <HugeiconsIcon icon={RefreshIcon} strokeWidth={2} />
+        <Alert.Title>Connection to the runtime was lost</Alert.Title>
+        <Alert.Description>Reconnecting — attempt {clientStore.reconnectAttempts} of 6.</Alert.Description>
+      </Alert.Root>
+    {:else if !isConnected && clientStore.reconnectFailed}
+      <Alert.Root variant="destructive" class="m-4 mb-0" data-testid="reconnect-failed-banner">
+        <HugeiconsIcon icon={Alert02Icon} strokeWidth={2} />
+        <Alert.Title>Could not reach the mjolnr runtime</Alert.Title>
+        <Alert.Description>
+          {clientStore.lastError ?? 'The desktop bridge stopped responding.'}
+          Automatic retries have stopped; retrying is a human decision.
+        </Alert.Description>
+        <Alert.Action>
+          <Button size="sm" variant="outline" onclick={() => clientStore.retryConnection()}>
+            Retry connection
+          </Button>
+        </Alert.Action>
+      </Alert.Root>
+    {/if}
+
     <div class="flex min-h-0 flex-1">
       <div class="flex min-w-0 flex-1 flex-col">
+    {#if graphExpanded && splitPreset === 'graph'}
+      <GraphPane expanded onopen={openFileInEditor} onexpand={(next) => (graphExpanded = next)} />
+    {:else}
     <Resizable.PaneGroup direction="horizontal" class="min-h-0 flex-1">
       <Resizable.Pane
         defaultSize={splitPreset === 'none' ? 100 : 50}
         minSize={30}
         class="flex min-w-0 flex-col"
       >
-        <div class="flex min-h-0 min-w-0 flex-1">
+        <div class="relative flex min-h-0 min-w-0 flex-1">
           <Tabs.Root bind:value={activeSurface} class="flex min-h-0 min-w-0 flex-1 flex-col gap-0">
       <Tabs.Content value="Conversation" class="relative min-h-0 flex-1 overflow-hidden" data-testid="conversation-surface">
         <AuroraBackground />
@@ -1719,25 +1877,51 @@
                 {/if}
                 {#each snap.messages as message (message.id)}
                   {#if message.kind === 'tool'}
+                    {@const detail = boundedDetail(message)}
                     <div class="max-w-[90%] overflow-hidden rounded-md border">
                       <div class={cn('flex items-center justify-between gap-3 border-b px-3 py-2', TOOL_OUTCOME_CLASS[message.outcome])}>
                         <span class="font-mono text-sm font-medium text-foreground">{message.name}</span>
-                        <span class="shrink-0 text-xs font-medium">{message.outcome}</span>
+                        <span class="flex shrink-0 items-center gap-2 text-xs font-medium">
+                          {#if formatMessageTime(message.at)}<span class="text-muted-foreground">{formatMessageTime(message.at)}</span>{/if}
+                          <span>{message.outcome}</span>
+                        </span>
                       </div>
-                      <pre class="max-h-56 overflow-auto p-3 font-mono text-xs text-muted-foreground">{message.detail}</pre>
+                      <pre class="max-h-56 overflow-auto p-3 font-mono text-xs whitespace-pre-wrap text-muted-foreground">{detail.text}</pre>
+                      {#if detail.truncated || expandedToolDetails[message.id]}
+                        <div class="border-t px-3 py-1.5">
+                          <button
+                            type="button"
+                            class="text-xs text-muted-foreground hover:text-foreground cursor-pointer"
+                            onclick={() => (expandedToolDetails[message.id] = !expandedToolDetails[message.id])}
+                          >
+                            {#if expandedToolDetails[message.id]}
+                              Show less
+                            {:else}
+                              Showing the first {TOOL_DETAIL_PREVIEW_CHARS.toLocaleString('en-US')} of {message.detail.length.toLocaleString('en-US')} characters — show all
+                            {/if}
+                          </button>
+                        </div>
+                      {/if}
                     </div>
+                  {:else if message.kind === 'assistant' && message.text.trim().length === 0}
+                    <!-- A turn that carried only tool calls has no narrative to
+                         show; rendering its shell produced the clipped "mj…"
+                         pills. The tool cards below carry the real effects. -->
                   {:else}
                     <Card.Root class={cn(
                       message.kind === 'user'
                         ? 'ml-auto w-fit min-w-24 max-w-[78%] rounded-2xl border-primary/25 bg-primary/10'
-                        : 'w-fit max-w-[90%] bg-card/80'
+                        : 'w-fit min-w-40 max-w-[90%] bg-card/80'
                     )}>
                       <Card.Header class="pb-2">
                         <div class="flex items-center justify-between gap-3">
                           <Card.Title class="text-sm">{message.kind === 'user' ? 'You' : 'mjolnr'}</Card.Title>
-                          {#if message.kind === 'assistant' && message.provider}
-                            <Badge variant="outline">{message.provider} · {message.model}</Badge>
-                          {/if}
+                          <span class="flex shrink-0 items-center gap-2">
+                            {#if formatMessageTime(message.at)}<span class="text-xs text-muted-foreground" title={message.at ?? undefined}>{formatMessageTime(message.at)}</span>{/if}
+                            {#if message.kind === 'assistant' && message.provider}
+                              <Badge variant="outline">{message.provider} · {message.model}</Badge>
+                            {/if}
+                          </span>
                         </div>
                       </Card.Header>
                       <Card.Content>
@@ -1857,6 +2041,8 @@
             onselect={selectEditorTab}
             onsave={saveEditorText}
             onclose={closeEditorTab}
+            expanded={editorExpanded}
+            onexpand={(next) => (editorExpanded = next)}
             autosaveEnabled={editorAutosave}
             onautosavechange={setEditorAutosave}
             autosaveMessage={editorPreferencesRefusal?.message ?? null}
@@ -1883,11 +2069,12 @@
             <div class="border-b px-4 py-2 font-medium">Verify</div>
             <div class="flex-1 overflow-auto"><VerifySurface /></div>
           {:else if splitPreset === 'graph'}
-            <GraphPane onopen={openFileInEditor} />
+            <GraphPane onopen={openFileInEditor} onexpand={(next) => (graphExpanded = next)} />
           {/if}
         </Resizable.Pane>
       {/if}
     </Resizable.PaneGroup>
+    {/if}
 
         {#if terminalOpen}
           <TerminalPane
@@ -2113,6 +2300,26 @@
           {/if}
         </Command.Group>
       {/if}
+      <Command.Separator />
+    {/if}
+
+    {#if openSidebarSessions.length > 0}
+      <Command.Group heading="Sessions">
+        {#each visible(openSidebarSessions).slice(0, 8) as session (session.id)}
+          <Command.Item
+            value={`session-${session.id}`}
+            onSelect={() => selectCommand(`session-${session.id}`)}
+          >
+            <HugeiconsIcon icon={Message01Icon} strokeWidth={2} />
+            <div class="flex min-w-0 flex-1 items-center justify-between gap-3">
+              <span class="truncate text-sm">{session.title || session.id.slice(0, 8)}</span>
+              <span class="shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-[9px] text-muted-foreground">
+                {sessionBadge(session)}
+              </span>
+            </div>
+          </Command.Item>
+        {/each}
+      </Command.Group>
       <Command.Separator />
     {/if}
 
