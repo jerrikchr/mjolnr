@@ -4,7 +4,7 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   plugins: [tailwindcss(), sveltekit()],
-  server: { port: 1420, strictPort: true },
+  server: { host: '127.0.0.1', port: 1420, strictPort: true },
   test: {
     environment: 'jsdom',
     include: ['src/**/*.{test,spec}.{js,ts}'],

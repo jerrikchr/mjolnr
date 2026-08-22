@@ -8,7 +8,7 @@
   import { rust } from '@codemirror/lang-rust';
   import { javascript } from '@codemirror/lang-javascript';
   import { json } from '@codemirror/lang-json';
-  import { ChevronDownIcon, File01Icon } from '@hugeicons/core-free-icons';
+  import { Cancel01Icon, File01Icon, Maximize01Icon, Minimize01Icon } from '@hugeicons/core-free-icons';
   import { HugeiconsIcon } from '@hugeicons/svelte';
   import type { ClientFileOpen } from '$lib/runtime/contract';
   import { cn } from '$lib/utils';
@@ -19,6 +19,8 @@
     tabs,
     onselect,
     onclose,
+    expanded = false,
+    onexpand,
     onsave,
     autosaveEnabled,
     onautosavechange,
@@ -29,6 +31,8 @@
     tabs: Array<{ path: string; file: ClientFileOpen }>;
     onselect: (path: string) => void;
     onclose: (path: string) => void;
+    expanded?: boolean;
+    onexpand?: (expanded: boolean) => void;
     onsave: (text: string, expectedDigest: string) => Promise<string | null>;
     autosaveEnabled: boolean;
     onautosavechange: (enabled: boolean) => void;
@@ -155,7 +159,7 @@
 </script>
 
 <div
-  class="flex min-h-0 w-[46%] shrink-0 flex-col border-l bg-background"
+  class={cn('flex min-h-0 shrink-0 flex-col border-l bg-background', expanded ? 'absolute inset-0 z-30 w-full border-l-0' : 'w-[46%]')}
   role="tabpanel"
   aria-labelledby={tabId(path)}
   data-testid="editor-pane"
@@ -191,7 +195,7 @@
           aria-label={`Close ${tab.path}`}
           onclick={() => onclose(tab.path)}
         >
-          <HugeiconsIcon icon={ChevronDownIcon} strokeWidth={2} class="size-3.5" />
+          <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} class="size-3.5" />
         </button>
       </div>
     {/each}
@@ -218,6 +222,15 @@
         {saving ? 'saving…' : saveMessage ? 'save refused' : '⌘S save · ⌘F find · ⌘W close'}
       </span>
     {/if}
+    <button
+      type="button"
+      class="ml-1 grid size-6 shrink-0 place-items-center rounded hover:bg-muted"
+      aria-label={expanded ? 'Exit full-width editor' : 'Open editor full width'}
+      title={expanded ? 'Exit full-width editor' : 'Open editor full width'}
+      onclick={() => onexpand?.(!expanded)}
+    >
+      <HugeiconsIcon icon={expanded ? Minimize01Icon : Maximize01Icon} strokeWidth={2} class="size-3.5" />
+    </button>
   </div>
 
   {#if !file}

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import {
-    ChevronDownIcon,
+    Cancel01Icon,
     SquareArrowExpand01Icon,
     SquareArrowShrink01Icon
   } from '@hugeicons/core-free-icons';
@@ -423,6 +423,7 @@
     <span class="shrink-0 font-mono text-xs text-muted-foreground">
       {starting ? 'starting…' : terminal ? `pty · ${terminal.status}` : 'operator-controlled'}
     </span>
+    {#if terminal?.status === 'running'}<span class="shrink-0 text-[10px] text-muted-foreground">click terminal to type</span>{/if}
     <div class="ml-auto flex shrink-0 items-center gap-0.5">
       <input
         class="h-7 w-32 rounded border bg-background px-2 font-mono text-xs"
@@ -459,7 +460,7 @@
           onclose();
         }}
       >
-        <HugeiconsIcon icon={ChevronDownIcon} strokeWidth={2} class="size-4" />
+        <HugeiconsIcon icon={Cancel01Icon} strokeWidth={2} class="size-4" />
       </button>
     </div>
   </div>

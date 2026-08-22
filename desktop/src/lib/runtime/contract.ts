@@ -75,8 +75,8 @@ export interface ClientToolCallRef {
 }
 
 export type ClientMessage =
-  | { kind: 'user'; id: string; text: string; textTruncated: boolean }
-  | { kind: 'system'; id: string; text: string; textTruncated: boolean }
+  | { kind: 'user'; id: string; text: string; textTruncated: boolean; at?: string | null }
+  | { kind: 'system'; id: string; text: string; textTruncated: boolean; at?: string | null }
   | {
       kind: 'assistant';
       id: string;
@@ -85,6 +85,7 @@ export type ClientMessage =
       provider?: string;
       model?: string;
       toolCalls: ClientToolCallRef[];
+      at?: string | null;
     }
   | {
       kind: 'tool';
@@ -94,6 +95,7 @@ export type ClientMessage =
       reasonCode?: string;
       detail: string;
       detailTruncated: boolean;
+      at?: string | null;
     };
 
 export interface ClientApproval {
@@ -465,6 +467,27 @@ export interface ClientTerminalLayout {
 
 export type ClientGraphDirection = 'imports' | 'importers' | 'both';
 
+export type ClientGraphBuildPhase = 'idle' | 'building' | 'ready' | 'failed';
+
+export interface ClientGraphStatus {
+  phase: ClientGraphBuildPhase;
+  detail: string;
+  filesScanned: number;
+  filesTotal: number;
+  nodes: number;
+  edges: number;
+}
+
+export interface ClientGraphLanguageCapability {
+  language: string;
+  files: number;
+  imports: boolean;
+  symbols: boolean;
+  callGraph: boolean;
+  resolver: string;
+  extraction: string;
+}
+
 export interface ClientGraphQuery {
   path?: string | null;
   depth: number;
@@ -482,6 +505,11 @@ export interface ClientGraphNode {
   path: string;
   language: string;
   distance?: number | null;
+  degree: number;
+  community?: number | null;
+  communitySize: number;
+  isArticulationPoint: boolean;
+  inCycle: boolean;
   imports: string[];
   importers: string[];
   symbols: ClientGraphSymbol[];
@@ -490,7 +518,9 @@ export interface ClientGraphNode {
 export interface ClientGraphEdge {
   from: string;
   to: string;
+  relation: string;
   provenance: string;
+  confidenceBps: number;
 }
 
 export interface ClientGraphSummary {
@@ -500,6 +530,11 @@ export interface ClientGraphSummary {
   filesSkipped: number;
   filesTooLarge: number;
   nonParsedEdges: number;
+  communities: number;
+  articulationPoints: number;
+  cycleNodes: number;
+  unsupportedLanguages: string[];
+  languages: ClientGraphLanguageCapability[];
 }
 
 export interface ClientGraphPage {

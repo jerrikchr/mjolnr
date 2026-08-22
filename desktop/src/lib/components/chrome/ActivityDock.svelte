@@ -1,6 +1,6 @@
 <!--
   ActivityDock: Far-left 48px global dock for workspace navigation,
-  surface switching (Chat, Plan, Board, Graph, Changes, Verify, Attention),
+  surface switching (Chat, Plan, Board, Changes, Verify, Attention),
   and bottom settings/status anchors (SOUL.md, Council, Provider Auth, Health).
 -->
 <script lang="ts">
@@ -13,7 +13,6 @@
     CheckmarkCircle02Icon,
     Notification02Icon,
     PuzzleIcon,
-    SearchIcon,
     BotIcon,
     MaskTheater01Icon,
     SparklesIcon
@@ -29,14 +28,12 @@
     activeSurface = $bindable('Conversation'),
     attentionCount = 0,
     onopenproviderauth,
-    onopengovernance,
-    onopengraph
+    onopengovernance
   }: {
     activeSurface: SurfaceId;
     attentionCount?: number;
     onopenproviderauth?: () => void;
     onopengovernance?: (tab: string) => void;
-    onopengraph?: () => void;
   } = $props();
 
   let snap = $derived(clientStore.snapshot);
@@ -107,17 +104,6 @@
           {/if}
         </button>
       {/each}
-
-      <!-- Code Graph Trigger -->
-      <button
-        type="button"
-        class="flex items-center justify-center size-9 rounded-lg text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/70 transition-all cursor-pointer"
-        onclick={onopengraph}
-        title="Knowledge & Code Graph"
-        aria-label="Code Graph"
-      >
-        <HugeiconsIcon icon={SearchIcon} strokeWidth={1.8} class="size-4.5" />
-      </button>
     </nav>
   </div>
 
