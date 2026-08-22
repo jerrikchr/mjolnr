@@ -93,6 +93,9 @@ static DESCRIPTOR: CompatDescriptor = CompatDescriptor {
     default_model: DEFAULT_MODEL,
     model_display: "Forge Claude Sonnet 5",
     auth: CompatAuth::Required,
+    // The inner compat adapter must return raw rows so the reviewed
+    // capability table below can do the intersecting.
+    catalog_trust: crate::providers::openai_compat::CatalogTrust::ReviewedOnly,
 };
 
 #[derive(Debug)]

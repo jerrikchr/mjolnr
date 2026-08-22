@@ -288,6 +288,60 @@ async fn a_generic_catalog_does_not_invent_tool_capability_for_unknown_models() 
 }
 
 #[tokio::test]
+async fn an_endpoint_authoritative_catalog_surfaces_every_listed_model() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/models"))
+        .and(header("authorization", "Bearer zen-secret"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "data": [
+                { "id": "claude-opus-4-8" },
+                { "id": "kimi-k2.7-code" },
+                { "id": "some-new-route-the-vendor-shipped-this-week" }
+            ]
+        })))
+        .mount(&server)
+        .await;
+    let provider =
+        OpenAiCompatProvider::new(descriptor("opencode-zen"), Arc::new(Secrets("zen-secret")))
+            .with_base_url(server.uri());
+
+    let mut models = provider
+        .discover_models(CancellationToken::new())
+        .await
+        .unwrap();
+    models.sort_by(|a, b| a.id.as_str().cmp(b.id.as_str()));
+
+    // A subscription gateway's own listing is the plan's route table; a
+    // curated mjolnr list would silently hide routes the account can use.
+    assert_eq!(models.len(), 3);
+    assert_eq!(
+        models.first().expect("first model").id.as_str(),
+        "claude-opus-4-8"
+    );
+    assert_eq!(
+        models.last().expect("last model").id.as_str(),
+        "some-new-route-the-vendor-shipped-this-week"
+    );
+}
+
+#[test]
+fn only_subscription_gateways_own_their_catalog() {
+    // Widening this flag must be a reviewed act per endpoint: every other
+    // compat endpoint's listing proves availability, not mjolnr's streaming +
+    // tool contract, and stays on the reviewed intersection.
+    let authoritative: Vec<&str> = CATALOG
+        .iter()
+        .filter(|descriptor| {
+            descriptor.catalog_trust
+                == mjolnr::providers::openai_compat::CatalogTrust::EndpointAuthoritative
+        })
+        .map(|descriptor| descriptor.id)
+        .collect();
+    assert_eq!(authoritative, vec!["opencode-zen", "opencode-go"]);
+}
+
+#[tokio::test]
 async fn a_keyed_catalog_endpoint_sends_the_bearer_credential() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))

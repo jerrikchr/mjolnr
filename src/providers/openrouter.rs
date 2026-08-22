@@ -24,6 +24,7 @@ static DESCRIPTOR: CompatDescriptor = CompatDescriptor {
     default_model: DEFAULT_MODEL,
     model_display: "OpenRouter GPT-4o mini route",
     auth: CompatAuth::Required,
+    catalog_trust: crate::providers::openai_compat::CatalogTrust::ReviewedOnly,
 };
 
 #[derive(Debug)]

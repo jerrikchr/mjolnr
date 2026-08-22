@@ -39,6 +39,23 @@ pub enum CompatAuth {
     Optional,
 }
 
+/// How [`OpenAiCompatProvider::discover_models`] treats this endpoint's
+/// `/models` listing.
+///
+/// A generic row proves availability, not mjolnr's required streaming + tool
+/// contract, so the default keeps only descriptors the named adapter has
+/// reviewed. Endpoints flagged [`CatalogTrust::EndpointAuthoritative`] are
+/// subscription gateways whose `/models` listing *is* the plan's route table;
+/// a curated mjolnr list there would silently rot as the vendor changes
+/// lineups and hide routes the account can actually use.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CatalogTrust {
+    /// Publish only the reviewed intersection (the historical behavior).
+    ReviewedOnly,
+    /// Publish every row the endpoint lists.
+    EndpointAuthoritative,
+}
+
 /// A named OpenAI-compatible endpoint.
 #[derive(Debug)]
 pub struct CompatDescriptor {
@@ -55,6 +72,9 @@ pub struct CompatDescriptor {
     /// Display name for the default model entry.
     pub model_display: &'static str,
     pub auth: CompatAuth,
+    /// Whether model discovery publishes this endpoint's full `/models`
+    /// listing or only the reviewed intersection.
+    pub catalog_trust: CatalogTrust,
 }
 
 /// Phase 16 catalog. Base URLs verified against each provider's published
@@ -68,6 +88,7 @@ pub static CATALOG: &[CompatDescriptor] = &[
         default_model: "nvidia/llama-3.1-nemotron-70b-instruct",
         model_display: "NVIDIA NIM Nemotron 70B",
         auth: CompatAuth::Required,
+        catalog_trust: CatalogTrust::ReviewedOnly,
     },
     CompatDescriptor {
         id: "xai",
@@ -76,6 +97,7 @@ pub static CATALOG: &[CompatDescriptor] = &[
         default_model: "grok-4-fast-non-reasoning",
         model_display: "xAI Grok 4 Fast",
         auth: CompatAuth::Required,
+        catalog_trust: CatalogTrust::ReviewedOnly,
     },
     CompatDescriptor {
         id: "opencode-zen",
@@ -84,6 +106,7 @@ pub static CATALOG: &[CompatDescriptor] = &[
         default_model: "claude-opus-4-8",
         model_display: "OpenCode Zen default route",
         auth: CompatAuth::Required,
+        catalog_trust: CatalogTrust::EndpointAuthoritative,
     },
     CompatDescriptor {
         id: "opencode-go",
@@ -92,6 +115,7 @@ pub static CATALOG: &[CompatDescriptor] = &[
         default_model: "kimi-k2.7-code",
         model_display: "OpenCode Go default route",
         auth: CompatAuth::Required,
+        catalog_trust: CatalogTrust::EndpointAuthoritative,
     },
     CompatDescriptor {
         id: "vercel-gateway",
@@ -100,6 +124,7 @@ pub static CATALOG: &[CompatDescriptor] = &[
         default_model: "anthropic/claude-opus-4.8",
         model_display: "Vercel AI Gateway default route",
         auth: CompatAuth::Required,
+        catalog_trust: CatalogTrust::ReviewedOnly,
     },
     CompatDescriptor {
         id: "cloudflare-gateway",
@@ -111,6 +136,7 @@ pub static CATALOG: &[CompatDescriptor] = &[
         default_model: "anthropic/claude-opus-4-8",
         model_display: "Cloudflare AI Gateway default route",
         auth: CompatAuth::Required,
+        catalog_trust: CatalogTrust::ReviewedOnly,
     },
     CompatDescriptor {
         id: "vllm",
@@ -119,6 +145,7 @@ pub static CATALOG: &[CompatDescriptor] = &[
         default_model: "gpt-oss-20b",
         model_display: "vLLM local server",
         auth: CompatAuth::Optional,
+        catalog_trust: CatalogTrust::ReviewedOnly,
     },
     CompatDescriptor {
         id: "lm-studio",
@@ -127,6 +154,7 @@ pub static CATALOG: &[CompatDescriptor] = &[
         default_model: "llama-3-8b",
         model_display: "LM Studio local server",
         auth: CompatAuth::Optional,
+        catalog_trust: CatalogTrust::ReviewedOnly,
     },
     CompatDescriptor {
         id: "deepseek",
@@ -135,6 +163,7 @@ pub static CATALOG: &[CompatDescriptor] = &[
         default_model: "deepseek-chat",
         model_display: "DeepSeek V3 Chat",
         auth: CompatAuth::Required,
+        catalog_trust: CatalogTrust::ReviewedOnly,
     },
     CompatDescriptor {
         id: "mistral",
@@ -143,6 +172,7 @@ pub static CATALOG: &[CompatDescriptor] = &[
         default_model: "mistral-large-latest",
         model_display: "Mistral Large",
         auth: CompatAuth::Required,
+        catalog_trust: CatalogTrust::ReviewedOnly,
     },
     CompatDescriptor {
         id: "groq",
@@ -151,6 +181,7 @@ pub static CATALOG: &[CompatDescriptor] = &[
         default_model: "llama-3.3-70b-versatile",
         model_display: "Groq Llama 3.3 70B",
         auth: CompatAuth::Required,
+        catalog_trust: CatalogTrust::ReviewedOnly,
     },
     CompatDescriptor {
         id: "together",
@@ -159,6 +190,7 @@ pub static CATALOG: &[CompatDescriptor] = &[
         default_model: "meta-llama/Llama-3.3-70B-Instruct-Turbo",
         model_display: "Together Llama 3.3 70B",
         auth: CompatAuth::Required,
+        catalog_trust: CatalogTrust::ReviewedOnly,
     },
     CompatDescriptor {
         id: "fireworks",
@@ -167,6 +199,7 @@ pub static CATALOG: &[CompatDescriptor] = &[
         default_model: "accounts/fireworks/models/llama-v3p3-70b-instruct",
         model_display: "Fireworks Llama 3.3 70B",
         auth: CompatAuth::Required,
+        catalog_trust: CatalogTrust::ReviewedOnly,
     },
     CompatDescriptor {
         id: "perplexity",
@@ -175,6 +208,7 @@ pub static CATALOG: &[CompatDescriptor] = &[
         default_model: "sonar-pro",
         model_display: "Perplexity Sonar Pro",
         auth: CompatAuth::Required,
+        catalog_trust: CatalogTrust::ReviewedOnly,
     },
     CompatDescriptor {
         id: "moonshot",
@@ -183,6 +217,7 @@ pub static CATALOG: &[CompatDescriptor] = &[
         default_model: "moonshot-v1-8k",
         model_display: "Moonshot Kimi v1 8K",
         auth: CompatAuth::Required,
+        catalog_trust: CatalogTrust::ReviewedOnly,
     },
     CompatDescriptor {
         id: "zhipu",
@@ -191,6 +226,7 @@ pub static CATALOG: &[CompatDescriptor] = &[
         default_model: "glm-4-flash",
         model_display: "GLM-4 Flash",
         auth: CompatAuth::Required,
+        catalog_trust: CatalogTrust::ReviewedOnly,
     },
     CompatDescriptor {
         id: "qwen",
@@ -199,6 +235,7 @@ pub static CATALOG: &[CompatDescriptor] = &[
         default_model: "qwen-max",
         model_display: "Qwen Max",
         auth: CompatAuth::Required,
+        catalog_trust: CatalogTrust::ReviewedOnly,
     },
     CompatDescriptor {
         id: "huggingface",
@@ -209,6 +246,7 @@ pub static CATALOG: &[CompatDescriptor] = &[
         default_model: "meta-llama/Llama-3.3-70B-Instruct",
         model_display: "Llama 3.3 70B (HF router)",
         auth: CompatAuth::Required,
+        catalog_trust: CatalogTrust::ReviewedOnly,
     },
     CompatDescriptor {
         id: "tokenrouter",
@@ -221,6 +259,7 @@ pub static CATALOG: &[CompatDescriptor] = &[
         default_model: "moonshotai/kimi-k3-free",
         model_display: "Kimi K3 (TokenRouter free tier)",
         auth: CompatAuth::Required,
+        catalog_trust: CatalogTrust::ReviewedOnly,
     },
 ];
 
@@ -851,6 +890,13 @@ impl Provider for OpenAiCompatProvider {
         if self.descriptor.id == crate::providers::forge::PROVIDER_ID {
             // Forge's wrapper intersects these names with its larger reviewed
             // capability table. Returning raw rows here does not publish them.
+            return Ok(discovered);
+        }
+
+        // Subscription gateways flagged authoritative own their catalog end
+        // to end: their listing is what the account can route to today, and
+        // a curated mjolnr list would silently hide new routes.
+        if self.descriptor.catalog_trust == CatalogTrust::EndpointAuthoritative {
             return Ok(discovered);
         }
 
