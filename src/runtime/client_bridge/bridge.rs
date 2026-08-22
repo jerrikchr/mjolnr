@@ -1,7 +1,9 @@
 //! `ClientBridge` handle and dispatch implementation.
 
+use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
@@ -15,6 +17,13 @@ use super::convert::snapshot_to_client;
 use super::pump::pump_updates;
 
 const CLIENT_UPDATE_CAPACITY: usize = 256;
+const GRAPH_CACHE_TTL: Duration = Duration::from_secs(15);
+
+#[derive(Debug)]
+struct GraphCache {
+    pages: BTreeMap<String, (Instant, crate::core::client::graph::ClientGraphPage)>,
+    status: crate::core::client::graph::ClientGraphStatus,
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum ClientBridgeError {
@@ -53,6 +62,7 @@ pub struct ClientBridge {
     updates: mpsc::Sender<ClientUpdate>,
     receiver: Mutex<Option<mpsc::Receiver<ClientUpdate>>>,
     pump: Mutex<Option<JoinHandle<()>>>,
+    graph_cache: Arc<Mutex<GraphCache>>,
 }
 
 impl ClientBridge {
@@ -70,12 +80,24 @@ impl ClientBridge {
             updates.clone(),
             Arc::clone(&sequence),
         ));
+        let graph_cache = Arc::new(Mutex::new(GraphCache {
+            pages: BTreeMap::new(),
+            status: crate::core::client::graph::ClientGraphStatus {
+                phase: crate::core::client::graph::ClientGraphBuildPhase::Idle,
+                detail: "graph has not been mapped yet".to_owned(),
+                files_scanned: 0,
+                files_total: 0,
+                nodes: 0,
+                edges: 0,
+            },
+        }));
         Self {
             runtime,
             sequence,
             updates,
             receiver: Mutex::new(Some(receiver)),
             pump: Mutex::new(Some(pump)),
+            graph_cache,
         }
     }
 
@@ -221,17 +243,86 @@ impl ClientBridge {
                     detail: "the code graph needs an open workspace".to_owned(),
                 })?;
         let query = validate_graph_query(query)?;
-        let answer = tokio::task::spawn_blocking(move || super::graph::build_page(&root, query))
-            .await
-            .map_err(|error| ClientBridgeError::RuntimeRefused {
+        let cache_key =
+            serde_json::to_string(&query).map_err(|error| ClientBridgeError::RuntimeRefused {
                 code: None,
-                detail: format!("code graph worker failed: {error}"),
-            })?
-            .map_err(|error| ClientBridgeError::RuntimeRefused {
+                detail: format!("code graph query could not be keyed: {error}"),
+            })?;
+        if let Ok(cache) = self.graph_cache.lock() {
+            if let Some((created, page)) = cache.pages.get(&cache_key) {
+                if created.elapsed() <= GRAPH_CACHE_TTL {
+                    return Ok(page.clone());
+                }
+            }
+        }
+        if let Ok(mut cache) = self.graph_cache.lock() {
+            cache.status = crate::core::client::graph::ClientGraphStatus {
+                phase: crate::core::client::graph::ClientGraphBuildPhase::Building,
+                detail: "scanning source files and resolving parsed import edges".to_owned(),
+                files_scanned: 0,
+                files_total: 0,
+                nodes: 0,
+                edges: 0,
+            };
+        }
+        let graph_cache = Arc::clone(&self.graph_cache);
+        let progress_cache = Arc::clone(&graph_cache);
+        let answer = match tokio::task::spawn_blocking(move || {
+            super::graph::build_page_with_progress(&root, query, |files_scanned, files_total| {
+                if let Ok(mut cache) = progress_cache.lock() {
+                    cache.status.files_scanned = files_scanned;
+                    cache.status.files_total = files_total;
+                }
+            })
+        })
+        .await
+        {
+            Ok(Ok(page)) => Ok(page),
+            Ok(Err(error)) => Err(ClientBridgeError::RuntimeRefused {
                 code: Some(ReasonCode::WorkspaceSearchRefused),
                 detail: error.to_string(),
-            })?;
-        Ok(answer)
+            }),
+            Err(error) => Err(ClientBridgeError::RuntimeRefused {
+                code: None,
+                detail: format!("code graph worker failed: {error}"),
+            }),
+        };
+        if let Ok(mut cache) = graph_cache.lock() {
+            match &answer {
+                Ok(page) => {
+                    cache.status = crate::core::client::graph::ClientGraphStatus {
+                        phase: crate::core::client::graph::ClientGraphBuildPhase::Ready,
+                        detail: "deterministic graph ready; cached for this workspace".to_owned(),
+                        files_scanned: page.summary.files_scanned,
+                        files_total: page.summary.files_scanned,
+                        nodes: page.nodes.len(),
+                        edges: page.edges.len(),
+                    };
+                    cache
+                        .pages
+                        .insert(cache_key, (Instant::now(), page.clone()));
+                }
+                Err(error) => {
+                    cache.status.phase = crate::core::client::graph::ClientGraphBuildPhase::Failed;
+                    cache.status.detail = error.to_string();
+                }
+            }
+        }
+        answer
+    }
+
+    pub fn graph_status(&self) -> crate::core::client::graph::ClientGraphStatus {
+        self.graph_cache
+            .lock()
+            .map(|cache| cache.status.clone())
+            .unwrap_or(crate::core::client::graph::ClientGraphStatus {
+                phase: crate::core::client::graph::ClientGraphBuildPhase::Failed,
+                detail: "graph status unavailable".to_owned(),
+                files_scanned: 0,
+                files_total: 0,
+                nodes: 0,
+                edges: 0,
+            })
     }
 
     /// Read the board: what can be decided right now, and why the rest is

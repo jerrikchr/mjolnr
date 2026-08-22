@@ -119,6 +119,43 @@ fn an_external_crate_is_counted_as_external_and_never_an_edge() {
 }
 
 #[test]
+fn dart_imports_and_package_libraries_are_structural_edges() {
+    let temp = TempDir::new().expect("fixture");
+    write(temp.path(), "pubspec.yaml", "name: sample\n");
+    write(
+        temp.path(),
+        "lib/app.dart",
+        "import 'package:sample/models.dart';\nexport 'screens/home.dart';\nclass App {}\n",
+    );
+    write(temp.path(), "lib/models.dart", "class Model {}\n");
+    write(
+        temp.path(),
+        "lib/screens/home.dart",
+        "part '../models.dart';\n",
+    );
+
+    let graph = graph::build(temp.path()).expect("build");
+    let app = node_named(&graph, "lib/app.dart");
+    let models = node_named(&graph, "lib/models.dart");
+    let home = node_named(&graph, "lib/screens/home.dart");
+    let imports = graph.node(app).expect("app node").imports.clone();
+
+    assert!(imports.contains(&models));
+    assert!(imports.contains(&home));
+    assert_eq!(
+        graph.node(app).expect("app node").language,
+        SourceLanguage::Dart
+    );
+    assert!(
+        graph
+            .symbols_in(app)
+            .iter()
+            .any(|symbol| symbol.name == "App")
+    );
+    assert_eq!(graph.external(), 0);
+}
+
+#[test]
 fn a_crate_path_naming_no_module_is_unresolved_not_external() {
     let temp = TempDir::new().expect("fixture");
     write(temp.path(), "src/lib.rs", "mod a;\n");

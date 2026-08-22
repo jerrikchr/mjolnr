@@ -323,14 +323,24 @@ pub const COMMANDS: &[SlashCommand] = &[
         aliases: &[],
         summary: "release the open session (resumable later, not terminal)",
         hint: None,
-        state: |view| view.snapshot.session.as_ref().map(|s| format!("session {}", &s.to_string()[..8.min(s.to_string().len())])),
+        state: |view| {
+            view.snapshot
+                .session
+                .as_ref()
+                .map(|s| format!("session {}", &s.to_string()[..8.min(s.to_string().len())]))
+        },
     },
     SlashCommand {
         name: "/end",
         aliases: &[],
         summary: "end the open session permanently (cannot be resumed)",
         hint: None,
-        state: |view| view.snapshot.session.as_ref().map(|s| format!("session {}", &s.to_string()[..8.min(s.to_string().len())])),
+        state: |view| {
+            view.snapshot
+                .session
+                .as_ref()
+                .map(|s| format!("session {}", &s.to_string()[..8.min(s.to_string().len())]))
+        },
     },
     SlashCommand {
         name: "/reclaim",

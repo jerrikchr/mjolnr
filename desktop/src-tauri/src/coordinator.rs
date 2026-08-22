@@ -299,6 +299,12 @@ impl RuntimeCoordinator {
         self.selected_bridge().await?.query_graph(query).await
     }
 
+    pub(crate) async fn query_graph_status(
+        &self,
+    ) -> Result<mjolnr::core::client::graph::ClientGraphStatus, ClientBridgeError> {
+        Ok(self.selected_bridge().await?.graph_status())
+    }
+
     pub(crate) async fn query_board(
         &self,
     ) -> Result<mjolnr::core::client::board::ClientBoardOverview, ClientBridgeError> {

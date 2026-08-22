@@ -702,6 +702,20 @@ async fn query_graph(
         })
 }
 
+#[tauri::command]
+async fn query_graph_status(
+    state: State<'_, AppState>,
+) -> Result<mjolnr::core::client::graph::ClientGraphStatus, DesktopBridgeError> {
+    state
+        .bridge
+        .query_graph_status()
+        .await
+        .map_err(|error| DesktopBridgeError::Refused {
+            code: error.reason_code().map(|code| code.as_str().to_owned()),
+            message: error.to_string(),
+        })
+}
+
 /// The board surface: what is decidable now, and why the rest is fogged
 /// (Phase E5, step 3). Pure query; refuses without an open workspace.
 #[tauri::command]
@@ -1074,6 +1088,7 @@ pub fn run() {
             auth_jules_status,
             auth_logout,
             query_graph,
+            query_graph_status,
             query_board,
             query_repository_history,
             terminal_start,

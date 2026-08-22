@@ -44,13 +44,19 @@ mod rust;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-pub use build::{BuildError, build};
+pub use build::{BuildError, build, build_with_progress};
 pub use diffmap::{
     ChangeMap, ChangedFile, FileImpact, LineRange, MAX_DIFF_BYTES, MAX_DIFF_FILES, ParsedDiff,
     UnmappedFile, map, parse_unified,
 };
 pub use query::{BlastRadius, Direction, Neighbour, between, blast_radius, neighbours, reachable};
 pub use rust::SymbolKind;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BuildProgress {
+    pub files_scanned: usize,
+    pub files_total: usize,
+}
 
 /// A source language the graph can parse structurally.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -61,6 +67,7 @@ pub enum SourceLanguage {
     TypeScriptReact,
     Python,
     Go,
+    Dart,
 }
 
 impl SourceLanguage {
@@ -73,6 +80,7 @@ impl SourceLanguage {
             "tsx" => Some(Self::TypeScriptReact),
             "py" => Some(Self::Python),
             "go" => Some(Self::Go),
+            "dart" => Some(Self::Dart),
             _ => None,
         }
     }
@@ -86,6 +94,7 @@ impl SourceLanguage {
             Self::TypeScriptReact => "typescript-react",
             Self::Python => "python",
             Self::Go => "go",
+            Self::Dart => "dart",
         }
     }
 }

@@ -60,6 +60,7 @@ fn language_for(language: SourceLanguage) -> Option<tree_sitter::Language> {
         SourceLanguage::TypeScriptReact => Some(tree_sitter_typescript::LANGUAGE_TSX.into()),
         SourceLanguage::Python => Some(tree_sitter_python::LANGUAGE.into()),
         SourceLanguage::Go => Some(tree_sitter_go::LANGUAGE.into()),
+        SourceLanguage::Dart => Some(tree_sitter_dart::LANGUAGE.into()),
         SourceLanguage::Rust => None,
     }
 }
@@ -125,6 +126,17 @@ fn import_from_node(node: Node<'_>, language: SourceLanguage, source: &str) -> I
                     .map_or(ImportMatch::Unparsed, ImportMatch::Parsed);
             }
         }
+        SourceLanguage::Dart => {
+            if matches!(
+                node.kind(),
+                "import_specification" | "library_export" | "part_directive"
+            ) {
+                return node
+                    .child_by_field_name("uri")
+                    .and_then(|child| first_string_literal(child, source))
+                    .map_or(ImportMatch::Unparsed, ImportMatch::Parsed);
+            }
+        }
         SourceLanguage::Rust => {}
     }
     ImportMatch::NotImport
@@ -143,9 +155,15 @@ fn symbol_from_node(
             "function_declaration" | "method_definition",
         )
         | (SourceLanguage::Python, "function_definition")
-        | (SourceLanguage::Go, "function_declaration" | "method_declaration") => {
-            SymbolKind::Function
-        }
+        | (SourceLanguage::Go, "function_declaration" | "method_declaration")
+        | (
+            SourceLanguage::Dart,
+            "function_declaration"
+            | "method_declaration"
+            | "getter_declaration"
+            | "setter_declaration"
+            | "local_function_declaration",
+        ) => SymbolKind::Function,
         (
             SourceLanguage::JavaScript
             | SourceLanguage::TypeScript
@@ -153,6 +171,14 @@ fn symbol_from_node(
             "class_declaration",
         )
         | (SourceLanguage::Python, "class_definition") => SymbolKind::Struct,
+        (
+            SourceLanguage::Dart,
+            "class_declaration"
+            | "enum_declaration"
+            | "extension_declaration"
+            | "extension_type_declaration"
+            | "mixin_declaration",
+        ) => SymbolKind::Struct,
         (
             SourceLanguage::JavaScript
             | SourceLanguage::TypeScript
@@ -165,11 +191,27 @@ fn symbol_from_node(
             | SourceLanguage::TypeScriptReact,
             "type_alias_declaration",
         )
-        | (SourceLanguage::Go, "type_spec") => SymbolKind::TypeAlias,
+        | (SourceLanguage::Go, "type_spec")
+        | (SourceLanguage::Dart, "type_alias") => SymbolKind::TypeAlias,
         _ => return None,
     };
-    let name = node.child_by_field_name("name")?;
+    let name = node
+        .child_by_field_name("name")
+        .or_else(|| find_named_field(node, "name"))?;
     Some((node_text(name, source)?, kind))
+}
+
+fn find_named_field<'a>(node: Node<'a>, field: &str) -> Option<Node<'a>> {
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        if let Some(found) = child.child_by_field_name(field) {
+            return Some(found);
+        }
+        if let Some(found) = find_named_field(child, field) {
+            return Some(found);
+        }
+    }
+    None
 }
 
 fn is_require_call(node: Node<'_>, source: &str) -> bool {
@@ -205,7 +247,11 @@ fn first_string_literal(node: Node<'_>, source: &str) -> Option<String> {
 fn is_string_node(node: Node<'_>) -> bool {
     matches!(
         node.kind(),
-        "string" | "string_fragment" | "interpreted_string_literal" | "raw_string_literal"
+        "string"
+            | "string_fragment"
+            | "string_literal"
+            | "interpreted_string_literal"
+            | "raw_string_literal"
     )
 }
 

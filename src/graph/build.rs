@@ -6,8 +6,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use super::{
-    CodeGraph, EdgeProvenance, FileNode, MAX_FILE_BYTES, MAX_FILES, MAX_SYMBOL_SITES, NodeId,
-    SKIPPED_DIRECTORIES, SourceLanguage, SymbolSite, Truncation, foreign, rust,
+    BuildProgress, CodeGraph, EdgeProvenance, FileNode, MAX_FILE_BYTES, MAX_FILES,
+    MAX_SYMBOL_SITES, NodeId, SKIPPED_DIRECTORIES, SourceLanguage, SymbolSite, Truncation, foreign,
+    rust,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -28,6 +29,13 @@ enum ExtractedFile {
 /// Blocking by design: the caller runs it on a blocking thread, the same way
 /// every other filesystem tool in mjolnr does (`AGENTS.md` §4).
 pub fn build(root: &Path) -> Result<CodeGraph, BuildError> {
+    build_with_progress(root, |_| {})
+}
+
+pub fn build_with_progress(
+    root: &Path,
+    mut progress: impl FnMut(BuildProgress),
+) -> Result<CodeGraph, BuildError> {
     if !root.is_dir() {
         return Err(BuildError::NotADirectory {
             path: root.display().to_string(),
@@ -43,7 +51,12 @@ pub fn build(root: &Path) -> Result<CodeGraph, BuildError> {
     let mut by_path = BTreeMap::new();
     let mut extracted = Vec::new();
 
-    for path in relative_paths {
+    let files_total = relative_paths.len();
+    for (index, path) in relative_paths.into_iter().enumerate() {
+        progress(BuildProgress {
+            files_scanned: index.saturating_add(1),
+            files_total,
+        });
         let absolute = root.join(&path);
         match std::fs::metadata(&absolute) {
             Ok(metadata) if metadata.len() > MAX_FILE_BYTES => {
@@ -362,8 +375,39 @@ fn resolve_foreign(
         }
         SourceLanguage::Python => resolve_python(graph, source, import),
         SourceLanguage::Go => resolve_go(graph, source, import),
+        SourceLanguage::Dart => resolve_dart(graph, source, import),
         SourceLanguage::Rust => Resolution::Unresolved,
     }
+}
+
+fn resolve_dart(graph: &CodeGraph, source: &Path, import: &str) -> Resolution {
+    if import.starts_with("dart:")
+        || import.starts_with("package:") && import.split('/').count() < 2
+    {
+        return Resolution::External;
+    }
+    let candidate = if let Some(package_path) = import.strip_prefix("package:") {
+        let mut parts = package_path.splitn(2, '/');
+        let _package = parts.next();
+        let Some(rest) = parts.next() else {
+            return Resolution::External;
+        };
+        PathBuf::from("lib").join(rest)
+    } else if let Some(base) = relative_target(source, import) {
+        base
+    } else {
+        return Resolution::Unresolved;
+    };
+    let candidate = if candidate.extension().is_none() {
+        candidate.with_extension("dart")
+    } else {
+        candidate
+    };
+    graph
+        .by_path
+        .get(&candidate)
+        .copied()
+        .map_or(Resolution::Unresolved, Resolution::Local)
 }
 
 fn resolve_python(graph: &CodeGraph, source: &Path, import: &str) -> Resolution {

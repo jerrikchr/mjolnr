@@ -38,6 +38,7 @@ Last verified: 2026-08-18 — re-verified with `cargo deny check` against the fo
 | `syntect` | 5.3.0 | MIT | Syntax highlighting for transcript code blocks and diffs (Phase 20). Minimal features: `parsing`, `default-syntaxes`, `regex-fancy` — no C regex engine, no theme/asset loaders. See justification below. | https://github.com/trishume/syntect |
 | `ratatui-image` | 11.0.6 | MIT | Image widget for the TUI: kitty / iTerm2 / sixel graphics protocols with a unicode-halfblock fallback. `default-features = false` + `crossterm` — no `chafa` C library, no extra image codecs. See justification below. | https://github.com/ratatui/ratatui-image |
 | `image` | 0.25.10 | MIT OR Apache-2.0 | Decoding only, for the transcript's inline images. `ratatui-image` links it for PNG but does not re-export it. Codecs named individually — `png`, `jpeg`, `gif`, `webp` — rather than `default`. | https://github.com/image-rs/image |
+| `tree-sitter-dart` | 0.2.0 | MIT | Dart grammar for AST-backed import and symbol extraction in the deterministic code graph. | https://github.com/nielsenko/tree-sitter-dart |
 | `uuid` | 1.23.5 | MIT OR Apache-2.0 | Time-sortable v7 identifiers for messages, sessions, runs. | https://github.com/uuid-rs/uuid |
 | `time` | 0.3.53 | MIT OR Apache-2.0 | Timestamps on canonical messages and stored events. | https://github.com/time-rs/time |
 | `thiserror` | 2.0.18 | MIT OR Apache-2.0 | Typed errors per module. No `anyhow` in library code. | https://github.com/dtolnay/thiserror |
@@ -85,6 +86,9 @@ Last verified: 2026-08-18 — re-verified with `cargo deny check` against the fo
 | `mode-watcher` | 1.1.0 | MIT | Class-based light/dark mode synchronization used by generated components | https://github.com/svecosystem/mode-watcher |
 | `svelte-sonner` | 1.1.1 | MIT | Accessible toast implementation exposed through the generated Sonner component | https://github.com/wobsoriano/svelte-sonner |
 | `paneforge` | 1.0.2 | MIT | Keyboard-accessible resizable layout primitive available to workspace surfaces | https://github.com/svecosystem/paneforge |
+| `@xyflow/svelte` | 1.6.3 | MIT | Interactive graph canvas for bounded node rendering, pan/zoom, dragging, selection, controls, and minimap in the Svelte 5 desktop client. | https://github.com/xyflow/xyflow |
+| `d3-force` | 3.0.0 | ISC | Deterministic force-directed layout and collision resolution for the Yggdrasil code graph. | https://github.com/d3/d3-force |
+| `@types/d3-force` | 3.0.10 | MIT | TypeScript declarations for the D3 force layout used by the desktop graph surface. | https://github.com/DefinitelyTyped/DefinitelyTyped |
 | `@internationalized/date` | 3.12.2 | Apache-2.0 | Date value types required by the installed Bits UI component graph | https://github.com/adobe/react-spectrum |
 | `codemirror` | 6.0.2 | MIT | CodeMirror 6 editor facade for the governed workspace file surface. | https://github.com/codemirror/dev |
 | `@codemirror/state` | 6.7.1 | MIT | Immutable editor state and document transactions. | https://github.com/codemirror/dev |
@@ -126,6 +130,25 @@ persistence boundary depends on these packages.
 **Removal cost:** moderate and confined to `desktop/`. Replacing the system
 would require rewriting presentation composition, but not Rust runtime truth,
 client DTOs, plan authority, approval, recovery, or execution policy.
+
+### Yggdrasil graph surface
+
+**Purpose:** `@xyflow/svelte` owns the accessible 2D viewport interactions and
+custom node surface; `d3-force` computes the bounded, clustered layout from the
+Rust-owned graph projection. The frontend receives no authority from either
+package and does not infer temporal events.
+
+**Alternatives rejected:** Three.js was rejected because the target reference
+is a 2D knowledge map and a 3D scene would add depth-navigation and rendering
+complexity without improving the required pan/zoom/drag workflow. A hand-built
+SVG viewport was rejected because it already failed to provide usable zoom,
+pan, minimap, node dragging, and visual hierarchy.
+
+**Licence:** `@xyflow/svelte` is MIT and `d3-force` is ISC according to the
+installed package metadata; both are permissive and confined to `desktop/`.
+
+**Removal cost:** moderate and isolated to the graph surface and its package
+lockfile. The Rust graph contract remains renderer-independent.
 
 
 ### Phase 11 official MCP client
