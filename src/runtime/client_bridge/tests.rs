@@ -270,6 +270,24 @@ fn tool_results_carry_outcome_and_bounded_detail() {
 }
 
 #[test]
+fn messages_carry_their_durable_timestamp() {
+    let client = snapshot_to_client(
+        1,
+        &snapshot_with(vec![CanonicalMessage::user("when".to_owned())]),
+    );
+    let Some(ClientMessage::User { at, .. }) = client.messages.first() else {
+        panic!("expected a user message");
+    };
+    let Some(stamp) = at else {
+        panic!("a durable message always knows when it was recorded");
+    };
+    let parsed = time::OffsetDateTime::parse(stamp, &time::format_description::well_known::Rfc3339)
+        .expect("an RFC 3339 timestamp");
+    // Not equal to the epoch and not absurdly far ahead: it is a real moment.
+    assert!(parsed.year() >= 2026);
+}
+
+#[test]
 fn approval_and_recovery_convert_without_client_inference() {
     let mut snapshot = snapshot_with(Vec::new());
     snapshot.pending_approval = Some(PendingApproval {
@@ -472,10 +490,7 @@ fn the_command_allowlist_maps_one_for_one() {
             },
         ),
         (ClientCommand::EndSession, MjolnrCommand::EndSession),
-        (
-            ClientCommand::ReleaseSession,
-            MjolnrCommand::ReleaseSession,
-        ),
+        (ClientCommand::ReleaseSession, MjolnrCommand::ReleaseSession),
         (
             ClientCommand::CreateWorktree {
                 name: "branch1".to_owned(),
@@ -2037,8 +2052,7 @@ async fn releasing_a_session_frees_the_seat_and_leaves_it_resumable() {
         .await
         .expect("release session");
 
-    let snap =
-        drain_until_snapshot(&mut rx, |s| s.session.is_none(), Duration::from_secs(5)).await;
+    let snap = drain_until_snapshot(&mut rx, |s| s.session.is_none(), Duration::from_secs(5)).await;
     assert!(
         snap.store_failure.is_none(),
         "a clean release is not a durability failure: {:?}",
@@ -2247,12 +2261,7 @@ async fn an_ended_session_cannot_be_resumed() {
         })
         .await
         .expect("create session");
-    let snap = drain_until_snapshot(
-        &mut rx,
-        |s| s.session.is_some(),
-        Duration::from_secs(5),
-    )
-    .await;
+    let snap = drain_until_snapshot(&mut rx, |s| s.session.is_some(), Duration::from_secs(5)).await;
     let ended = snap.session.clone().expect("session id");
 
     bridge
@@ -2339,6 +2348,16 @@ impl crate::core::store::EventStore for FailingEventStore {
         _session: crate::core::event::SessionId,
     ) -> Result<(), crate::core::store::StoreError> {
         Ok(())
+    }
+
+    async fn rename_session(
+        &self,
+        _session: crate::core::event::SessionId,
+        _title: String,
+    ) -> Result<(), crate::core::store::StoreError> {
+        Err(crate::core::store::StoreError::Unavailable {
+            detail: "FailingEventStore refuses everything by design".to_owned(),
+        })
     }
 
     async fn sessions(

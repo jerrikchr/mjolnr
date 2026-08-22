@@ -207,12 +207,16 @@ pub enum ClientMessage {
         id: String,
         text: String,
         text_truncated: bool,
+        /// When the message entered the durable record, RFC 3339, or `None`
+        /// when the projection cannot know. Display metadata only.
+        at: Option<String>,
     },
     #[serde(rename_all = "camelCase")]
     System {
         id: String,
         text: String,
         text_truncated: bool,
+        at: Option<String>,
     },
     #[serde(rename_all = "camelCase")]
     Assistant {
@@ -222,6 +226,7 @@ pub enum ClientMessage {
         provider: Option<String>,
         model: Option<String>,
         tool_calls: Vec<ClientToolCallRef>,
+        at: Option<String>,
     },
     #[serde(rename_all = "camelCase")]
     Tool {
@@ -231,6 +236,7 @@ pub enum ClientMessage {
         reason_code: Option<String>,
         detail: String,
         detail_truncated: bool,
+        at: Option<String>,
     },
 }
 

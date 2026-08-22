@@ -96,6 +96,7 @@ fn sample_snapshot() -> ClientSnapshot {
                 id: "m1".to_owned(),
                 text: "hello".to_owned(),
                 text_truncated: false,
+                at: Some("2026-07-30T12:00:00Z".to_owned()),
             },
             ClientMessage::Assistant {
                 id: "m2".to_owned(),
@@ -107,6 +108,7 @@ fn sample_snapshot() -> ClientSnapshot {
                     id: "call_1".to_owned(),
                     name: "read_file".to_owned(),
                 }],
+                at: Some("2026-07-30T12:00:01Z".to_owned()),
             },
             ClientMessage::Tool {
                 id: "m3".to_owned(),
@@ -115,6 +117,7 @@ fn sample_snapshot() -> ClientSnapshot {
                 reason_code: None,
                 detail: "file contents".to_owned(),
                 detail_truncated: false,
+                at: Some("2026-07-30T12:00:02Z".to_owned()),
             },
         ],
         messages_omitted: 7,

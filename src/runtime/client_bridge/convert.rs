@@ -263,6 +263,10 @@ pub fn session_summary_to_client(summary: &SessionSummary) -> ClientSessionSumma
 fn message_to_client(entry: &TranscriptEntry) -> ClientMessage {
     let message = &entry.message;
     let id = message.id.to_string();
+    let at = message
+        .created_at
+        .format(&time::format_description::well_known::Rfc3339)
+        .ok();
     match message.role {
         Role::User => {
             let (text, text_truncated) = truncate_text(&message.text(), MAX_MESSAGE_TEXT);
@@ -270,6 +274,7 @@ fn message_to_client(entry: &TranscriptEntry) -> ClientMessage {
                 id,
                 text,
                 text_truncated,
+                at,
             }
         }
         Role::System => {
@@ -278,6 +283,7 @@ fn message_to_client(entry: &TranscriptEntry) -> ClientMessage {
                 id,
                 text,
                 text_truncated,
+                at,
             }
         }
         Role::Assistant => {
@@ -295,13 +301,18 @@ fn message_to_client(entry: &TranscriptEntry) -> ClientMessage {
                         name: call.name.clone(),
                     })
                     .collect(),
+                at,
             }
         }
-        Role::Tool => tool_message_to_client(id, message),
+        Role::Tool => tool_message_to_client(id, message, at),
     }
 }
 
-fn tool_message_to_client(id: String, message: &CanonicalMessage) -> ClientMessage {
+fn tool_message_to_client(
+    id: String,
+    message: &CanonicalMessage,
+    at: Option<String>,
+) -> ClientMessage {
     for block in &message.blocks {
         if let ContentBlock::ToolResult { name, result, .. } = block {
             let (outcome, reason_code) = outcome_to_client(&result.outcome);
@@ -313,6 +324,7 @@ fn tool_message_to_client(id: String, message: &CanonicalMessage) -> ClientMessa
                 reason_code,
                 detail,
                 detail_truncated: detail_truncated || result.truncated,
+                at,
             };
         }
     }
@@ -321,6 +333,7 @@ fn tool_message_to_client(id: String, message: &CanonicalMessage) -> ClientMessa
         id,
         text,
         text_truncated,
+        at,
     }
 }
 
