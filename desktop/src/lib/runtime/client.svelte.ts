@@ -323,10 +323,32 @@ export class MjolnrClient {
 
   handleUpdate(update: ClientUpdate) {
     switch (update.type) {
-      case 'snapshot':
+      case 'snapshot': {
+        const previous = this.snapshot;
         this.snapshot = update.snapshot;
-        this.streamingText = '';
+        // Mid-run snapshots land at tool boundaries while deltas are still
+        // streaming into the live bubble. Wiping there is what hid all
+        // progress until run end: the bubble emptied and the transcript did
+        // not yet hold the words either. Keep the stream while the same
+        // session keeps running; retire it when its text has landed durably
+        // in the transcript (tail match), or when the run/session ends.
+        const sessionChanged = previous.session !== update.snapshot.session;
+        if (!update.snapshot.runActive || sessionChanged) {
+          this.streamingText = '';
+          break;
+        }
+        const assistant = [...update.snapshot.messages]
+          .reverse()
+          .find((m) => m.kind === 'assistant');
+        if (
+          assistant &&
+          assistant.text.length >= 40 &&
+          this.streamingText.endsWith(assistant.text.slice(-120))
+        ) {
+          this.streamingText = '';
+        }
         break;
+      }
       case 'event':
         this.activityFeed = [...this.activityFeed.slice(-99), update.event];
         if (update.event.activity === 'subagentActivity') {
@@ -342,7 +364,11 @@ export class MjolnrClient {
             done: false
           });
         }
-        if (update.event.activity === 'textDelta') {
+        if (update.event.activity === 'runStarted') {
+          // A fresh run starts a clean live bubble; anything left over from
+          // the previous one is stale presentation, not transcript.
+          this.streamingText = '';
+        } else if (update.event.activity === 'textDelta') {
           this.streamingText += update.event.text;
         } else if (
           update.event.activity === 'runFinished' ||
@@ -626,6 +652,18 @@ export class MjolnrClient {
 
   async createSession(provider: string, model: string) {
     return this.dispatch({ type: 'createSession', provider, model });
+  }
+
+  /**
+   * Switch the open session's route while idle.
+   *
+   * The runtime refuses with a typed reason (run active, provider not
+   * connected, model absent from the catalog) and that refusal surfaces
+   * through `lastError` like any other refused command, so a pick that did
+   * not land is never silent.
+   */
+  async selectSessionModel(provider: string, model: string) {
+    return this.dispatch({ type: 'selectModel', provider, model });
   }
 
   async sendMessage(text: string) {

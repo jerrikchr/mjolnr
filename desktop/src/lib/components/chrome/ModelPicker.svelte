@@ -53,7 +53,10 @@
   // The model id is the visible selection contract, but provider identity is
   // equally authoritative for session creation. Keep the parent synchronized
   // whenever the select changes so choosing a Gemini model cannot leave the
-  // previous Codex provider paired with it.
+  // previous Codex provider paired with it. Echo safety lives in the parent:
+  // its handler ignores picks identical to the route the snapshot reports,
+  // so syncing this picker to session truth cannot re-dispatch that truth as
+  // a command.
   $effect(() => {
     const choice = models.find((model) => model.model === value);
     if (choice) onselect?.(choice);

@@ -181,8 +181,16 @@
   }
 
   function selectModel(choice: { provider: string; model: string }) {
-    selectedProvider = choice.provider;
-    selectedModel = choice.model;
+    if (choice.provider !== selectedProvider) selectedProvider = choice.provider;
+    if (choice.model !== selectedModel) selectedModel = choice.model;
+    // With a session open, a pick switches that session's route now — the
+    // same semantics as the TUI's model overlay. Without one, the pick arms
+    // the next `createSession`. The runtime refuses impossible switches
+    // (active run, disconnected provider, absent model) with typed reasons
+    // that surface through the global refusal channel.
+    if (!snap.session) return;
+    if (snap.provider === choice.provider && snap.model === choice.model) return;
+    void clientStore.selectSessionModel(choice.provider, choice.model);
   }
 
   /**
@@ -358,8 +366,76 @@
   let recentProjectRoots = $derived(
     Array.from(new Set(snap.sessions.map((session) => session.projectRoot).filter(Boolean))).slice(0, 5)
   );
+  let transcriptViewport = $state<HTMLElement | null>(null);
+  let pinnedToBottom = $state(true);
+
+  function onTranscriptScroll() {
+    const el = transcriptViewport;
+    if (!el) return;
+    pinnedToBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+  }
+
+  function jumpToLatest() {
+    const el = transcriptViewport;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+    pinnedToBottom = true;
+  }
+
+  // Follow the stream while the reader is at the bottom. Reading further up
+  // unpins, so a long tool dump cannot yank the viewport out from under
+  // someone mid-read; the jump control returns them when *they* choose to.
+  $effect(() => {
+    void snap.messages.length;
+    void streamingText.length;
+    if (!pinnedToBottom || !transcriptViewport) return;
+    transcriptViewport.scrollTop = transcriptViewport.scrollHeight;
+  });
+
+  // The scrollable surface is the ScrollArea viewport itself, so the pin
+  // check listens there natively rather than on the content column, which
+  // never overflows.
+  $effect(() => {
+    const el = transcriptViewport;
+    if (!el) return;
+    const onScroll = () => onTranscriptScroll();
+    el.addEventListener('scroll', onScroll);
+    return () => el.removeEventListener('scroll', onScroll);
+  });
+
   let isConnected = $derived(clientStore.connected);
   let streamingText = $derived(clientStore.streamingText);
+  /**
+   * What mjolnr is doing right now, in the reader's words.
+   *
+   * Read off the newest meaningful activity event rather than a bare
+   * runActive flag: "calling list_directory…" answers the question a stuck
+   * run always begs. Falls back through the feed tail so an idle-then-busy
+   * gap still says something true instead of nothing.
+   */
+  let liveActivityLabel = $derived.by(() => {
+    if (!snap.runActive) return null;
+    const feed = clientStore.activityFeed;
+    for (let i = feed.length - 1; i >= 0; i--) {
+      const e = feed[i];
+      switch (e.activity) {
+        case 'textDelta':
+          return 'responding';
+        case 'reasoningDelta':
+          return 'thinking';
+        case 'toolAssembling':
+        case 'toolProposed':
+          return `calling ${e.name}`;
+        case 'toolCompleted':
+          return `${e.name} → ${e.outcome}`;
+        case 'runStarted':
+          return 'starting';
+        case 'subagentActivity':
+          return e.label;
+      }
+    }
+    return 'working';
+  });
   let quotaWindow = $derived(relevantQuotaWindow(snap.quota));
 
   // The webview can restore an old form value after a packaged launch. That
@@ -457,6 +533,22 @@
     if (!modelChoices.some((choice) => choice.model === selectedModel)) {
       selectedModel = modelChoices[0]?.model ?? '';
     }
+  });
+
+  // The picker shows the route the open session actually carries, not a
+  // locally-armed preference: after resume, after create, and after a switch
+  // lands, the snapshot is the truth. A pick the runtime refused (run active,
+  // provider disconnected) therefore visibly falls back to the route that is
+  // still in effect — with its typed reason on the refusal channel — rather
+  // than leaving the header claiming a model that will never answer.
+  $effect(() => {
+    if (!snap.session || !snap.provider || !snap.model) return;
+    const listed = snap.models.some(
+      (choice) => choice.provider === snap.provider && choice.model === snap.model
+    );
+    if (!listed) return;
+    if (selectedProvider !== snap.provider) selectedProvider = snap.provider;
+    if (selectedModel !== snap.model) selectedModel = snap.model;
   });
 
   /**
@@ -1560,7 +1652,13 @@
                 {snap.session ? activeSessionTitle : projectName ? `Project ${projectName}` : 'What should we work on?'}
               </h1>
               <p class="text-xs text-muted-foreground">
-                {snap.runActive ? 'mjolnr is working' : snap.session ? 'Ready for your next instruction' : 'Type a prompt or choose a project to start chatting'}
+                {#if snap.runActive}
+                  {liveActivityLabel ? `mjolnr · ${liveActivityLabel}…` : 'mjolnr is working'}
+                {:else if snap.session}
+                  Ready for your next instruction
+                {:else}
+                  Type a prompt or choose a project to start chatting
+                {/if}
               </p>
             </div>
             <div class="flex items-center gap-2">
@@ -1673,7 +1771,7 @@
             </Alert.Root>
           {/if}
 
-          <ScrollArea.Root class="min-h-0 flex-1">
+          <ScrollArea.Root class="relative min-h-0 flex-1" bind:viewportRef={transcriptViewport}>
             <div class="mx-auto flex w-full max-w-4xl flex-col gap-5 p-6">
               {#if snap.messages.length === 0 && !streamingText}
                 <!-- Codex Conversational Hero Layout with Norse Flavor -->
@@ -1942,6 +2040,19 @@
                 {/if}
               {/if}
             </div>
+            {#if !pinnedToBottom && (snap.runActive || streamingText)}
+              <!-- Reading further up unpins; the stream keeps flowing. This
+                control returns to the live edge only when *the reader* asks,
+                so a long tool dump cannot yank the viewport out from under
+                someone mid-read. -->
+              <button
+                type="button"
+                class="absolute bottom-4 left-1/2 z-10 -translate-x-1/2 rounded-full border border-primary/40 bg-card/95 px-3 py-1.5 text-xs font-medium text-primary shadow-lg backdrop-blur-md hover:bg-primary/10"
+                onclick={jumpToLatest}
+              >
+                ↓ Jump to latest
+              </button>
+            {/if}
             <ScrollArea.Scrollbar orientation="vertical" />
           </ScrollArea.Root>
 
