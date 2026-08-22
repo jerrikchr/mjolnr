@@ -441,6 +441,22 @@
     return 'working';
   });
   let quotaWindow = $derived(relevantQuotaWindow(snap.quota));
+  /**
+   * Run-level failures, newest last, bounded to a small tail.
+   *
+   * `RunFailed` carries a code and detail on the wire and reached the
+   * activity feed — but nothing in the conversation rendered it, so a run
+   * that died mid-flight looked identical to one that finished: Idle header,
+   * no answer, no reason. These cards put the death where the reader is.
+   * Durable truth stays in the store; this is the live view of it.
+   */
+  let runFailures = $derived.by(() => {
+    const out: Array<{ run: string; code: string; detail: string }> = [];
+    for (const e of clientStore.activityFeed) {
+      if (e.activity === 'runFailed') out.push({ run: e.run, code: e.code, detail: e.detail });
+    }
+    return out.slice(-3);
+  });
 
   // The webview can restore an old form value after a packaged launch. That
   // value is not runtime truth and must never look like the selected project.
@@ -1988,7 +2004,15 @@
                           <span>{message.outcome}</span>
                         </span>
                       </div>
-                      <pre class="max-h-56 overflow-auto p-3 font-mono text-xs whitespace-pre-wrap text-muted-foreground">{detail.text}</pre>
+                      <!-- One truncation mechanism at a time: the collapsed
+                          view is a hard character cap with no inner
+                          scrollbar, so the pane never implies completeness
+                          the cap denies. Expanding swaps to the full text
+                          under a real scroll. -->
+                      <pre class={cn(
+                        'p-3 font-mono text-xs whitespace-pre-wrap break-words text-muted-foreground',
+                        detail.truncated && !expandedToolDetails[message.id] ? '' : 'max-h-96 overflow-auto'
+                      )}>{detail.text}</pre>
                       {#if detail.truncated || expandedToolDetails[message.id]}
                         <div class="border-t px-3 py-1.5">
                           <button
@@ -2031,6 +2055,12 @@
                       </Card.Content>
                     </Card.Root>
                   {/if}
+                {/each}
+                {#each runFailures as failure (failure.run + failure.code)}
+                  <div class="max-w-[90%] rounded-md border border-gov-refusal-border bg-gov-refusal-bg px-3 py-2">
+                    <p class="text-xs font-semibold text-gov-refusal">Run failed · {failure.code}</p>
+                    <p class="mt-1 whitespace-pre-wrap break-words text-xs text-muted-foreground">{failure.detail}</p>
+                  </div>
                 {/each}
                 {#if streamingText}
                   <Card.Root class="max-w-[90%]">
@@ -2226,11 +2256,23 @@
       <div class="flex items-center gap-2.5">
         <span>policy: <span class="font-mono text-accent-bright">{snap.policy}</span></span>
         <span class="h-3 w-px bg-border" aria-hidden="true"></span>
-        <span>in: <span class="font-mono text-foreground">{formatTokenCount(snap.usage.inputTokens)}</span></span>
-        <span>out: <span class="font-mono text-foreground">{formatTokenCount(snap.usage.outputTokens)}</span></span>
+        <!-- Session-cumulative. Routes that omit usage frames on stream
+             (several subscription relays do) leave these frozen rather than
+             wrong; the title says so instead of the number pretending to be
+             fresh. -->
+        <span title="Session token totals; routes that omit stream usage will not update these">
+          in: <span class="font-mono text-foreground">{formatTokenCount(snap.usage.inputTokens)}</span>
+        </span>
+        <span title="Session token totals; routes that omit stream usage will not update these">
+          out: <span class="font-mono text-foreground">{formatTokenCount(snap.usage.outputTokens)}</span>
+        </span>
         <span class="h-3 w-px bg-border" aria-hidden="true"></span>
-        <span class="flex items-center gap-1.5">
-          turns
+        <!-- Per-run by runtime contract: both counters reset at every run
+             start, so a finished run's spend vanishes from these chips while
+             its tool cards remain in the transcript above. Naming the scope
+             is what stops "tools 0/40 under a tool card" reading as a bug. -->
+        <span class="flex items-center gap-1.5" title="Provider turns this run; resets when a new run starts">
+          turns·run
           <span class="h-1 w-14 overflow-hidden rounded-full bg-border">
             <span
               class="block h-full rounded-full bg-accent-bright"
@@ -2239,8 +2281,8 @@
           </span>
           <span class="font-mono text-foreground">{snap.budget.providerTurns}/{snap.budget.maxProviderTurns}</span>
         </span>
-        <span class="flex items-center gap-1.5">
-          tools
+        <span class="flex items-center gap-1.5" title="Tool calls this run; resets when a new run starts">
+          tools·run
           <span class="h-1 w-14 overflow-hidden rounded-full bg-border">
             <span
               class="block h-full rounded-full bg-accent-bright"
