@@ -24,6 +24,15 @@ tokio = { version = "1.52.3", features = ["sync", "rt-multi-thread"] }
 thiserror = "2.0.18"
 async-trait = "0.1.89"
 tracing = "0.1.44"
+# File diagnostics (AGENTS.md §4): every error!/info! in this crate compiled
+# against a subscriber that was never installed, so runtime failures were
+# undiagnosable after the fact. The subscriber writes daily-rolling files
+# under the platform data directory; `tracing-appender` supplies the
+# non-blocking writer and `tracing-subscriber` the filter/format layer.
+# Rejected: hand-rolling a `tracing` Subscriber (recreates formatting and
+# level filtering without review); logging to stdout (the webview owns it).
+tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
+tracing-appender = "0.2.3"
 
 [lints.rust]
 unsafe_code = "forbid"

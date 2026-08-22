@@ -47,6 +47,9 @@ Last verified: 2026-08-18 — re-verified with `cargo deny check` against the fo
 | `etcetera` | 0.11.0 | MIT OR Apache-2.0 | Resolves the platform data directory without introducing a disallowed licence. **See below.** | https://github.com/lunacookies/etcetera |
 | `unicode-normalization` | 0.1.25 | MIT OR Apache-2.0 | NFKC normalization required by the official Agent Skills validation fixtures. | https://github.com/unicode-rs/unicode-normalization |
 | `tauri` | 2.11.5 (declared 2.1.1, tauri-build 2.6.3) | MIT OR Apache-2.0 | Tauri 2 framework hosting mjolnr's shared core & client bridge. | https://github.com/tauri-apps/tauri |
+| `tracing` (desktop) | 0.1.44 | MIT | Structured diagnostics in the desktop shell. | https://github.com/tokio-rs/tracing |
+| `tracing-subscriber` (desktop) | 0.3.20 | MIT | Installs the file subscriber `AGENTS.md` §4 requires; `env-filter` honors `RUST_LOG`. Arrived with the desktop shell rather than Phase 8 — a run that died silently had no log to autopsy. | https://github.com/tokio-rs/tracing |
+| `tracing-appender` (desktop) | 0.2.3 | MIT | Daily-rolling, non-blocking log files under the platform data directory. | https://github.com/tokio-rs/tracing |
 
 ### Phase A0 Tauri Desktop Client Dependencies (`desktop/package.json`)
 
@@ -311,8 +314,9 @@ Not linked into release artifacts.
 
 | Crate | Arrives in | For |
 |---|---|---|
-| `tracing`, `tracing-subscriber` | 8 | Redacted file logging with bounded rotation |
 | `pulldown-cmark` | 8 | Markdown rendering |
+
+`tracing` and `tracing-subscriber` were scheduled for Phase 8 but arrived early in the **desktop shell only** (see the desktop rows above): runtime failures there were undiagnosable with no subscriber installed. The root crate still has no tracing dependency — that remains deferred to its phase.
 
 `directories` was scheduled here for Phase 8 and is now **removed from the plan entirely**: Phase 4 needed platform paths, and `directories` cannot pass `cargo deny` (see above). `etcetera` does that job.
 

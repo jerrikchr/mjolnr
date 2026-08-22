@@ -4,6 +4,7 @@
 #![allow(clippy::doc_markdown)]
 
 mod coordinator;
+mod logging;
 
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
@@ -1043,6 +1044,14 @@ pub fn run() {
             return;
         }
     };
+    // Installed before any fallible setup so the failures that motivated it —
+    // store open, bridge init, runtime spawn — are the first things recorded.
+    // The guard is held for `run`'s lifetime, which is the process lifetime.
+    let _log_guard = logging::init(&database_path);
+    info!(
+        "mjolnr-desktop starting; logs at {}",
+        logging::logs_dir(&database_path).display()
+    );
     let setup_result: Result<Arc<RuntimeCoordinator>, DesktopBridgeError> =
         tokio_runtime.block_on(init_bridge(database_path));
 
